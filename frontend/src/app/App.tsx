@@ -1,14 +1,10 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 
-import { SystemStatusPage } from '../features/system-status/SystemStatusPage'
 import { createQueryClient } from './queryClient'
+import { resolvePage } from './routes'
 
 export function App() {
   const [queryClient] = useState(createQueryClient)
-  return (
-    <QueryClientProvider client={queryClient}>
-      <SystemStatusPage />
-    </QueryClientProvider>
-  )
+  return <QueryClientProvider client={queryClient}>{resolvePage(window.location.pathname)}</QueryClientProvider>
 }

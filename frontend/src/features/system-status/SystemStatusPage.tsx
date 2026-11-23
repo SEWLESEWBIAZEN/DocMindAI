@@ -40,10 +40,10 @@ export function SystemStatusPage() {
   return (
     <main className="page">
       <header className="page__header">
-        <div className="brand">
+        <a className="brand" href="/">
           <img src="/favicon.svg" alt="" width={28} height={28} />
           <span className="brand__name">DocuMind AI</span>
-        </div>
+        </a>
         <button type="button" className="button" onClick={() => void refetch()} disabled={isFetching}>
           {isFetching ? 'Checking…' : 'Refresh'}
         </button>

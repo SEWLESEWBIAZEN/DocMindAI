@@ -85,7 +85,19 @@ Acceptance criteria (verified 2026-11-23):
 
 ## Phase 7: Frontend implementation
 
-- [ ] All 16 pages, navigation, chat UI, citations, accessibility
+- [~] **Landing page** (delivered early at the product owner's request, 2026-11-23)
+  - Animated hero product demo (typed question → streamed answer → citation-linked source highlight),
+    cycling through five team scenarios; benefits bento, use-case tabs, pipeline, security, CTA
+  - Motion: CSS transitions/animations on `transform`/`opacity` with shared easing tokens; hover gated
+    to fine pointers; reduced motion shows the finished demo state and keeps fades only
+  - Accessibility: skip link, ARIA tabs with arrow-key navigation, labelled demo region, focus styles
+  - Verified: 28 frontend tests (timeline logic, tabs, reduced motion, autoplay, routes); Playwright
+    screenshots in light, dark and 390 px mobile with no horizontal overflow
+  - Scenario companies, documents and figures are fictional and labelled illustrative; replace with
+    approved customer stories before using any as testimonials
+  - `/login` and `/register` show a "coming soon" page until authentication ships (Phase 2)
+  - Routing is a minimal pathname switch (`src/app/routes.tsx`); a full router comes with the app shell
+- [ ] Remaining pages (login, registration, dashboard, library, chat, etc.), navigation shell, chat UI
 
 ## Phase 8: Usage, administration and SaaS readiness
 

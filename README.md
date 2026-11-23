@@ -53,7 +53,8 @@ docker compose up --build
 
 | URL                                 | What                                      |
 | ----------------------------------- | ----------------------------------------- |
-| http://localhost:5173               | Frontend (system status page)             |
+| http://localhost:5173               | Frontend landing page with live product demo |
+| http://localhost:5173/status        | System status page                        |
 | http://localhost:8000/api/v1/health | Readiness: app + dependency health        |
 | http://localhost:8000/api/docs      | OpenAPI docs (disabled in production)     |
 | http://localhost:9001               | MinIO console (credentials from `.env`)   |
