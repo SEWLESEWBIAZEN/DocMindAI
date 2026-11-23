@@ -14,11 +14,21 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from documind.application.health_service import HealthService
+from documind.application.ports import (
+    AccessTokenService,
+    EmailSender,
+    PasswordHasher,
+    RateLimiter,
+)
 from documind.core.config import Settings
 from documind.infrastructure.cache.health import RedisHealthCheck
 from documind.infrastructure.cache.redis import create_redis_client
 from documind.infrastructure.database.engine import create_engine, create_session_factory
 from documind.infrastructure.database.health import PostgresHealthCheck
+from documind.infrastructure.email.smtp import SmtpEmailSender
+from documind.infrastructure.ratelimit.redis_limiter import RedisRateLimiter
+from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
+from documind.infrastructure.security.passwords import Argon2PasswordHasher
 from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 
@@ -33,6 +43,10 @@ class Container:
     redis: Redis
     s3_client: Any
     health_service: HealthService
+    password_hasher: PasswordHasher
+    access_tokens: AccessTokenService
+    email_sender: EmailSender
+    rate_limiter: RateLimiter
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -62,4 +76,17 @@ def build_container(settings: Settings) -> Container:
         redis=redis,
         s3_client=s3_client,
         health_service=health_service,
+        password_hasher=Argon2PasswordHasher(
+            time_cost=settings.password_hash_time_cost,
+            memory_kib=settings.password_hash_memory_kib,
+            parallelism=settings.password_hash_parallelism,
+        ),
+        access_tokens=JwtAccessTokenService(
+            secret=settings.jwt_secret_key.get_secret_value(),
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
+            ttl_seconds=settings.access_token_ttl_seconds,
+        ),
+        email_sender=SmtpEmailSender(settings),
+        rate_limiter=RedisRateLimiter(redis, enabled=settings.rate_limit_enabled),
     )

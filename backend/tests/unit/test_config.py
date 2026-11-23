@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from tests.conftest import SettingsFactory
+from tests.conftest import PRODUCTION, SettingsFactory
 
 
 def test_valid_settings(make_settings: SettingsFactory) -> None:
@@ -13,8 +13,9 @@ def test_valid_settings(make_settings: SettingsFactory) -> None:
 
 def test_secrets_are_not_rendered(make_settings: SettingsFactory) -> None:
     s = make_settings()
-    assert "pass" not in repr(s)
-    assert "test-secret-key" not in repr(s)
+    rendered = repr(s) + str(s.model_dump())
+    for secret in ("user:pass@", "test-secret-key", "test-jwt-secret-key"):
+        assert secret not in rendered
 
 
 def test_database_url_requires_asyncpg_driver(make_settings: SettingsFactory) -> None:
@@ -45,7 +46,13 @@ def test_cors_origins_from_environment(
 
     base = make_settings().model_dump()
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://a.test,http://b.test")
-    for key in ("database_url", "redis_url", "s3_access_key_id", "s3_secret_access_key"):
+    for key in (
+        "database_url",
+        "redis_url",
+        "s3_access_key_id",
+        "s3_secret_access_key",
+        "jwt_secret_key",
+    ):
         monkeypatch.setenv(key.upper(), base[key].get_secret_value())
     monkeypatch.setenv("S3_BUCKET", "documind-test")
     s = Settings(_env_file=None)
@@ -54,15 +61,41 @@ def test_cors_origins_from_environment(
 
 def test_production_rejects_placeholder_credentials(make_settings: SettingsFactory) -> None:
     with pytest.raises(ValidationError, match="S3_SECRET_ACCESS_KEY"):
-        make_settings(environment="production", s3_secret_access_key="change-me-dev-only")
+        make_settings(**PRODUCTION, s3_secret_access_key="change-me-dev-only")
 
 
 def test_production_rejects_wildcard_cors(make_settings: SettingsFactory) -> None:
     with pytest.raises(ValidationError, match="Wildcard CORS"):
-        make_settings(environment="production", cors_allowed_origins="*")
+        make_settings(**PRODUCTION, cors_allowed_origins="*")
 
 
 def test_docs_disabled_by_default_in_production(make_settings: SettingsFactory) -> None:
-    assert make_settings(environment="production").docs_enabled is False
-    assert make_settings(environment="production", api_docs_enabled=True).docs_enabled is True
+    assert make_settings(**PRODUCTION).docs_enabled is False
+    assert make_settings(**PRODUCTION, api_docs_enabled=True).docs_enabled is True
     assert make_settings(api_docs_enabled=False).docs_enabled is False
+
+
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"jwt_secret_key": "change-me-dev-only-0123456789abcdef0123"}, "JWT_SECRET_KEY"),
+        ({"auth_cookie_secure": False}, "AUTH_COOKIE_SECURE"),
+        ({"public_app_url": "http://app.example.com"}, "PUBLIC_APP_URL"),
+        ({"smtp_starttls": False}, "SMTP must use"),
+    ],
+)
+def test_production_auth_safeguards(
+    make_settings: SettingsFactory, override: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        make_settings(**{**PRODUCTION, **override})
+
+
+def test_jwt_secret_minimum_length(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError):
+        make_settings(jwt_secret_key="too-short")
+
+
+def test_smtp_tls_modes_are_exclusive(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="either"):
+        make_settings(smtp_starttls=True, smtp_use_ssl=True)

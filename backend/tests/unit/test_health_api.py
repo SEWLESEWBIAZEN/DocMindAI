@@ -10,7 +10,7 @@ from documind.container import Container, build_container
 from documind.core.config import Settings
 from documind.domain.health import DependencyCheckError
 from documind.main import create_app
-from tests.conftest import SettingsFactory
+from tests.conftest import PRODUCTION, SettingsFactory
 from tests.unit.test_health_service import FakeCheck
 
 
@@ -75,7 +75,7 @@ def test_production_hides_details(make_settings: SettingsFactory) -> None:
         ],
         timeout_seconds=1,
     )
-    with _client(make_settings(environment="production"), service) as client:
+    with _client(make_settings(**PRODUCTION), service) as client:
         body = client.get("/api/v1/health").json()
     assert body["components"]["database"]["details"] is None
     assert body["components"]["redis"]["error"] is None
@@ -123,7 +123,7 @@ def test_docs_toggle(make_settings: SettingsFactory) -> None:
     service = HealthService([], timeout_seconds=1)
     with _client(make_settings(), service) as client:
         assert client.get("/api/openapi.json").status_code == 200
-    with _client(make_settings(environment="production"), service) as client:
+    with _client(make_settings(**PRODUCTION), service) as client:
         assert client.get("/api/openapi.json").status_code == 404
         assert client.get("/api/docs").status_code == 404
 

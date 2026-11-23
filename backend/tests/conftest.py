@@ -19,6 +19,20 @@ _BASE: dict[str, Any] = {
     "s3_access_key_id": "test-access-key",
     "s3_secret_access_key": "test-secret-key",
     "s3_bucket": "documind-test",
+    "jwt_secret_key": "test-jwt-secret-key-that-is-long-enough-0123456789",
+    "auth_cookie_secure": False,
+    "password_hash_time_cost": 1,
+    "password_hash_memory_kib": 8,
+    "password_hash_parallelism": 1,
+}
+
+
+# The minimum overrides that make settings valid for ENVIRONMENT=production.
+PRODUCTION: dict[str, Any] = {
+    "environment": "production",
+    "auth_cookie_secure": True,
+    "public_app_url": "https://app.example.com",
+    "smtp_starttls": True,
 }
 
 

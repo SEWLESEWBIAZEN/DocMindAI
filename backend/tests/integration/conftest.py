@@ -2,9 +2,44 @@
 and a .env (see .env.example). Run with: uv run pytest -m integration
 """
 
-import pytest
+from __future__ import annotations
 
-from documind.core.config import Settings
+import asyncio
+import re
+import subprocess
+import sys
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+from redis.asyncio import Redis
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from documind.application.ports import EmailMessage
+from documind.container import Container, build_container
+from documind.core.config import Environment, Settings
+from documind.main import create_app
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+PASSWORD = "correct horse battery staple"
+# Every table holding per-test data (roles/permissions are seed data and stay).
+DATA_TABLES = [
+    "audit_logs",
+    "invitations",
+    "account_tokens",
+    "refresh_tokens",
+    "workspace_members",
+    "workspaces",
+    "organizations",
+    "users",
+]
+TEST_REDIS_DB = 15
 
 
 @pytest.fixture(scope="session")
@@ -15,7 +50,195 @@ def live_settings() -> Settings:
 @pytest.fixture(scope="session")
 def test_database_url(live_settings: Settings) -> str:
     """URL of the dedicated `<db>_test` database created by the Postgres init script."""
-    from sqlalchemy.engine import make_url
-
     url = make_url(live_settings.database_url.get_secret_value())
     return url.set(database=f"{url.database}_test").render_as_string(hide_password=False)
+
+
+@pytest.fixture(scope="session")
+def migrated_test_db(test_database_url: str) -> str:
+    subprocess.run(  # noqa: S603 - fixed argv
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "-x",
+            f"database_url={test_database_url}",
+            "upgrade",
+            "head",
+        ],
+        cwd=BACKEND_DIR,
+        check=True,
+        capture_output=True,
+    )
+    return test_database_url
+
+
+@pytest.fixture
+def identity_settings(live_settings: Settings, migrated_test_db: str) -> Settings:
+    redis_url = make_url(live_settings.redis_url.get_secret_value()).set(
+        database=str(TEST_REDIS_DB)
+    )
+    return live_settings.model_copy(
+        update={
+            "environment": Environment.TEST,
+            "log_level": "WARNING",
+            "database_url": SecretStr(migrated_test_db),
+            "redis_url": SecretStr(redis_url.render_as_string(hide_password=False)),
+            "auth_cookie_secure": False,  # TestClient talks plain http
+            "password_hash_time_cost": 1,
+            "password_hash_memory_kib": 8,
+            "password_hash_parallelism": 1,
+            # Generous limits; rate limiting has dedicated tests.
+            "rate_limit_login_per_ip": 1000,
+            "rate_limit_login_per_email": 1000,
+            "rate_limit_auth_per_ip": 1000,
+            "rate_limit_refresh_per_ip": 1000,
+            "public_app_url": "https://app.test.example",
+        }
+    )
+
+
+async def _reset_state(settings: Settings) -> None:
+    engine = create_async_engine(settings.database_url.get_secret_value())
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(f"TRUNCATE {', '.join(DATA_TABLES)} RESTART IDENTITY CASCADE"))
+    finally:
+        await engine.dispose()
+    redis = Redis.from_url(settings.redis_url.get_secret_value())
+    try:
+        await redis.flushdb()
+    finally:
+        await redis.aclose()
+
+
+@dataclass
+class Mailbox:
+    """In-memory EmailSender: captures messages so tests can follow links."""
+
+    sent: list[EmailMessage] = field(default_factory=list)
+
+    async def send(self, message: EmailMessage) -> None:
+        self.sent.append(message)
+
+    def to(self, address: str) -> list[EmailMessage]:
+        return [m for m in self.sent if m.to == address]
+
+    def last_token(self, address: str, path: str) -> str:
+        for message in reversed(self.to(address)):
+            match = re.search(rf"{re.escape(path)}\?token=([\w\-]+)", message.text)
+            if match:
+                return str(match.group(1))
+        raise AssertionError(f"No {path} link emailed to {address}")
+
+
+@dataclass
+class Api:
+    client: TestClient
+    mail: Mailbox
+    settings: Settings
+
+    # ---- convenience flows -------------------------------------------------
+
+    def register(self, email: str, password: str = PASSWORD, name: str = "Test User") -> Any:
+        return self.client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": password, "display_name": name},
+        )
+
+    def verify(self, email: str) -> Any:
+        token = self.mail.last_token(email, "/verify-email")
+        return self.client.post("/api/v1/auth/verify-email", json={"token": token})
+
+    def login(self, email: str, password: str = PASSWORD) -> Any:
+        return self.client.post("/api/v1/auth/login", json={"email": email, "password": password})
+
+    def signup(self, email: str, name: str = "Test User") -> dict[str, str]:
+        """Register, verify and sign in. Returns Authorization headers."""
+        assert self.register(email, name=name).status_code == 202
+        assert self.verify(email).status_code == 200
+        response = self.login(email)
+        assert response.status_code == 200, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    def me(self, headers: dict[str, str]) -> Any:
+        return self.client.get("/api/v1/me", headers=headers).json()
+
+    def create_org(self, headers: dict[str, str], name: str = "Acme") -> dict[str, Any]:
+        response = self.client.post("/api/v1/organizations", json={"name": name}, headers=headers)
+        assert response.status_code == 201, response.text
+        result: dict[str, Any] = response.json()
+        return result
+
+    def add_member(
+        self, org_id: str, owner: dict[str, str], email: str, role: str
+    ) -> dict[str, str]:
+        """Sign up `email`, invite them with `role`, and accept. Returns their headers."""
+        headers = self.signup(email)
+        invited = self.client.post(
+            f"/api/v1/workspaces/{org_id}/invitations",
+            json={"email": email, "role": role},
+            headers=owner,
+        )
+        assert invited.status_code == 201, invited.text
+        token = self.mail.last_token(email, "/invitations/accept")
+        accepted = self.client.post(
+            "/api/v1/invitations/accept", json={"token": token}, headers=headers
+        )
+        assert accepted.status_code == 200, accepted.text
+        return headers
+
+    def member_id(self, org_id: str, headers: dict[str, str], email: str) -> str:
+        members = self.client.get(f"/api/v1/workspaces/{org_id}/members", headers=headers).json()
+        return str(next(m["id"] for m in members if m["email"] == email))
+
+    def use_refresh_cookie(self, value: str | None) -> None:
+        self.client.cookies.clear()
+        if value is not None:
+            self.client.cookies.set(
+                self.settings.refresh_cookie_name,
+                value,
+                domain="testserver.local",
+                path="/api/v1/auth",
+            )
+
+    def refresh(self, csrf: bool = True) -> Any:
+        headers = {"X-CSRF-Protection": "1"} if csrf else {}
+        return self.client.post("/api/v1/auth/refresh", headers=headers)
+
+
+@pytest.fixture
+def mailbox() -> Mailbox:
+    return Mailbox()
+
+
+@pytest.fixture
+def make_api(identity_settings: Settings, mailbox: Mailbox) -> Iterator[Any]:
+    """Factory so a test can tweak settings (e.g. rate limits) before the app starts."""
+    clients: list[TestClient] = []
+
+    def _make(**overrides: Any) -> Api:
+        settings = identity_settings.model_copy(update=overrides)
+        asyncio.run(_reset_state(settings))
+
+        def factory(s: Settings) -> Container:
+            container = build_container(s)
+            container.email_sender = mailbox
+            return container
+
+        client = TestClient(
+            create_app(settings, container_factory=factory), base_url="http://testserver.local"
+        )
+        client.__enter__()
+        clients.append(client)
+        return Api(client=client, mail=mailbox, settings=settings)
+
+    yield _make
+    for client in clients:
+        client.__exit__(None, None, None)
+
+
+@pytest.fixture
+def api(make_api: Any) -> Api:
+    result: Api = make_api()
+    return result

@@ -44,18 +44,53 @@ Acceptance criteria (verified 2026-11-23):
 - **CI workflow** (`.github/workflows/ci.yml`) is written but was not run in
   the build environment. Its steps mirror commands that were run locally.
 
-## Phase 2: Database and identity architecture
+## Phase 2: Database and identity architecture ✅
 
-- [ ] Entities: User, Workspace, Organization, WorkspaceMember, Role, Permission, RefreshToken, AuditLog
-- [ ] Registration (creates personal workspace), login, logout
-- [ ] Argon2id password hashing
-- [ ] Access tokens; refresh-token rotation and revocation
-- [ ] Password reset; email verification
-- [ ] Profile management
-- [ ] Organizations, invitations, workspace switching, member management, ownership rules
-- [ ] Roles Owner/Admin/Member/Viewer via explicit permission policies
-- [ ] IDOR and cross-tenant protections; account-enumeration protection; auth rate limiting
-- [ ] Alembic migrations; auth and authorization tests
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Entities: User, Workspace, Organization, WorkspaceMember, Role, Permission, RefreshToken, AuditLog | [x] | Migration `0002`, plus AccountToken (verification/reset) and Invitation. `alembic check` reports no drift; upgrade → downgrade → upgrade tested |
+| Registration (creates personal workspace) | [x] | `test_registration_creates_user_and_personal_workspace` |
+| Login / logout / logout everywhere | [x] | `test_login_*`, `test_logout_*` |
+| Argon2id hashing (with rehash on parameter change) | [x] | `test_security_adapters.py`, stored-hash assertion |
+| Access-token issuance (JWT, strict claims) | [x] | Forged, expired, wrong-audience, `alg:none` and tampered tokens rejected |
+| Refresh-token rotation and revocation, with reuse detection | [x] | `test_refresh_rotates_token`, `test_reused_refresh_token_revokes_the_session`, grace-window test; verified in Chromium |
+| Password reset | [x] | `test_password_reset_flow`, single-use and latest-link-only tests |
+| Email verification | [x] | Verification required before login; single-use and expiry tests; real SMTP via Mailpit end to end |
+| Profile management, password change | [x] | `test_profile_update`, `test_change_password` |
+| Create organizations, join via invitations | [x] | `test_invitation_flow`, email binding, decline/revoke/re-invite |
+| Switch workspaces | [x] | `PUT /me/active-workspace`; non-member → 404 |
+| Manage members, assign roles, leave with ownership rules | [x] | Hierarchy, last-owner and remove/leave tests |
+| Owner / Admin / Member / Viewer via explicit permission policies | [x] | Permission catalog plus DB seed equality test; role matrix over HTTP |
+| Authorization enforced in backend services | [x] | `ctx.require(...)` in services; policy unit tests |
+| IDOR and cross-tenant protection | [x] | Cross-workspace 404 matrix; foreign member and invitation IDs not found |
+| Secure refresh storage and cookies | [x] | Hash-only storage; `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` verified in browser |
+| Account enumeration protection | [x] | Uniform register, resend and forgot responses; identical login errors; dummy hash |
+| Rate limiting on auth endpoints | [x] | Per-email and per-IP 429 tests with `Retry-After` |
+| Audit log | [x] | Security events recorded transactionally; paginated `GET /audit-logs` |
+
+Acceptance criteria (verified 2026-11-23):
+
+- [x] Registration creates a user and personal workspace.
+- [x] Users can create organizations.
+- [x] Users can belong to multiple workspaces.
+- [x] Workspace switching works.
+- [x] Unauthorized cross-workspace access is rejected (404 without revealing existence).
+- [x] Authentication and authorization tests pass: 104 unit + 51 integration (backend); live end-to-end flows via Mailpit and Chromium.
+
+### Phase 2 follow-ups / known issues
+
+- Logging out one device leaves that access token valid for up to 15 minutes
+  ("sign out everywhere" is immediate). Documented in ADR 0008.
+- Rate limiting fails open if Redis is down (logged).
+- Email change and account deletion are not implemented yet.
+- Organization deletion is not implemented. Ownership transfer works by
+  promoting another owner and then leaving.
+- Emails are sent via FastAPI background tasks; move them to Celery with
+  retries in Phase 4.
+- Frontend sign-in and workspace screens arrive in Phase 7. The `/login` and
+  `/register` pages still show "coming soon". The SPA must send
+  `X-CSRF-Protection: 1` and make concurrent refresh calls single-flight.
+- PostgreSQL row-level security as defence in depth: evaluate in Phase 3/9 (ADR 0009).
 
 ## Phase 3: Document management and storage
 

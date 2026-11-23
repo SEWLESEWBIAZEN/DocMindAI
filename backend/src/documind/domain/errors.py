@@ -1,0 +1,60 @@
+"""Domain errors.
+
+Each error carries a stable machine-readable ``code`` and a message that is
+safe to show to API clients. The API layer maps error classes to HTTP status
+codes; nothing here knows about HTTP.
+"""
+
+from __future__ import annotations
+
+
+class DomainError(Exception):
+    code: str = "error"
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        if code is not None:
+            self.code = code
+
+
+class ValidationFailedError(DomainError):
+    code = "validation_failed"
+
+
+class AuthenticationError(DomainError):
+    """Credentials or token are missing, invalid or expired."""
+
+    code = "authentication_failed"
+
+
+class EmailNotVerifiedError(DomainError):
+    code = "email_not_verified"
+
+
+class PermissionDeniedError(DomainError):
+    code = "permission_denied"
+
+
+class NotFoundError(DomainError):
+    """Also used when a resource exists but the caller may not know that."""
+
+    code = "not_found"
+
+
+class ConflictError(DomainError):
+    code = "conflict"
+
+
+class InvalidTokenError(DomainError):
+    """A one-time token (verification, reset, invitation) is invalid or expired."""
+
+    code = "invalid_token"
+
+
+class RateLimitedError(DomainError):
+    code = "rate_limited"
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__("Too many requests. Please try again later.")
+        self.retry_after_seconds = retry_after_seconds

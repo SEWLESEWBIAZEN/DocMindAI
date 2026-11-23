@@ -76,6 +76,48 @@ class Settings(BaseSettings):
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
+    # --- Public URLs -------------------------------------------------------
+    # Base URL of the web app; used to build links in emails.
+    public_app_url: str = "http://localhost:5173"
+
+    # --- Authentication ----------------------------------------------------
+    jwt_secret_key: SecretStr = Field(min_length=32)
+    jwt_issuer: str = "documind"
+    jwt_audience: str = "documind-api"
+    access_token_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    refresh_token_ttl_days: int = Field(default=14, ge=1, le=90)
+    refresh_cookie_name: str = "documind_refresh"
+    # Secure cookies are required in production; browsers also accept them on
+    # http://localhost, so this stays on in development too.
+    auth_cookie_secure: bool = True
+    email_verification_ttl_hours: int = Field(default=24, ge=1, le=168)
+    password_reset_ttl_minutes: int = Field(default=30, ge=5, le=240)
+    invitation_ttl_days: int = Field(default=7, ge=1, le=30)
+    # Argon2id cost (RFC 9106 second recommended option by default).
+    password_hash_time_cost: int = Field(default=3, ge=1, le=10)
+    password_hash_memory_kib: int = Field(default=65536, ge=8, le=1048576)
+    password_hash_parallelism: int = Field(default=4, ge=1, le=16)
+
+    # --- Rate limits (requests per window, per client IP unless noted) ------
+    rate_limit_enabled: bool = True
+    rate_limit_login_per_ip: int = Field(default=20, ge=1)
+    rate_limit_login_per_email: int = Field(default=10, ge=1)
+    rate_limit_login_window_seconds: int = Field(default=300, ge=1)
+    rate_limit_auth_per_ip: int = Field(default=10, ge=1)
+    rate_limit_auth_window_seconds: int = Field(default=600, ge=1)
+    rate_limit_refresh_per_ip: int = Field(default=60, ge=1)
+    rate_limit_refresh_window_seconds: int = Field(default=60, ge=1)
+
+    # --- Email (SMTP) ------------------------------------------------------
+    smtp_host: str = "localhost"
+    smtp_port: int = Field(default=1025, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = False
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: float = Field(default=10.0, gt=0)
+    email_from: str = "DocuMind AI <no-reply@documind.local>"
+
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
@@ -108,6 +150,7 @@ class Settings(BaseSettings):
             "REDIS_URL": self.redis_url,
             "S3_ACCESS_KEY_ID": self.s3_access_key_id,
             "S3_SECRET_ACCESS_KEY": self.s3_secret_access_key,
+            "JWT_SECRET_KEY": self.jwt_secret_key,
         }
         insecure = [
             name
@@ -123,6 +166,18 @@ class Settings(BaseSettings):
             )
         if "*" in self.cors_allowed_origins:
             raise ValueError("Wildcard CORS origins are not allowed in production")
+        if not self.auth_cookie_secure:
+            raise ValueError("AUTH_COOKIE_SECURE must be true in production")
+        if not self.public_app_url.startswith("https://"):
+            raise ValueError("PUBLIC_APP_URL must use https in production")
+        if not (self.smtp_starttls or self.smtp_use_ssl):
+            raise ValueError("SMTP must use STARTTLS or SSL in production")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_smtp(self) -> Settings:
+        if self.smtp_starttls and self.smtp_use_ssl:
+            raise ValueError("Choose either SMTP_STARTTLS or SMTP_USE_SSL, not both")
         return self
 
     @property

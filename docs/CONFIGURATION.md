@@ -50,13 +50,65 @@ Required variables have no default; the backend refuses to start without them.
 | `S3_CONNECT_TIMEOUT_SECONDS`    |          | `5.0`       | boto3 connect timeout.                                            |
 | `S3_READ_TIMEOUT_SECONDS`       |          | `30.0`      | boto3 read timeout.                                               |
 
+## Authentication
+
+| Variable                          | Required | Default            | Description                                                         |
+| --------------------------------- | -------- | ------------------ | ------------------------------------------------------------------- |
+| `JWT_SECRET_KEY`                  | yes      |                    | HS256 signing key for access tokens; at least 32 characters (use ≥ 48 random bytes). |
+| `JWT_ISSUER`                      |          | `documind`         | `iss` claim.                                                        |
+| `JWT_AUDIENCE`                    |          | `documind-api`     | `aud` claim.                                                        |
+| `ACCESS_TOKEN_TTL_SECONDS`        |          | `900`              | Access token lifetime (60–3600).                                    |
+| `REFRESH_TOKEN_TTL_DAYS`          |          | `14`               | Refresh token lifetime; slides on each rotation.                    |
+| `REFRESH_COOKIE_NAME`             |          | `documind_refresh` | Name of the HttpOnly refresh cookie.                                |
+| `AUTH_COOKIE_SECURE`              |          | `true`             | `Secure` cookie flag. Must be true in production; browsers accept it on `http://localhost`. |
+| `EMAIL_VERIFICATION_TTL_HOURS`    |          | `24`               | Verification link lifetime.                                         |
+| `PASSWORD_RESET_TTL_MINUTES`      |          | `30`               | Reset link lifetime.                                                |
+| `INVITATION_TTL_DAYS`             |          | `7`                | Invitation lifetime.                                                |
+| `PASSWORD_HASH_TIME_COST`         |          | `3`                | Argon2id iterations.                                                |
+| `PASSWORD_HASH_MEMORY_KIB`        |          | `65536`            | Argon2id memory (64 MiB).                                           |
+| `PASSWORD_HASH_PARALLELISM`       |          | `4`                | Argon2id lanes.                                                     |
+| `PUBLIC_APP_URL`                  |          | `http://localhost:5173` | Web app base URL used in email links. Must be `https://` in production. |
+
+## Rate limits
+
+Fixed windows in Redis. Exceeding one returns 429 with `Retry-After`. If
+Redis is unavailable, requests are allowed and an error is logged.
+
+| Variable                              | Default | Applies to                                              |
+| ------------------------------------- | ------- | ------------------------------------------------------- |
+| `RATE_LIMIT_ENABLED`                  | `true`  | Master switch.                                          |
+| `RATE_LIMIT_LOGIN_PER_IP`             | `20`    | Login attempts per client IP per window.                |
+| `RATE_LIMIT_LOGIN_PER_EMAIL`          | `10`    | Login attempts per email per window; also password changes per user. |
+| `RATE_LIMIT_LOGIN_WINDOW_SECONDS`     | `300`   | Login window.                                           |
+| `RATE_LIMIT_AUTH_PER_IP`              | `10`    | Register, verify, resend, forgot and reset, per IP (and per email where given). |
+| `RATE_LIMIT_AUTH_WINDOW_SECONDS`      | `600`   | Window for the above.                                   |
+| `RATE_LIMIT_REFRESH_PER_IP`           | `60`    | Token refreshes per IP per window.                      |
+| `RATE_LIMIT_REFRESH_WINDOW_SECONDS`   | `60`    | Refresh window.                                         |
+
+## Email (SMTP)
+
+| Variable                | Default                                  | Description                                     |
+| ----------------------- | ---------------------------------------- | ----------------------------------------------- |
+| `SMTP_HOST`             | `localhost`                              | SMTP server (`mailpit` inside Compose).          |
+| `SMTP_PORT`             | `1025`                                   |                                                 |
+| `SMTP_USERNAME`         | *(none)*                                 | Login is used only when username and password are both set. |
+| `SMTP_PASSWORD`         | *(none)*                                 |                                                 |
+| `SMTP_STARTTLS`         | `false`                                  | Upgrade with STARTTLS. Production requires this or SSL. |
+| `SMTP_USE_SSL`          | `false`                                  | Implicit TLS (usually port 465). Mutually exclusive with STARTTLS. |
+| `SMTP_TIMEOUT_SECONDS`  | `10`                                     |                                                 |
+| `EMAIL_FROM`            | `DocuMind AI <no-reply@documind.local>`  | From header.                                    |
+
 ## Production safeguards
 
 With `ENVIRONMENT=production` the backend refuses to start if:
 
-- `DATABASE_URL`, `REDIS_URL`, `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`
-  contains a development placeholder marker (`change-me`, `dev-only`, `insecure`);
-- `CORS_ALLOWED_ORIGINS` contains `*`.
+- `DATABASE_URL`, `REDIS_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` or
+  `JWT_SECRET_KEY` contains a development placeholder marker (`change-me`,
+  `dev-only`, `insecure`);
+- `CORS_ALLOWED_ORIGINS` contains `*`;
+- `AUTH_COOKIE_SECURE` is false;
+- `PUBLIC_APP_URL` is not `https://`;
+- SMTP uses neither STARTTLS nor SSL.
 
 ## Docker Compose (development) variables
 
@@ -78,6 +130,8 @@ Read by `docker-compose.yml` from the repository-root `.env`:
 | `MINIO_CONSOLE_HOST_PORT`  | `9001`  |                                                         |
 | `BACKEND_HOST_PORT`        | `8000`  |                                                         |
 | `FRONTEND_HOST_PORT`       | `5173`  |                                                         |
+| `MAILPIT_SMTP_HOST_PORT`   | `1025`  | Mailpit SMTP (development mail catcher).                |
+| `MAILPIT_UI_HOST_PORT`     | `8025`  | Mailpit web UI: read every email the app sends.         |
 
 Inside Compose, the backend container receives `DATABASE_URL`, `REDIS_URL` and
 the `S3_*` values built from the infrastructure variables above, using service

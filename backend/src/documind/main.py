@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from documind import __version__
+from documind.api.errors import register_error_handlers
 from documind.api.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from documind.api.router import api_router
 from documind.container import Container, build_container
@@ -66,5 +67,6 @@ def create_app(
     # Added last so it is the outermost middleware and sees every request.
     app.add_middleware(RequestContextMiddleware)
 
+    register_error_handlers(app)
     app.include_router(api_router)
     return app

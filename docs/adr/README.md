@@ -13,5 +13,8 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0005](0005-logging-and-health-checks.md) | Structured stdlib logging, request IDs, liveness vs readiness | Accepted |
 | [0006](0006-local-object-storage-image.md) | Local object storage image after MinIO's distribution change | Accepted (development) / Open (production) |
 | [0007](0007-frontend-toolchain.md) | Frontend toolchain: Vite, TypeScript 7, oxlint, Vitest | Accepted |
+| [0008](0008-authentication-and-sessions.md) | Authentication and session tokens | Accepted |
+| [0009](0009-tenancy-and-authorization.md) | Tenancy model and authorization policy | Accepted |
+| [0010](0010-application-layer-persistence.md) | Application services use concrete repositories (amends 0001) | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

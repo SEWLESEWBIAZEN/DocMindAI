@@ -72,7 +72,59 @@ Tenant isolation will be enforced in application services and in repository
 queries (workspace ID is a mandatory filter parameter, never optional), not
 only in routes. Phase 2 establishes this pattern.
 
-## 3. Runtime resources and lifecycle
+## 3. Identity, tenancy and authorization (Phase 2)
+
+See ADR 0008 (sessions), ADR 0009 (tenancy and permissions) and ADR 0010
+(persistence layering).
+
+```
+users ──< workspace_members >── workspaces ──1:1── organizations
+  │              │                  │ (kind = personal → personal_owner_id = user)
+  │            roles ──< role_permissions >── permissions
+  ├──< refresh_tokens   (hashed, rotated, grouped by family_id)
+  ├──< account_tokens   (hashed; email_verification | password_reset)
+  └──< invitations      (workspace, email, role; hashed token)
+audit_logs (append-only; no FKs so history survives deletions)
+```
+
+**Request authorization path for workspace routes**
+
+1. `get_current_user` decodes the bearer JWT and loads the user. The token's
+   `ver` claim must match `users.auth_version`.
+2. `get_workspace_context(workspace_id)` loads the caller's membership. If
+   there is none it raises 404. Otherwise it returns a `WorkspaceContext` with
+   the role and the permissions from `role_permissions`.
+3. The service calls `ctx.require(Permission.…)` and applies the hierarchy and
+   ownership policies.
+4. Repositories filter by `ctx.workspace_id` in SQL. Rows read and then changed
+   under an invariant are locked `FOR UPDATE`.
+
+**API surface** (all under `/api/v1`; full schema at `/api/docs`)
+
+| Area | Endpoints |
+| ---- | --------- |
+| Auth | `POST /auth/register`, `/auth/verify-email`, `/auth/verify-email/resend`, `/auth/login`, `/auth/refresh`*, `/auth/logout`*, `/auth/logout-all`, `/auth/password/forgot`, `/auth/password/reset` |
+| Me | `GET/PATCH /me`, `POST /me/password`, `GET /me/workspaces`, `PUT /me/active-workspace`, `GET /me/invitations`, `POST /me/invitations/{id}/accept`, `POST /me/invitations/{id}/decline` |
+| Organizations | `POST /organizations` |
+| Workspace | `GET/PATCH /workspaces/{id}`, `POST /workspaces/{id}/leave`, `GET /workspaces/{id}/members`, `PATCH/DELETE /workspaces/{id}/members/{member_id}`, `GET/POST /workspaces/{id}/invitations`, `DELETE /workspaces/{id}/invitations/{invitation_id}`, `GET /workspaces/{id}/audit-logs` |
+| Invitations | `POST /invitations/accept` (emailed token) |
+
+\* Authenticated by the refresh cookie; requires the `X-CSRF-Protection: 1` header.
+
+Errors are JSON of the form `{"detail": "...", "code": "..."}`, where `code`
+is stable for clients:
+
+| Status | Meaning |
+| ------ | ------- |
+| 401 | Not authenticated or invalid credentials |
+| 403 | Permission denied, email not verified, or CSRF header missing |
+| 404 | Not found, including resources in other tenants |
+| 409 | Conflict: last owner, personal workspace, already a member |
+| 400 | Invalid or expired one-time token |
+| 422 | Validation failed |
+| 429 | Rate limited (`Retry-After` header) |
+
+## 4. Runtime resources and lifecycle
 
 `create_app()` builds the app. The lifespan:
 
@@ -82,7 +134,7 @@ only in routes. Phase 2 establishes this pattern.
    reports it, and the dependency recovers without a restart.
 3. On shutdown, closes Redis, disposes the engine pool and closes the S3 client.
 
-## 4. Health model
+## 5. Health model
 
 | Endpoint                   | Purpose   | Touches dependencies | Failure                                                         |
 | -------------------------- | --------- | -------------------- | --------------------------------------------------------------- |
@@ -95,7 +147,7 @@ exception messages are logged but never returned; clients see either a
 curated message (`DependencyCheckError`) or the exception type. In
 production, details and error reasons are hidden from the response.
 
-## 5. Data and migrations
+## 6. Data and migrations
 
 - SQLAlchemy 2.x async with asyncpg. All models share `infrastructure/database/base.Base`
   with a deterministic constraint naming convention.
@@ -105,7 +157,7 @@ production, details and error reasons are hidden from the response.
   superuser) and by migration `0001` (idempotent). This supports managed
   databases where no init script runs.
 
-## 6. Observability
+## 7. Observability
 
 - Structured logs via the standard library: JSON in production
   (`LOG_FORMAT=json`), human-readable in development.
@@ -117,7 +169,7 @@ production, details and error reasons are hidden from the response.
 - Client-supplied request IDs are accepted only if they match
   `[A-Za-z0-9._-]{1,128}`, which prevents log injection.
 
-## 7. Frontend
+## 8. Frontend
 
 - Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
 - `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
@@ -127,7 +179,7 @@ production, details and error reasons are hidden from the response.
 - Phase 1 ships a system status page that exercises the full path:
   browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
 
-## 8. Environments
+## 9. Environments
 
 | Environment   | Config source                              | Notes                                                        |
 | ------------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -135,7 +187,7 @@ production, details and error reasons are hidden from the response.
 | test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
 | production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
 
-## 9. Deployment target
+## 10. Deployment target
 
 The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
 Compose behind Nginx with TLS (Phase 10). The backend image has a separate

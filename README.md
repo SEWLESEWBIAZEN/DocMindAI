@@ -4,10 +4,11 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phase 1 (foundation) complete.** The repository has the
-> infrastructure, backend and frontend skeletons with health checks. Product
-> features (identity, documents, RAG, chat) arrive in later phases. See
-> [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+> **Status: Phases 1–2 complete.** The foundation plus identity and tenancy are
+> in place: accounts, email verification, sessions with rotating refresh tokens,
+> personal and organization workspaces, roles and permissions, invitations and
+> an audit log, all exposed through the API. Documents, RAG and chat arrive in
+> later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Stack
 
@@ -58,6 +59,7 @@ docker compose up --build
 | http://localhost:8000/api/v1/health | Readiness: app + dependency health        |
 | http://localhost:8000/api/docs      | OpenAPI docs (disabled in production)     |
 | http://localhost:9001               | MinIO console (credentials from `.env`)   |
+| http://localhost:8025               | Mailpit: every email the app sends (verification, reset, invitations) |
 
 The backend container applies migrations and creates the private storage
 bucket on start. All ports are bound to `127.0.0.1`.
@@ -87,6 +89,16 @@ make test-integration  # backend tests against real Postgres/Redis/MinIO
 Backend integration tests are opt-in (`pytest -m integration`) and require
 `make infra bootstrap`. They use a separate `<db>_test` database for migration
 round-trips.
+
+## Trying the identity API
+
+With the stack running, open http://localhost:8000/api/docs:
+
+1. `POST /api/v1/auth/register` with an email, a password (at least 10 characters) and a display name.
+2. Open Mailpit at http://localhost:8025, copy the token from the verification
+   link, and call `POST /api/v1/auth/verify-email`.
+3. `POST /api/v1/auth/login` returns an access token. Click **Authorize** and paste it.
+4. Try `POST /api/v1/organizations`, invitations, members and `GET /api/v1/me/workspaces`.
 
 ## Health endpoints
 
