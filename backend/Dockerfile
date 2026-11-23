@@ -16,6 +16,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/opt/venv
+# Tesseract OCR (scanned PDFs, ADR 0011) with English language data.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
+ && rm -rf /var/lib/apt/lists/*
 RUN pip install "uv==0.11.32"
 WORKDIR /app
 
@@ -38,6 +42,10 @@ RUN uv sync --frozen --no-dev --no-editable
 
 # --------------------------------------------------------------------------- #
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+# Tesseract OCR (scanned PDFs, ADR 0011) with English language data.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
+ && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:${PATH}"

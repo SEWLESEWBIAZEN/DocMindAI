@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +32,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 PASSWORD = "correct horse battery staple"
 # Every table holding per-test data (roles/permissions are seed data and stay).
 DATA_TABLES = [
+    "processing_jobs",
+    "document_chunks",
+    "document_pages",
     "document_collection_items",
     "document_collections",
     "document_versions",
@@ -124,6 +128,8 @@ def identity_settings(live_settings: Settings, migrated_test_db: str, test_bucke
             "rate_limit_mfa_per_user": 1000,
             "public_app_url": "https://app.test.example",
             "s3_bucket": test_bucket,
+            "embedding_provider": "local",
+            "processing_retry_base_seconds": 1,
         }
     )
 
@@ -163,10 +169,25 @@ class Mailbox:
 
 
 @dataclass
+class RecordingDispatcher:
+    """JobDispatcher for API tests: records job IDs instead of publishing to Celery."""
+
+    dispatched: list[uuid.UUID] = field(default_factory=list)
+    fail: bool = False
+
+    async def dispatch(self, job_id: uuid.UUID, *, countdown_seconds: int | None = None) -> bool:
+        if self.fail:
+            return False
+        self.dispatched.append(job_id)
+        return True
+
+
+@dataclass
 class Api:
     client: TestClient
     mail: Mailbox
     settings: Settings
+    dispatcher: RecordingDispatcher = field(default_factory=RecordingDispatcher)
     clock: dict[str, float] = field(default_factory=lambda: {"offset": 0.0})
 
     # ---- two-factor helpers -----------------------------------------------
@@ -294,11 +315,13 @@ def make_api(
     def _make(container_overrides: dict[str, Any] | None = None, **overrides: Any) -> Api:
         settings = identity_settings.model_copy(update=overrides)
         asyncio.run(_reset_state(settings))
+        dispatcher = RecordingDispatcher()
+        container_overrides = {"job_dispatcher": dispatcher, **(container_overrides or {})}
 
         def factory(s: Settings) -> Container:
             container = build_container(s)
             container.email_sender = mailbox
-            for name, value in (container_overrides or {}).items():
+            for name, value in container_overrides.items():
                 setattr(container, name, value)
             return container
 
@@ -307,7 +330,10 @@ def make_api(
         )
         client.__enter__()
         clients.append(client)
-        return Api(client=client, mail=mailbox, settings=settings, clock=clock)
+        api = Api(client=client, mail=mailbox, settings=settings, clock=clock)
+        if isinstance(container_overrides["job_dispatcher"], RecordingDispatcher):
+            api.dispatcher = container_overrides["job_dispatcher"]
+        return api
 
     yield _make
     for client in clients:

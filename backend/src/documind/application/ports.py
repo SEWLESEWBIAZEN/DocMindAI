@@ -124,3 +124,38 @@ class MalwareScanner(Protocol):
 
 class ScannerUnavailableError(Exception):
     pass
+
+
+# --------------------------------------------------------------------------- #
+# Embeddings
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingBatch:
+    vectors: list[list[float]]
+    input_tokens: int
+
+
+class EmbeddingProvider(Protocol):
+    """Turns texts into vectors. Raises Transient/PermanentProcessingError on failure."""
+
+    @property
+    def model(self) -> str: ...
+
+    @property
+    def dimensions(self) -> int: ...
+
+    async def embed(self, texts: list[str]) -> EmbeddingBatch: ...
+
+
+# --------------------------------------------------------------------------- #
+# Background jobs
+# --------------------------------------------------------------------------- #
+
+
+class JobDispatcher(Protocol):
+    """Hands a processing job to the worker queue. Best effort: returns False on
+    failure (the sweeper re-dispatches queued jobs, so nothing is lost)."""
+
+    async def dispatch(self, job_id: UUID, *, countdown_seconds: int | None = None) -> bool: ...

@@ -92,6 +92,37 @@ Required variables have no default; the backend refuses to start without them.
 | `RATE_LIMIT_MFA_PER_USER`         |          | `5`        | 2FA attempts (setup, confirm, verify, disable, regenerate) per user per window. |
 | `RATE_LIMIT_MFA_WINDOW_SECONDS`   |          | `300`      | Window for the above.                                                    |
 
+## Document processing
+
+| Variable                              | Default  | Description                                                         |
+| ------------------------------------- | -------- | ------------------------------------------------------------------- |
+| `CELERY_BROKER_URL`                   | *(= `REDIS_URL`)* | Celery broker.                                             |
+| `PROCESSING_MAX_ATTEMPTS`             | `5`      | Attempts before a job is marked `dead` (dead letter).               |
+| `PROCESSING_RETRY_BASE_SECONDS`       | `30`     | Backoff base; doubles each attempt (±20 % jitter, capped at 1 h).   |
+| `PROCESSING_LEASE_SECONDS`            | `1800`   | A running job whose lease expires is re-queued by the sweeper. Also bounds task time limits. |
+| `PROCESSING_DISPATCH_GRACE_SECONDS`   | `60`     | Queued jobs not picked up within this time are re-dispatched.       |
+| `PROCESSING_SWEEP_INTERVAL_SECONDS`   | `30`     | How often Celery beat runs the sweeper.                             |
+| `MAX_DOCUMENT_PAGES`                  | `2000`   | PDFs with more pages fail permanently.                              |
+| `CHUNK_MAX_TOKENS`                    | `500`    | Chunk budget (estimated tokens).                                    |
+| `CHUNK_OVERLAP_TOKENS`                | `60`     | Overlap of whole sentences between consecutive chunks (< half the budget). |
+| `CHUNK_RESPECT_PAGES`                 | `true`   | Never let a chunk span pages, so citations name exact pages.        |
+| `OCR_ENABLED`                         | `true`   | OCR pages without a usable text layer (needs Tesseract language data). |
+| `OCR_LANGUAGES`                       | `eng`    | Tesseract languages, e.g. `eng+deu` (install matching `tesseract-ocr-*` packages). |
+| `OCR_DPI`                             | `300`    | Rendering resolution for OCR.                                       |
+
+## Embeddings
+
+| Variable                     | Default                   | Description                                                   |
+| ---------------------------- | ------------------------- | ------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`         | `openai`                  | `openai`, or `local` (deterministic, offline; development and tests only; rejected in production). |
+| `OPENAI_API_KEY`             | *(none)*                  | Required when the provider is `openai`.                        |
+| `OPENAI_BASE_URL`            | *(OpenAI)*                | Optional compatible endpoint (e.g. Azure OpenAI gateway).      |
+| `EMBEDDING_MODEL`            | `text-embedding-3-small`  | Changing it: run `documind-manage reindex`.                    |
+| `EMBEDDING_DIMENSIONS`       | `1536`                    | Must match the vector column (migration `0005`).               |
+| `EMBEDDING_BATCH_SIZE`       | `64`                      | Inputs per request (also bounded by a token budget).           |
+| `EMBEDDING_MAX_RETRIES`      | `5`                       | SDK retries for 429/5xx/connection errors (honours `Retry-After`). |
+| `EMBEDDING_TIMEOUT_SECONDS`  | `60`                      | Per-request timeout.                                          |
+
 ## Rate limits
 
 Fixed windows in Redis. Exceeding one returns 429 with `Retry-After`. If
@@ -131,7 +162,8 @@ With `ENVIRONMENT=production` the backend refuses to start if:
 - `CORS_ALLOWED_ORIGINS` contains `*`;
 - `AUTH_COOKIE_SECURE` is false;
 - `PUBLIC_APP_URL` is not `https://`;
-- SMTP uses neither STARTTLS nor SSL.
+- SMTP uses neither STARTTLS nor SSL;
+- `EMBEDDING_PROVIDER` is not `openai`.
 
 ## Docker Compose (development) variables
 

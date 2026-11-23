@@ -15,10 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from documind.application.documents.uploads import InspectedUpload, inspect_upload
 from documind.application.identity.common import AuditRecorder, RequestMeta, utcnow
 from documind.application.ports import (
+    JobDispatcher,
     MalwareScanner,
     ObjectStorageProvider,
     ScannerUnavailableError,
 )
+from documind.application.processing.jobs import new_job
 from documind.core.config import Settings
 from documind.domain.documents.files import (
     MEDIA_TYPES,
@@ -50,6 +52,7 @@ from documind.infrastructure.database.repositories.documents import (
     DocumentRepository,
 )
 from documind.infrastructure.database.repositories.identity import AuditLogRepository
+from documind.infrastructure.database.repositories.processing import ProcessingJobRepository
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +71,8 @@ class DocumentInfo:
     status: DocumentStatus
     processing_error: str | None
     page_count: int | None
+    chunk_count: int | None
+    processed_at: datetime | None
     version_count: int
     current_version_id: uuid.UUID | None
     collection_ids: list[uuid.UUID]
@@ -124,11 +129,14 @@ class DocumentService:
         storage: ObjectStorageProvider,
         scanner: MalwareScanner,
         meta: RequestMeta,
+        dispatcher: JobDispatcher,
     ) -> None:
         self._session = session
         self._settings = settings
         self._storage = storage
         self._scanner = scanner
+        self._dispatcher = dispatcher
+        self._jobs = ProcessingJobRepository(session)
         self._documents = DocumentRepository(session)
         self._collections = CollectionRepository(session)
         self._audit = AuditRecorder(AuditLogRepository(session), meta)
@@ -147,6 +155,8 @@ class DocumentService:
             status=DocumentStatus(doc.status),
             processing_error=doc.processing_error,
             page_count=doc.page_count,
+            chunk_count=doc.chunk_count,
+            processed_at=doc.processed_at,
             version_count=doc.version_count,
             current_version_id=doc.current_version_id,
             collection_ids=collection_ids or [],
@@ -283,6 +293,11 @@ class DocumentService:
                         added_by_user_id=ctx.user_id,
                     )
                 )
+            # Transactional outbox: the job is committed with the document.
+            job = new_job(
+                doc, self._settings, now=utcnow(), requested_by=ctx.user_id, dispatched=True
+            )
+            self._jobs.add(job)
             self._audit.record(
                 "document.uploaded",
                 actor_user_id=ctx.user_id,
@@ -306,6 +321,7 @@ class DocumentService:
             await self._session.rollback()
             await self._discard(key)
             raise
+        await self._dispatcher.dispatch(job.id)
         await self._session.refresh(doc)
         return self._info(doc, [collection_id] if collection_id else [])
 
@@ -352,10 +368,16 @@ class DocumentService:
             doc.media_type = inspected.media_type
             doc.size_bytes = inspected.size_bytes
             doc.checksum_sha256 = inspected.checksum_sha256
-            # The new content must be processed again (Phase 4).
+            # The new content must be processed again; an in-flight job for the
+            # previous version is superseded (its results are discarded).
             doc.status = DocumentStatus.PENDING.value
             doc.processing_error = None
             doc.page_count = None
+            await self._supersede_active_job(doc.id)
+            job = new_job(
+                doc, self._settings, now=utcnow(), requested_by=ctx.user_id, dispatched=True
+            )
+            self._jobs.add(job)
             self._audit.record(
                 "document.version_uploaded",
                 actor_user_id=ctx.user_id,
@@ -375,7 +397,48 @@ class DocumentService:
             await self._session.rollback()
             await self._discard(key)
             raise
+        await self._dispatcher.dispatch(job.id)
         return await self.get(ctx, document_id)
+
+    async def _supersede_active_job(self, document_id: uuid.UUID) -> None:
+        active = await self._jobs.active_for_document(document_id)
+        if active is not None:
+            active.status = "superseded"
+            active.finished_at = utcnow()
+            active.lease_expires_at = None
+            await self._session.flush()
+
+    async def reprocess(self, ctx: WorkspaceContext, document_id: uuid.UUID) -> uuid.UUID:
+        """Queue the current version for processing again (e.g. after a failure)."""
+        ctx.require(Permission.DOCUMENTS_WRITE)
+        doc = await self._require(ctx, document_id, for_update=True)
+        if await self._jobs.active_for_document(doc.id) is not None:
+            raise ConflictError(
+                "This document is already queued or being processed.",
+                code="processing_in_progress",
+            )
+        job = new_job(doc, self._settings, now=utcnow(), requested_by=ctx.user_id, dispatched=True)
+        self._jobs.add(job)
+        doc.status = DocumentStatus.PENDING.value
+        doc.processing_error = None
+        self._audit.record(
+            "document.reprocess_requested",
+            actor_user_id=ctx.user_id,
+            workspace_id=ctx.workspace_id,
+            target_type="document",
+            target_id=doc.id,
+            details={"job_id": str(job.id)},
+        )
+        try:
+            await self._session.commit()
+        except IntegrityError as exc:  # lost a race with another reprocess request
+            await self._session.rollback()
+            raise ConflictError(
+                "This document is already queued or being processed.",
+                code="processing_in_progress",
+            ) from exc
+        await self._dispatcher.dispatch(job.id)
+        return job.id
 
     # ------------------------------------------------------------------ read
 

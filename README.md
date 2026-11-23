@@ -4,11 +4,11 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–3 complete.** Foundation, identity and tenancy (accounts,
-> sessions, workspaces, roles, invitations, audit log), and document management
-> (validated uploads to private storage, versions, collections, metadata search,
-> signed downloads) are in place, all exposed through the API. Processing, RAG
-> and chat arrive in later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+> **Status: Phases 1–4 complete.** Foundation, identity and tenancy, document
+> management, and the asynchronous processing pipeline are in place: uploads are
+> extracted (with OCR for scanned PDFs), chunked by page and section, embedded
+> into pgvector and observable per document. AI search, RAG and chat arrive in
+> later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
 and low-vision professionals too: full screen-reader support, questions by
@@ -65,6 +65,10 @@ docker compose up --build
 | http://localhost:8000/api/docs      | OpenAPI docs (disabled in production)     |
 | http://localhost:9001               | MinIO console (credentials from `.env`)   |
 | http://localhost:8025               | Mailpit: every email the app sends (verification, reset, invitations) |
+
+Background services: `worker` (Celery; processes uploads) and `beat` (runs the
+recovery sweep). In development, embeddings use the offline `local` provider;
+set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY` for real embeddings.
 
 The backend container applies migrations and creates the private storage
 bucket on start. All ports are bound to `127.0.0.1`.

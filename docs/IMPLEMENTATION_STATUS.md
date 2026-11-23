@@ -164,14 +164,43 @@ Follow-ups:
 - [ ] Passkeys (WebAuthn) as an additional factor; email OTP as an accessible fallback (ADR 0011)
 - [ ] Frontend 2FA screens (QR code, manual secret, recovery codes) in Phase 7
 
-## Phase 4: Document processing engine
+## Phase 4: Document processing engine ✅
 
-- [ ] Celery + Redis; reliable dispatch (outbox or equivalent)
-- [ ] Extractor (PyMuPDF, python-docx, text), normaliser, chunker
-- [ ] **OCR for scanned PDFs (required, ADR 0011)**; preserve reading order, headings and page numbers
-- [ ] Text descriptions for figures and charts (vision model; ADR 0011)
-- [ ] Embedding provider abstraction (OpenAI), batching, retries, dedup
-- [ ] pgvector repository; idempotency; retries; failed-job handling
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Celery + Redis; asynchronous processing | [x] | Real Celery worker test; live stack (`worker` and `beat` services) |
+| Reliable dispatch (no silently unprocessed documents) | [x] | Outbox job in the upload transaction; sweeper re-dispatch test; live run with the worker stopped and restarted |
+| DocumentExtractor: PyMuPDF, python-docx, TXT/Markdown | [x] | `test_extractors.py`; pipeline tests per format |
+| Page numbers, title, section headings, metadata, warnings preserved | [x] | `document_pages`, chunk `page_start`/`page_end`/`heading_path`, `extraction_warnings`, `extracted_metadata` |
+| OCR for scanned PDFs (required by ADR 0011) | [x] | Tesseract via PyMuPDF; unit, integration and live (inside the worker container) |
+| TextNormalizer | [x] | Hyphenation, whitespace, control characters, repeated headers/footers |
+| DocumentChunker: max tokens, overlap, page boundaries, section-aware, metadata | [x] | `test_chunking.py` (20 tests) |
+| EmbeddingService: batching, rate limits, retries, model/dimensions tracked, no duplicate work, re-indexing | [x] | Mocked-HTTP tests of the OpenAI adapter; content-hash re-use (reprocess creates 0 new embeddings); `documind-manage reindex` |
+| VectorRepository (pgvector, HNSW cosine) | [x] | Migration `0005`; cosine-search test returns the right chunk |
+| Orchestrator: idempotent, retry policy, failure tracking, status, observability | [x] | Duplicate delivery, superseded (including mid-run), permanent vs transient, backoff then dead then manual retry |
+| Dead-letter / failed-job handling | [x] | `dead` status; `POST …/reprocess`; `documind-manage jobs --status dead` |
+| Recovery from worker restarts | [x] | Expired-lease sweep test; `acks_late` + `reject_on_worker_lost`; live stop/start |
+
+Acceptance criteria (verified 2026-11-23):
+
+- [x] Uploaded documents are processed asynchronously.
+- [x] Extracted text is available (`GET …/pages`).
+- [x] Chunks are stored (`GET …/chunks`).
+- [x] Embeddings are stored in pgvector (1536-d, HNSW). **Note:** verified with the local development provider; the OpenAI adapter is verified against mocked HTTP only, because `api.openai.com` is not reachable from this build environment and no key is configured.
+- [x] Page metadata is preserved.
+- [x] Failed jobs can be retried.
+- [x] Duplicate processing is prevented.
+
+Tests: 236 unit and 116 integration tests (backend), including a real Celery worker; live end-to-end on the Compose stack.
+
+### Phase 4 follow-ups / known issues
+
+- Live verification against the real OpenAI API is pending (network policy, no key).
+- Token counts are estimates (conservative); a tokenizer can replace the estimator when its data is available.
+- The image's `apt-get install tesseract-ocr` step couldn't run here (`deb.debian.org` is blocked by this
+  environment's network policy). OCR was verified with the same language data mounted from the host; CI builds the images.
+- Figure and chart descriptions (ADR 0011) move to Phase 5, where a vision-capable LLM provider exists.
+- The development worker does not auto-reload; restart it after backend code changes (`docker compose restart worker`).
 
 ## Phase 5: AI search and RAG engine
 

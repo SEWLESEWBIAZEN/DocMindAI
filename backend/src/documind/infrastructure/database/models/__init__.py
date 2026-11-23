@@ -20,18 +20,26 @@ from documind.infrastructure.database.models.identity import (
     WorkspaceMember,
     role_permissions,
 )
+from documind.infrastructure.database.models.processing import (
+    DocumentChunk,
+    DocumentPage,
+    ProcessingJob,
+)
 
 __all__ = [
     "AccountToken",
     "AuditLog",
     "Document",
+    "DocumentChunk",
     "DocumentCollection",
     "DocumentCollectionItem",
+    "DocumentPage",
     "DocumentVersion",
     "Invitation",
     "MfaRecoveryCode",
     "Organization",
     "Permission",
+    "ProcessingJob",
     "RefreshToken",
     "Role",
     "User",

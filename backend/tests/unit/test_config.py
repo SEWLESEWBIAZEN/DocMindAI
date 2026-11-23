@@ -56,6 +56,7 @@ def test_cors_origins_from_environment(
     ):
         monkeypatch.setenv(key.upper(), base[key].get_secret_value())
     monkeypatch.setenv("S3_BUCKET", "documind-test")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     s = Settings(_env_file=None)
     assert s.cors_allowed_origins == ["http://a.test", "http://b.test"]
 
@@ -114,3 +115,31 @@ def test_production_rejects_placeholder_mfa_key(make_settings: SettingsFactory) 
         make_settings(
             **PRODUCTION, mfa_encryption_key="Y2hhbmdlLW1lLWRldi1vbmx5LW1mYS1rZXktMDAwMDA="
         )
+
+
+def test_openai_provider_requires_key(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
+        make_settings(embedding_provider="openai")
+    configured = make_settings(embedding_provider="openai", openai_api_key="sk-x")
+    assert configured.embedding_provider == "openai"
+
+
+def test_production_rejects_local_embeddings(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="development only"):
+        make_settings(**{**PRODUCTION, "embedding_provider": "local"})
+
+
+def test_embedding_dimensions_fixed_by_schema(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="1536"):
+        make_settings(embedding_dimensions=3072)
+
+
+def test_chunk_overlap_bound(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="CHUNK_OVERLAP_TOKENS"):
+        make_settings(chunk_max_tokens=100, chunk_overlap_tokens=60)
+
+
+def test_broker_defaults_to_redis(make_settings: SettingsFactory) -> None:
+    assert make_settings().broker_url == "redis://127.0.0.1:1/0"
+    custom = make_settings(celery_broker_url="redis://broker:6379/2")
+    assert custom.broker_url == "redis://broker:6379/2"

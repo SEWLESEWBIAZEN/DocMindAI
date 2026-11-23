@@ -8,12 +8,17 @@ dependencies = [
     "argon2-cffi>=23.1",
     "asyncpg>=0.30",
     "boto3>=1.35",
+    "celery>=5.4",
     "cryptography>=44",
     "email-validator>=2.2",
     "fastapi>=0.115",
+    "openai>=1.60",
+    "pgvector>=0.3",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "pyjwt>=2.9",
+    "pymupdf>=1.25,<2",
+    "python-docx>=1.1",
     "python-multipart>=0.0.20",
     "redis>=5.2",
     "sqlalchemy[asyncio]>=2.0.36",
@@ -81,5 +86,11 @@ files = ["src/documind", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*"]
+module = ["boto3.*", "botocore.*", "celery.*", "kombu.*"]
 ignore_missing_imports = true
+
+# Test fixtures are built with untyped PyMuPDF / python-docx APIs.
+[[tool.mypy.overrides]]
+module = ["tests.unit.test_extractors", "tests.integration.test_processing_pipeline"]
+disallow_untyped_calls = false
+warn_return_any = false

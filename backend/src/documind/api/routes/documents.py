@@ -7,15 +7,27 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 
-from documind.api.dependencies import CollectionServiceDep, DocumentServiceDep, WorkspaceCtx
+from documind.api.dependencies import (
+    CollectionServiceDep,
+    DocumentServiceDep,
+    ProcessingQueriesDep,
+    WorkspaceCtx,
+)
 from documind.api.schemas.documents import (
+    ChunkListResponse,
+    ChunkResponse,
     CollectionResponse,
     CreateCollectionRequest,
     DocumentPageResponse,
     DocumentResponse,
     DocumentVersionResponse,
     DownloadUrlResponse,
+    PageListResponse,
+    PageResponse,
+    ProcessingJobResponse,
+    ProcessingStatusResponse,
     RenameDocumentRequest,
+    ReprocessResponse,
     UpdateCollectionRequest,
 )
 from documind.application.documents.collection_service import CollectionInfo
@@ -194,6 +206,108 @@ async def upload_version(
     file: Annotated[UploadFile, File()],
 ) -> DocumentResponse:
     return _doc(await documents.upload_version(ctx, document_id, file.file, file.filename))
+
+
+# --- Processing ----------------------------------------------------------------
+
+
+@router.get(
+    "/documents/{document_id}/processing",
+    response_model=ProcessingStatusResponse,
+    tags=["processing"],
+    summary="Processing status and job history",
+)
+async def processing_status(
+    document_id: uuid.UUID, ctx: WorkspaceCtx, queries: ProcessingQueriesDep
+) -> ProcessingStatusResponse:
+    result = await queries.status(ctx, document_id)
+    doc = result.document
+    return ProcessingStatusResponse(
+        document_id=doc.id,
+        status=DocumentStatus(doc.status),
+        processing_error=doc.processing_error,
+        page_count=doc.page_count,
+        chunk_count=doc.chunk_count,
+        processed_at=doc.processed_at,
+        extraction_warnings=list(doc.extraction_warnings or []),
+        jobs=[
+            ProcessingJobResponse(**{f: getattr(j, f) for f in ProcessingJobResponse.model_fields})
+            for j in result.jobs
+        ],
+    )
+
+
+@router.post(
+    "/documents/{document_id}/reprocess",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=ReprocessResponse,
+    tags=["processing"],
+    summary="Queue the document for processing again (e.g. after a failure)",
+)
+async def reprocess_document(
+    document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
+) -> ReprocessResponse:
+    return ReprocessResponse(job_id=await documents.reprocess(ctx, document_id))
+
+
+@router.get(
+    "/documents/{document_id}/pages",
+    response_model=PageListResponse,
+    tags=["processing"],
+    summary="Extracted text, page by page",
+)
+async def document_pages(
+    document_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    queries: ProcessingQueriesDep,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> PageListResponse:
+    pages, total = await queries.pages(ctx, document_id, offset=offset, limit=limit)
+    return PageListResponse(
+        items=[
+            PageResponse(
+                position=p.position,
+                page_number=p.page_number,
+                text=p.text,
+                headings=list(p.headings),
+                ocr=p.ocr,
+            )
+            for p in pages
+        ],
+        total=total,
+    )
+
+
+@router.get(
+    "/documents/{document_id}/chunks",
+    response_model=ChunkListResponse,
+    tags=["processing"],
+    summary="Indexed chunks with citation metadata (embeddings omitted)",
+)
+async def document_chunks(
+    document_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    queries: ProcessingQueriesDep,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ChunkListResponse:
+    chunks, total = await queries.chunks(ctx, document_id, offset=offset, limit=limit)
+    return ChunkListResponse(
+        items=[
+            ChunkResponse(
+                chunk_index=c.chunk_index,
+                text=c.text,
+                token_count=c.token_count,
+                page_start=c.page_start,
+                page_end=c.page_end,
+                heading_path=list(c.heading_path),
+                embedding_model=c.embedding_model,
+            )
+            for c in chunks
+        ],
+        total=total,
+    )
 
 
 # --- Collections ---------------------------------------------------------------

@@ -18,6 +18,8 @@ from urllib.parse import urlsplit
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from documind.domain.processing.vectors import VECTOR_DIMENSIONS
+
 
 class Environment(StrEnum):
     DEVELOPMENT = "development"
@@ -87,6 +89,38 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = Field(default=3310, ge=1, le=65535)
     clamav_timeout_seconds: float = Field(default=30.0, gt=0)
+
+    # --- Document processing (Celery workers) ------------------------------
+    # Defaults to REDIS_URL when unset.
+    celery_broker_url: SecretStr | None = None
+    processing_max_attempts: int = Field(default=5, ge=1, le=20)
+    processing_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
+    # A running job whose lease expires (worker crashed) is re-queued.
+    processing_lease_seconds: int = Field(default=1800, ge=60, le=86400)
+    # Queued jobs not picked up within this time are re-dispatched by the sweeper.
+    processing_dispatch_grace_seconds: int = Field(default=60, ge=5, le=3600)
+    processing_sweep_interval_seconds: int = Field(default=30, ge=5, le=3600)
+    max_document_pages: int = Field(default=2000, ge=1, le=100_000)
+    chunk_max_tokens: int = Field(default=500, ge=50, le=4000)
+    chunk_overlap_tokens: int = Field(default=60, ge=0, le=1000)
+    # Keep each chunk on a single page so citations point at exact pages.
+    chunk_respect_pages: bool = True
+    ocr_enabled: bool = True
+    ocr_languages: str = Field(default="eng", pattern=r"^[a-z_]{3,}(\+[a-z_]{3,})*$")
+    ocr_dpi: int = Field(default=300, ge=72, le=600)
+
+    # --- Embeddings --------------------------------------------------------
+    # "openai" in production; "local" is a deterministic, network-free
+    # development/test provider and is rejected in production.
+    embedding_provider: Literal["openai", "local"] = "openai"
+    openai_api_key: SecretStr | None = None
+    openai_base_url: str | None = None
+    embedding_model: str = "text-embedding-3-small"
+    # Must match the vector column created by the migrations.
+    embedding_dimensions: int = 1536
+    embedding_batch_size: int = Field(default=64, ge=1, le=2048)
+    embedding_max_retries: int = Field(default=5, ge=0, le=10)
+    embedding_timeout_seconds: float = Field(default=60.0, gt=0)
 
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
@@ -167,6 +201,30 @@ class Settings(BaseSettings):
             raise ValueError("MFA_ENCRYPTION_KEY must be 32 bytes, base64url-encoded")
         return value
 
+    @field_validator("openai_api_key", "celery_broker_url", "smtp_password", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        # Compose passes unset variables as empty strings.
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("embedding_dimensions")
+    @classmethod
+    def _validate_dimensions(cls, value: int) -> int:
+        if value != VECTOR_DIMENSIONS:
+            raise ValueError(
+                f"EMBEDDING_DIMENSIONS must be {VECTOR_DIMENSIONS} (the vector column size); "
+                "changing it requires a migration"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _validate_embeddings(self) -> Settings:
+        if self.embedding_provider == "openai" and self.openai_api_key is None:
+            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
+        if self.chunk_overlap_tokens >= self.chunk_max_tokens // 2:
+            raise ValueError("CHUNK_OVERLAP_TOKENS must be less than half of CHUNK_MAX_TOKENS")
+        return self
+
     @field_validator("redis_url")
     @classmethod
     def _validate_redis_url(cls, value: SecretStr) -> SecretStr:
@@ -209,6 +267,8 @@ class Settings(BaseSettings):
             raise ValueError("PUBLIC_APP_URL must use https in production")
         if not (self.smtp_starttls or self.smtp_use_ssl):
             raise ValueError("SMTP must use STARTTLS or SSL in production")
+        if self.embedding_provider != "openai":
+            raise ValueError("EMBEDDING_PROVIDER=local is for development only")
         return self
 
     @model_validator(mode="after")
@@ -222,6 +282,10 @@ class Settings(BaseSettings):
         if self.api_docs_enabled is not None:
             return self.api_docs_enabled
         return self.environment is not Environment.PRODUCTION
+
+    @property
+    def broker_url(self) -> str:
+        return (self.celery_broker_url or self.redis_url).get_secret_value()
 
     @property
     def is_production(self) -> bool:

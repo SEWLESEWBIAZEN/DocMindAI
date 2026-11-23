@@ -17,6 +17,8 @@ from documind.application.health_service import HealthService
 from documind.application.ports import (
     AccessTokenService,
     EmailSender,
+    EmbeddingProvider,
+    JobDispatcher,
     MalwareScanner,
     ObjectStorageProvider,
     PasswordHasher,
@@ -28,6 +30,13 @@ from documind.infrastructure.cache.redis import create_redis_client
 from documind.infrastructure.database.engine import create_engine, create_session_factory
 from documind.infrastructure.database.health import PostgresHealthCheck
 from documind.infrastructure.email.smtp import SmtpEmailSender
+from documind.infrastructure.embeddings.local_provider import LocalHashingEmbeddingProvider
+from documind.infrastructure.embeddings.openai_provider import OpenAIEmbeddingProvider
+from documind.infrastructure.processing.extractors import (
+    CompositeExtractor,
+    ExtractionLimits,
+    OcrOptions,
+)
 from documind.infrastructure.ratelimit.redis_limiter import RedisRateLimiter
 from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
 from documind.infrastructure.security.malware import ClamAVScanner, NoopMalwareScanner
@@ -36,6 +45,8 @@ from documind.infrastructure.security.secret_box import SecretBox
 from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
+from documind.infrastructure.tasks.celery_dispatcher import CeleryJobDispatcher
+from documind.worker.celery_factory import PROCESS_TASK, QUEUE, create_celery
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +66,9 @@ class Container:
     storage: ObjectStorageProvider
     malware_scanner: MalwareScanner
     secret_box: SecretBox
+    extractor: CompositeExtractor
+    embedding_provider: EmbeddingProvider
+    job_dispatcher: JobDispatcher
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -106,6 +120,33 @@ def build_container(settings: Settings) -> Container:
         ),
         malware_scanner=_build_scanner(settings),
         secret_box=SecretBox(mfa_key_bytes(settings.mfa_encryption_key)),
+        extractor=CompositeExtractor(
+            ExtractionLimits(max_pages=settings.max_document_pages),
+            OcrOptions(
+                enabled=settings.ocr_enabled,
+                languages=settings.ocr_languages,
+                dpi=settings.ocr_dpi,
+            ),
+        ),
+        embedding_provider=_build_embedding_provider(settings),
+        job_dispatcher=CeleryJobDispatcher(
+            create_celery(settings), task_name=PROCESS_TASK, queue=QUEUE
+        ),
+    )
+
+
+def _build_embedding_provider(settings: Settings) -> EmbeddingProvider:
+    if settings.embedding_provider == "local":
+        return LocalHashingEmbeddingProvider(settings.embedding_dimensions)
+    if settings.openai_api_key is None:  # also enforced by settings validation
+        raise ValueError("OPENAI_API_KEY is required for EMBEDDING_PROVIDER=openai")
+    return OpenAIEmbeddingProvider(
+        api_key=settings.openai_api_key.get_secret_value(),
+        model=settings.embedding_model,
+        dimensions=settings.embedding_dimensions,
+        base_url=settings.openai_base_url,
+        timeout_seconds=settings.embedding_timeout_seconds,
+        max_retries=settings.embedding_max_retries,
     )
 
 

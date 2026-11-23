@@ -33,6 +33,8 @@ jobs:
       - name: Unit tests
         working-directory: backend
         run: uv run pytest
+      - name: Install Tesseract (OCR tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
       - name: Start infrastructure
         run: |
           cp .env.example .env

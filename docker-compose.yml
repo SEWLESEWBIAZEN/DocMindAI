@@ -28,6 +28,9 @@ x-backend-environment: &backend-environment
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
   EMAIL_FROM: ${EMAIL_FROM:-DocuMind AI <no-reply@documind.local>}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
 services:
   postgres:
@@ -103,6 +106,7 @@ services:
     build:
       context: ./backend
       target: dev
+    image: documind-backend
     environment: *backend-environment
     # Development convenience: apply migrations and create the bucket on start.
     # Production runs these as explicit deployment steps instead.
@@ -134,6 +138,59 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 5
+    restart: unless-stopped
+
+  # Document processing (extraction, OCR, chunking, embeddings).
+  worker:
+    build:
+      context: ./backend
+      target: dev
+    image: documind-backend
+    environment: *backend-environment
+    command:
+      - celery
+      - -A
+      - documind.worker.celery_app
+      - worker
+      - -Q
+      - documents
+      - --concurrency
+      - "2"
+      - --loglevel
+      - INFO
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      backend:
+        condition: service_healthy  # migrations have run
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A documind.worker.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10"]
+      interval: 30s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
+    # Warm shutdown: let in-flight jobs finish (acks_late re-delivers otherwise).
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  # Schedules the recovery sweep (re-dispatch lost jobs, recover crashed workers).
+  beat:
+    image: documind-backend
+    environment: *backend-environment
+    command:
+      - celery
+      - -A
+      - documind.worker.celery_app
+      - beat
+      - --loglevel
+      - INFO
+      - --schedule
+      - /tmp/celerybeat-schedule
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      worker:
+        condition: service_started
     restart: unless-stopped
 
   frontend:

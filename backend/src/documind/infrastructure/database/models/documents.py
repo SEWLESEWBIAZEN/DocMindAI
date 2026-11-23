@@ -25,6 +25,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from documind.infrastructure.database.base import Base
@@ -76,6 +77,16 @@ class Document(Base):
     archived_at: Mapped[datetime | None] = mapped_column(TZ)
     archived_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
+    )
+    # Results of the last successful processing run (Phase 4).
+    chunk_count: Mapped[int | None] = mapped_column(Integer)
+    processed_at: Mapped[datetime | None] = mapped_column(TZ)
+    extracted_title: Mapped[str | None] = mapped_column(String(500))
+    extraction_warnings: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    extracted_metadata: Mapped[dict[str, str]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
     )
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now(), onupdate=func.now())

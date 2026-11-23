@@ -173,7 +173,30 @@ Errors added: 413 `payload_too_large`, 415 `unsupported_file` /
 `malware_detected`, 409 `duplicate_document` / `duplicate_collection`,
 503 `service_unavailable` (scanner down).
 
-## 5. Runtime resources and lifecycle
+## 5. Document processing (Phase 4)
+
+See ADR 0014.
+
+```
+upload tx ─┬─ documents (status=pending)
+           └─ processing_jobs (queued)  ──after commit──► Celery "documents" queue
+                                                              │
+Celery beat ── sweep every 30 s: re-dispatch lost jobs,       ▼
+               recover expired leases, create missing jobs   worker: claim (atomic) →
+                                                              extract (PyMuPDF / OCR / python-docx / text)
+                                                              → normalize → chunk (page- & section-aware)
+                                                              → embed (batched, de-duplicated)
+                                                              → replace pages + chunks (one tx) → ready
+```
+
+| Endpoint (under `/api/v1/workspaces/{id}/documents/{doc}`) | Purpose |
+| --- | --- |
+| `GET /processing` | Status, warnings, job history with stats |
+| `POST /reprocess` | Queue again (409 while a job is active) |
+| `GET /pages` | Extracted text per page (OCR flag, headings) |
+| `GET /chunks` | Indexed chunks with page and heading metadata |
+
+## 6. Runtime resources and lifecycle
 
 `create_app()` builds the app. The lifespan:
 
@@ -183,7 +206,7 @@ Errors added: 413 `payload_too_large`, 415 `unsupported_file` /
    reports it, and the dependency recovers without a restart.
 3. On shutdown, closes Redis, disposes the engine pool and closes the S3 client.
 
-## 6. Health model
+## 7. Health model
 
 | Endpoint                   | Purpose   | Touches dependencies | Failure                                                         |
 | -------------------------- | --------- | -------------------- | --------------------------------------------------------------- |
@@ -196,7 +219,7 @@ exception messages are logged but never returned; clients see either a
 curated message (`DependencyCheckError`) or the exception type. In
 production, details and error reasons are hidden from the response.
 
-## 7. Data and migrations
+## 8. Data and migrations
 
 - SQLAlchemy 2.x async with asyncpg. All models share `infrastructure/database/base.Base`
   with a deterministic constraint naming convention.
@@ -206,7 +229,7 @@ production, details and error reasons are hidden from the response.
   superuser) and by migration `0001` (idempotent). This supports managed
   databases where no init script runs.
 
-## 8. Observability
+## 9. Observability
 
 - Structured logs via the standard library: JSON in production
   (`LOG_FORMAT=json`), human-readable in development.
@@ -218,7 +241,7 @@ production, details and error reasons are hidden from the response.
 - Client-supplied request IDs are accepted only if they match
   `[A-Za-z0-9._-]{1,128}`, which prevents log injection.
 
-## 9. Frontend
+## 10. Frontend
 
 - Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
 - `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
@@ -228,7 +251,7 @@ production, details and error reasons are hidden from the response.
 - Phase 1 ships a system status page that exercises the full path:
   browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
 
-## 10. Environments
+## 11. Environments
 
 | Environment   | Config source                              | Notes                                                        |
 | ------------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -236,7 +259,7 @@ production, details and error reasons are hidden from the response.
 | test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
 | production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
 
-## 11. Deployment target
+## 12. Deployment target
 
 The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
 Compose behind Nginx with TLS (Phase 10). The backend image has a separate

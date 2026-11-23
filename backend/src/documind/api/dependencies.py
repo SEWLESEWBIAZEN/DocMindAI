@@ -19,6 +19,7 @@ from documind.application.identity.invitation_service import InvitationService
 from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
 from documind.application.ports import EmailMessage, EmailSender
+from documind.application.processing.queries import ProcessingQueries
 from documind.container import Container
 from documind.core.config import Settings
 from documind.core.logging import get_request_id
@@ -221,7 +222,12 @@ def get_document_service(
     session: SessionDep, container: ContainerDep, meta: MetaDep
 ) -> DocumentService:
     return DocumentService(
-        session, container.settings, container.storage, container.malware_scanner, meta
+        session,
+        container.settings,
+        container.storage,
+        container.malware_scanner,
+        meta,
+        container.job_dispatcher,
     )
 
 
@@ -231,3 +237,10 @@ def get_collection_service(session: SessionDep, meta: MetaDep) -> CollectionServ
 
 DocumentServiceDep = Annotated[DocumentService, Depends(get_document_service)]
 CollectionServiceDep = Annotated[CollectionService, Depends(get_collection_service)]
+
+
+def get_processing_queries(session: SessionDep) -> ProcessingQueries:
+    return ProcessingQueries(session)
+
+
+ProcessingQueriesDep = Annotated[ProcessingQueries, Depends(get_processing_queries)]

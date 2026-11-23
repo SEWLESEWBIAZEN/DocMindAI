@@ -64,8 +64,8 @@ def upload(
     content: bytes,
     filename: str,
     **form: str,
-) -> httpx.Response:
-    response: httpx.Response = api.client.post(
+) -> Any:
+    response = api.client.post(
         f"/api/v1/workspaces/{ws}/documents",
         files={"file": (filename, content, "application/octet-stream")},
         data=form,
