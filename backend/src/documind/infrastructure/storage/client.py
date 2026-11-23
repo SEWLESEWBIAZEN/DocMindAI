@@ -12,12 +12,16 @@ from botocore.config import Config
 from documind.core.config import Settings
 
 
-def create_s3_client(settings: Settings) -> Any:
-    """Create a thread-safe boto3 S3 client. No network call is made here."""
+def create_s3_client(settings: Settings, *, endpoint_url: str | None = None) -> Any:
+    """Create a thread-safe boto3 S3 client. No network call is made here.
+
+    ``endpoint_url`` overrides the configured endpoint, e.g. to sign URLs for
+    a browser-reachable host while the API talks to storage internally.
+    """
     session = boto3.session.Session()
     return session.client(
         "s3",
-        endpoint_url=settings.s3_endpoint_url,
+        endpoint_url=endpoint_url or settings.s3_endpoint_url,
         region_name=settings.s3_region,
         aws_access_key_id=settings.s3_access_key_id.get_secret_value(),
         aws_secret_access_key=settings.s3_secret_access_key.get_secret_value(),

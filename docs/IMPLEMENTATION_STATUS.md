@@ -92,13 +92,52 @@ Acceptance criteria (verified 2026-11-23):
   `X-CSRF-Protection: 1` and make concurrent refresh calls single-flight.
 - PostgreSQL row-level security as defence in depth: evaluate in Phase 3/9 (ADR 0009).
 
-## Phase 3: Document management and storage
+## Phase 3: Document management and storage ✅
 
-- [ ] `ObjectStorageProvider` port + S3 (boto3) adapter
-- [ ] Upload / list / metadata / download (signed URLs) / delete / rename
-- [ ] Collections; metadata search; processing status
-- [ ] PDF, DOCX, TXT, Markdown; MIME and signature validation; size limits
-- [ ] Document, DocumentCollection, DocumentCollectionItem, DocumentVersion
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Upload documents | [x] | `test_upload_*`; browser FormData upload against the live stack |
+| List / retrieve metadata | [x] | `GET /documents`, `GET /documents/{id}` |
+| Download via signed URLs | [x] | `test_signed_download_url`; browser download from MinIO with the original filename |
+| Delete (rows and stored objects) | [x] | `test_rename_and_delete`, `test_versions` (all versions' objects removed) |
+| Rename | [x] | `PATCH /documents/{id}` |
+| Collections (CRUD, add/remove, filter) | [x] | `test_collections` |
+| Search by metadata | [x] | `q` over title and filename (LIKE wildcards escaped), status, format, collection, uploader, sort, pagination |
+| Track processing status | [x] | `pending` on upload and on each new version; `processing_error`, `page_count` ready for Phase 4 |
+| PDF, DOCX, TXT, Markdown | [x] | Signature and structure validation per format |
+| `ObjectStorageProvider` (upload, download, delete, signed URL, metadata) + S3/boto3 adapter | [x] | `application/ports.py`, `infrastructure/storage/s3_provider.py` |
+| Storage config independent of business logic | [x] | Port plus container wiring; public endpoint for signing |
+| MIME and signature validation | [x] | Spoofed exe, mismatched extension, macro DOCX, non-UTF-8 text all rejected (415) |
+| File-size limits | [x] | Service (413) and middleware cut-off before the body is read (413) |
+| Internal object keys; path traversal prevented | [x] | `../../etc/evil.pdf` stored as `evil.pdf` under a generated key |
+| Private buckets; short-lived signed URLs | [x] | Unsigned, tampered and expired URLs return 403 |
+| No storage credentials in the frontend | [x] | Presign-only client; the browser receives only signed URLs |
+| Malware scanning where feasible | [x] | `MalwareScanner` port; ClamAV adapter (protocol-tested); blocked and fail-closed tests |
+| Uploaded content treated as untrusted | [x] | Attachment-only downloads with a forced content type; bidi and control characters stripped |
+| Document, DocumentCollection, DocumentCollectionItem, DocumentVersion | [x] | Migration `0003`; composite FKs reject cross-tenant links at the DB level (tested) |
+
+Acceptance criteria (verified 2026-11-23):
+
+- [x] Users can upload supported files.
+- [x] Documents are stored in MinIO.
+- [x] Documents are isolated by workspace (API 404s plus database composite FKs).
+- [x] Signed download URLs work (and expire).
+- [x] Document metadata is persisted.
+- [x] File validation works.
+- [x] Unauthorized downloads are blocked.
+
+Tests: 151 unit and 78 integration (backend, all passing); live browser upload, search, download and delete against the Compose stack.
+
+### Phase 3 follow-ups / known issues
+
+- ClamAV is opt-in (`MALWARE_SCANNER=clamav`) because clamd needs about 1–1.5 GB of
+  RAM; the adapter is tested against a protocol-level fake, not a live clamd.
+- Orphaned objects (if an object delete fails after commit) are logged; add a sweeper.
+- Duplicate detection is exact-bytes, per workspace.
+- In organizations, Members can delete any document; consider uploader- or admin-only.
+- Production Nginx must set `client_max_body_size` to match `MAX_UPLOAD_BYTES` (Phase 10).
+- A filename containing `"` is received as `%22` (browsers encode it in multipart per the
+  HTML spec); it is displayed as sent.
 
 ## Phase 4: Document processing engine
 

@@ -49,6 +49,18 @@ Required variables have no default; the backend refuses to start without them.
 | `S3_FORCE_PATH_STYLE`           |          | `true`      | Path-style addressing (required by MinIO).                        |
 | `S3_CONNECT_TIMEOUT_SECONDS`    |          | `5.0`       | boto3 connect timeout.                                            |
 | `S3_READ_TIMEOUT_SECONDS`       |          | `30.0`      | boto3 read timeout.                                               |
+| `S3_PUBLIC_ENDPOINT_URL`        |          | *(= `S3_ENDPOINT_URL`)* | Browser-reachable endpoint used **only** to sign download URLs (e.g. `http://localhost:9000` when the API reaches MinIO as `minio:9000`). |
+
+## Documents
+
+| Variable                  | Default    | Description                                                              |
+| ------------------------- | ---------- | ------------------------------------------------------------------------ |
+| `MAX_UPLOAD_BYTES`        | `52428800` | Largest accepted file (50 MiB). Request bodies above this + 1 MiB are cut off with 413. |
+| `SIGNED_URL_TTL_SECONDS`  | `300`      | Lifetime of download URLs (30–3600).                                     |
+| `MALWARE_SCANNER`         | `none`     | `none` or `clamav`. With `clamav`, uploads fail with 503 if clamd is unreachable. |
+| `CLAMAV_HOST`             | `clamav`   | clamd host.                                                              |
+| `CLAMAV_PORT`             | `3310`     | clamd TCP port.                                                          |
+| `CLAMAV_TIMEOUT_SECONDS`  | `30`       | Scan timeout.                                                            |
 
 ## Authentication
 

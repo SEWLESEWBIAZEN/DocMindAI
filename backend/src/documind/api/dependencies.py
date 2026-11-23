@@ -9,6 +9,8 @@ from fastapi import BackgroundTasks, Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from documind.application.documents.collection_service import CollectionService
+from documind.application.documents.document_service import DocumentService
 from documind.application.health_service import HealthService
 from documind.application.identity.account_service import AccountService
 from documind.application.identity.auth_service import AuthService
@@ -183,3 +185,24 @@ def require_csrf_header(
     """
     if x_csrf_protection != "1":
         raise PermissionDeniedError("Missing CSRF protection header.", code="csrf_header_missing")
+
+
+# --------------------------------------------------------------------------- #
+# Documents
+# --------------------------------------------------------------------------- #
+
+
+def get_document_service(
+    session: SessionDep, container: ContainerDep, meta: MetaDep
+) -> DocumentService:
+    return DocumentService(
+        session, container.settings, container.storage, container.malware_scanner, meta
+    )
+
+
+def get_collection_service(session: SessionDep, meta: MetaDep) -> CollectionService:
+    return CollectionService(session, meta)
+
+
+DocumentServiceDep = Annotated[DocumentService, Depends(get_document_service)]
+CollectionServiceDep = Annotated[CollectionService, Depends(get_collection_service)]

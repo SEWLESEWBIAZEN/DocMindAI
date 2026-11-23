@@ -12,8 +12,11 @@ from documind.domain.errors import (
     EmailNotVerifiedError,
     InvalidTokenError,
     NotFoundError,
+    PayloadTooLargeError,
     PermissionDeniedError,
     RateLimitedError,
+    ServiceUnavailableError,
+    UnsupportedMediaTypeError,
     ValidationFailedError,
 )
 
@@ -25,6 +28,9 @@ _STATUS: list[tuple[type[DomainError], int]] = [
     (NotFoundError, 404),
     (ConflictError, 409),
     (InvalidTokenError, 400),
+    (PayloadTooLargeError, 413),
+    (UnsupportedMediaTypeError, 415),
+    (ServiceUnavailableError, 503),
     (ValidationFailedError, 422),
 ]
 

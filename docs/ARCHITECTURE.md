@@ -124,7 +124,41 @@ is stable for clients:
 | 422 | Validation failed |
 | 429 | Rate limited (`Retry-After` header) |
 
-## 4. Runtime resources and lifecycle
+## 4. Documents and storage (Phase 3)
+
+See ADR 0012.
+
+```
+workspaces ──< documents ──< document_versions   (immutable; storage_key per version)
+                   │ (id, workspace_id) composite FKs enforce same-tenant links
+                   └──< document_collection_items >── document_collections
+```
+
+**Upload pipeline** (`POST /workspaces/{id}/documents`, multipart):
+
+1. Body-size middleware.
+2. Permission check (`documents.write`).
+3. In a worker thread: size check, filename sanitization, signature and
+   structure validation, SHA-256.
+4. Malware scan.
+5. Duplicate check.
+6. Put the object at `workspaces/{ws}/documents/{doc}/versions/{ver}`.
+7. Commit the rows, with status `pending`. If the commit fails, delete the object.
+8. Audit event.
+
+**Download**: `GET …/download-url` returns a 5-minute signed GET URL for the
+public storage endpoint, forcing an attachment and a safe content type.
+
+| Area | Endpoints (under `/api/v1/workspaces/{workspace_id}`) |
+| ---- | ----------------------------------------------------- |
+| Documents | `POST/GET /documents` (upload; list and search by `q`, `status`, `format`, `collection_id`, `uploaded_by`, with sort and pagination), `GET/PATCH/DELETE /documents/{id}`, `GET /documents/{id}/download-url`, `GET/POST /documents/{id}/versions` |
+| Collections | `GET/POST /collections`, `GET/PATCH/DELETE /collections/{id}`, `PUT/DELETE /collections/{id}/documents/{document_id}` |
+
+Errors added: 413 `payload_too_large`, 415 `unsupported_file` /
+`malware_detected`, 409 `duplicate_document` / `duplicate_collection`,
+503 `service_unavailable` (scanner down).
+
+## 5. Runtime resources and lifecycle
 
 `create_app()` builds the app. The lifespan:
 
@@ -134,7 +168,7 @@ is stable for clients:
    reports it, and the dependency recovers without a restart.
 3. On shutdown, closes Redis, disposes the engine pool and closes the S3 client.
 
-## 5. Health model
+## 6. Health model
 
 | Endpoint                   | Purpose   | Touches dependencies | Failure                                                         |
 | -------------------------- | --------- | -------------------- | --------------------------------------------------------------- |
@@ -147,7 +181,7 @@ exception messages are logged but never returned; clients see either a
 curated message (`DependencyCheckError`) or the exception type. In
 production, details and error reasons are hidden from the response.
 
-## 6. Data and migrations
+## 7. Data and migrations
 
 - SQLAlchemy 2.x async with asyncpg. All models share `infrastructure/database/base.Base`
   with a deterministic constraint naming convention.
@@ -157,7 +191,7 @@ production, details and error reasons are hidden from the response.
   superuser) and by migration `0001` (idempotent). This supports managed
   databases where no init script runs.
 
-## 7. Observability
+## 8. Observability
 
 - Structured logs via the standard library: JSON in production
   (`LOG_FORMAT=json`), human-readable in development.
@@ -169,7 +203,7 @@ production, details and error reasons are hidden from the response.
 - Client-supplied request IDs are accepted only if they match
   `[A-Za-z0-9._-]{1,128}`, which prevents log injection.
 
-## 8. Frontend
+## 9. Frontend
 
 - Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
 - `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
@@ -179,7 +213,7 @@ production, details and error reasons are hidden from the response.
 - Phase 1 ships a system status page that exercises the full path:
   browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
 
-## 9. Environments
+## 10. Environments
 
 | Environment   | Config source                              | Notes                                                        |
 | ------------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -187,7 +221,7 @@ production, details and error reasons are hidden from the response.
 | test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
 | production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
 
-## 10. Deployment target
+## 11. Deployment target
 
 The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
 Compose behind Nginx with TLS (Phase 10). The backend image has a separate

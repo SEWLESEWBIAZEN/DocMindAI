@@ -73,6 +73,19 @@ class Settings(BaseSettings):
     s3_connect_timeout_seconds: float = Field(default=5.0, gt=0)
     s3_read_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    # Browser-reachable endpoint used only to sign download URLs (the API may
+    # reach storage on an internal hostname). Defaults to S3_ENDPOINT_URL.
+    s3_public_endpoint_url: str | None = None
+
+    # --- Documents ---------------------------------------------------------
+    max_upload_bytes: int = Field(default=50 * 1024 * 1024, ge=1024, le=1024 * 1024 * 1024)
+    signed_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    # "none" or "clamav" (clamd over TCP).
+    malware_scanner: Literal["none", "clamav"] = "none"
+    clamav_host: str = "clamav"
+    clamav_port: int = Field(default=3310, ge=1, le=65535)
+    clamav_timeout_seconds: float = Field(default=30.0, gt=0)
+
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 

@@ -1,5 +1,11 @@
 """ORM models. Import every model module here so Alembic autogenerate sees it."""
 
+from documind.infrastructure.database.models.documents import (
+    Document,
+    DocumentCollection,
+    DocumentCollectionItem,
+    DocumentVersion,
+)
 from documind.infrastructure.database.models.identity import (
     AccountToken,
     AuditLog,
@@ -17,6 +23,10 @@ from documind.infrastructure.database.models.identity import (
 __all__ = [
     "AccountToken",
     "AuditLog",
+    "Document",
+    "DocumentCollection",
+    "DocumentCollectionItem",
+    "DocumentVersion",
     "Invitation",
     "Organization",
     "Permission",

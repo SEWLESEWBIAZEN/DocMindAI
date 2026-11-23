@@ -6,6 +6,7 @@ streaming responses (Server-Sent Events) introduced in later phases.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -97,6 +98,70 @@ async def _send_json_error(send: Send, status: int, detail: str, request_id: str
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+class _BodyTooLargeError(Exception):
+    pass
+
+
+class BodySizeLimitMiddleware:
+    """Reject request bodies above ``max_bytes`` with 413.
+
+    Checks Content-Length up front and counts streamed bytes for chunked
+    bodies, so an oversized upload is cut off before it fills the spool disk.
+    """
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        declared = _header(scope, b"content-length")
+        if declared is not None and declared.isdigit() and int(declared) > self.max_bytes:
+            await self._reject(send)
+            return
+
+        received = 0
+        exceeded = False
+
+        async def limited_receive() -> Message:
+            nonlocal received, exceeded
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    exceeded = True
+                    raise _BodyTooLargeError
+            return message
+
+        async def guarded_send(message: Message) -> None:
+            if not exceeded:  # the app's own error response is replaced by 413
+                await send(message)
+
+        with contextlib.suppress(_BodyTooLargeError):
+            await self.app(scope, limited_receive, guarded_send)
+        if exceeded:
+            await self._reject(send)
+
+    async def _reject(self, send: Send) -> None:
+        body = json.dumps(
+            {"detail": "The request body is too large.", "code": "payload_too_large"}
+        ).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                    (b"connection", b"close"),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
 
 
 def _header(scope: Scope, name: bytes) -> str | None:

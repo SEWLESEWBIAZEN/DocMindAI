@@ -11,7 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from documind import __version__
 from documind.api.errors import register_error_handlers
-from documind.api.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from documind.api.middleware import (
+    REQUEST_ID_HEADER,
+    BodySizeLimitMiddleware,
+    RequestContextMiddleware,
+)
 from documind.api.router import api_router
 from documind.container import Container, build_container
 from documind.core.config import Settings, get_settings
@@ -64,6 +68,8 @@ def create_app(
             allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
             expose_headers=[REQUEST_ID_HEADER],
         )
+    # Uploads may be up to MAX_UPLOAD_BYTES plus multipart framing overhead.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_upload_bytes + 1024 * 1024)
     # Added last so it is the outermost middleware and sees every request.
     app.add_middleware(RequestContextMiddleware)
 

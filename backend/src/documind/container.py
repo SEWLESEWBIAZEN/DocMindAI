@@ -17,6 +17,8 @@ from documind.application.health_service import HealthService
 from documind.application.ports import (
     AccessTokenService,
     EmailSender,
+    MalwareScanner,
+    ObjectStorageProvider,
     PasswordHasher,
     RateLimiter,
 )
@@ -28,9 +30,11 @@ from documind.infrastructure.database.health import PostgresHealthCheck
 from documind.infrastructure.email.smtp import SmtpEmailSender
 from documind.infrastructure.ratelimit.redis_limiter import RedisRateLimiter
 from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
+from documind.infrastructure.security.malware import ClamAVScanner, NoopMalwareScanner
 from documind.infrastructure.security.passwords import Argon2PasswordHasher
 from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
+from documind.infrastructure.storage.s3_provider import S3ObjectStorage
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +51,8 @@ class Container:
     access_tokens: AccessTokenService
     email_sender: EmailSender
     rate_limiter: RateLimiter
+    storage: ObjectStorageProvider
+    malware_scanner: MalwareScanner
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -89,4 +95,20 @@ def build_container(settings: Settings) -> Container:
         ),
         email_sender=SmtpEmailSender(settings),
         rate_limiter=RedisRateLimiter(redis, enabled=settings.rate_limit_enabled),
+        storage=S3ObjectStorage(
+            s3_client,
+            settings.s3_bucket,
+            presign_client=create_s3_client(
+                settings, endpoint_url=settings.s3_public_endpoint_url or settings.s3_endpoint_url
+            ),
+        ),
+        malware_scanner=_build_scanner(settings),
     )
+
+
+def _build_scanner(settings: Settings) -> MalwareScanner:
+    if settings.malware_scanner == "clamav":
+        return ClamAVScanner(
+            settings.clamav_host, settings.clamav_port, settings.clamav_timeout_seconds
+        )
+    return NoopMalwareScanner()

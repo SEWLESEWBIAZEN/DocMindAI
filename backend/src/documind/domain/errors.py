@@ -52,6 +52,20 @@ class InvalidTokenError(DomainError):
     code = "invalid_token"
 
 
+class PayloadTooLargeError(DomainError):
+    code = "payload_too_large"
+
+
+class UnsupportedMediaTypeError(DomainError):
+    """The upload is not a supported, well-formed file of the type it claims to be."""
+
+    code = "unsupported_file"
+
+
+class ServiceUnavailableError(DomainError):
+    code = "service_unavailable"
+
+
 class RateLimitedError(DomainError):
     code = "rate_limited"
 

@@ -4,11 +4,11 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–2 complete.** The foundation plus identity and tenancy are
-> in place: accounts, email verification, sessions with rotating refresh tokens,
-> personal and organization workspaces, roles and permissions, invitations and
-> an audit log, all exposed through the API. Documents, RAG and chat arrive in
-> later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+> **Status: Phases 1–3 complete.** Foundation, identity and tenancy (accounts,
+> sessions, workspaces, roles, invitations, audit log), and document management
+> (validated uploads to private storage, versions, collections, metadata search,
+> signed downloads) are in place, all exposed through the API. Processing, RAG
+> and chat arrive in later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
 and low-vision professionals too: full screen-reader support, questions by

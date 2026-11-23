@@ -30,6 +30,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 PASSWORD = "correct horse battery staple"
 # Every table holding per-test data (roles/permissions are seed data and stay).
 DATA_TABLES = [
+    "document_collection_items",
+    "document_collections",
+    "document_versions",
+    "documents",
     "audit_logs",
     "invitations",
     "account_tokens",
@@ -73,8 +77,31 @@ def migrated_test_db(test_database_url: str) -> str:
     return test_database_url
 
 
+TEST_BUCKET = "documind-integration-tests"
+
+
+@pytest.fixture(scope="session")
+def test_bucket(live_settings: Settings) -> Iterator[str]:
+    """A private bucket used only by tests; emptied before and after the session."""
+    from documind.infrastructure.storage.bootstrap import ensure_private_bucket
+    from documind.infrastructure.storage.client import create_s3_client
+
+    client = create_s3_client(live_settings)
+    ensure_private_bucket(client, TEST_BUCKET, live_settings.s3_region)
+    _empty_bucket(client, TEST_BUCKET)
+    yield TEST_BUCKET
+    _empty_bucket(client, TEST_BUCKET)
+    client.close()
+
+
+def _empty_bucket(client: Any, bucket: str) -> None:
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket):
+        for obj in page.get("Contents", []):
+            client.delete_object(Bucket=bucket, Key=obj["Key"])
+
+
 @pytest.fixture
-def identity_settings(live_settings: Settings, migrated_test_db: str) -> Settings:
+def identity_settings(live_settings: Settings, migrated_test_db: str, test_bucket: str) -> Settings:
     redis_url = make_url(live_settings.redis_url.get_secret_value()).set(
         database=str(TEST_REDIS_DB)
     )
@@ -94,6 +121,7 @@ def identity_settings(live_settings: Settings, migrated_test_db: str) -> Setting
             "rate_limit_auth_per_ip": 1000,
             "rate_limit_refresh_per_ip": 1000,
             "public_app_url": "https://app.test.example",
+            "s3_bucket": test_bucket,
         }
     )
 
@@ -217,13 +245,15 @@ def make_api(identity_settings: Settings, mailbox: Mailbox) -> Iterator[Any]:
     """Factory so a test can tweak settings (e.g. rate limits) before the app starts."""
     clients: list[TestClient] = []
 
-    def _make(**overrides: Any) -> Api:
+    def _make(container_overrides: dict[str, Any] | None = None, **overrides: Any) -> Api:
         settings = identity_settings.model_copy(update=overrides)
         asyncio.run(_reset_state(settings))
 
         def factory(s: Settings) -> Container:
             container = build_container(s)
             container.email_sender = mailbox
+            for name, value in (container_overrides or {}).items():
+                setattr(container, name, value)
             return container
 
         client = TestClient(
