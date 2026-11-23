@@ -66,6 +66,7 @@ class UserResponse(BaseModel):
     email: str
     display_name: str
     email_verified: bool
+    mfa_enabled: bool
     default_workspace_id: uuid.UUID | None
     created_at: datetime
 
@@ -141,3 +142,50 @@ class AuditLogResponse(BaseModel):
     target_id: str | None
     details: dict[str, Any]
     ip_address: str | None
+
+
+# --- Two-factor authentication ---
+
+MfaCode = Field(min_length=6, max_length=10, description="6-digit code from the authenticator app")
+
+
+class MfaStatusResponse(BaseModel):
+    enabled: bool
+    enabled_at: datetime | None
+    recovery_codes_remaining: int
+
+
+class MfaSetupRequest(_In):
+    password: str = Password
+
+
+class MfaSetupResponse(BaseModel):
+    secret: str = Field(description="Base32 secret for manual entry in an authenticator app")
+    otpauth_uri: str = Field(description="otpauth:// URI to render as a QR code")
+    expires_at: datetime
+
+
+class MfaCodeRequest(_In):
+    code: str = MfaCode
+
+
+class MfaSecondFactorRequest(_In):
+    code: str | None = Field(default=None, min_length=6, max_length=10)
+    recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
+
+
+class MfaDisableRequest(_In):
+    password: str = Password
+    code: str | None = Field(default=None, min_length=6, max_length=10)
+    recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
+
+
+class RecoveryCodesResponse(BaseModel):
+    recovery_codes: list[str] = Field(description="Shown once. Store them somewhere safe.")
+
+
+class StepUpResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"  # noqa: S105 - OAuth2 token type, not a secret
+    expires_in: int
+    mfa_verified_at: datetime

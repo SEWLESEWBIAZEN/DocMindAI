@@ -8,6 +8,8 @@ insecure defaults.
 
 from __future__ import annotations
 
+import base64
+import binascii
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Literal
@@ -111,6 +113,18 @@ class Settings(BaseSettings):
     password_hash_memory_kib: int = Field(default=65536, ge=8, le=1048576)
     password_hash_parallelism: int = Field(default=4, ge=1, le=16)
 
+    # --- Two-factor authentication ----------------------------------------
+    # 32 random bytes, base64url-encoded. Encrypts TOTP secrets at rest and
+    # keys the recovery-code hashes. Generate with:
+    #   python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+    mfa_encryption_key: SecretStr
+    mfa_issuer: str = "DocuMind"
+    # How long a successful 2FA check authorizes sensitive actions (e.g. delete).
+    mfa_step_up_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    mfa_setup_ttl_minutes: int = Field(default=15, ge=1, le=60)
+    rate_limit_mfa_per_user: int = Field(default=5, ge=1)
+    rate_limit_mfa_window_seconds: int = Field(default=300, ge=1)
+
     # --- Rate limits (requests per window, per client IP unless noted) ------
     rate_limit_enabled: bool = True
     rate_limit_login_per_ip: int = Field(default=20, ge=1)
@@ -146,6 +160,13 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must use the 'postgresql+asyncpg' scheme")
         return value
 
+    @field_validator("mfa_encryption_key")
+    @classmethod
+    def _validate_mfa_key(cls, value: SecretStr) -> SecretStr:
+        if len(mfa_key_bytes(value)) != 32:
+            raise ValueError("MFA_ENCRYPTION_KEY must be 32 bytes, base64url-encoded")
+        return value
+
     @field_validator("redis_url")
     @classmethod
     def _validate_redis_url(cls, value: SecretStr) -> SecretStr:
@@ -172,6 +193,9 @@ class Settings(BaseSettings):
                 marker in secret.get_secret_value().lower() for marker in _INSECURE_SECRET_MARKERS
             )
         ]
+        decoded_mfa_key = mfa_key_bytes(self.mfa_encryption_key).lower()
+        if any(marker.encode() in decoded_mfa_key for marker in _INSECURE_SECRET_MARKERS):
+            insecure.append("MFA_ENCRYPTION_KEY")
         if insecure:
             raise ValueError(
                 "Development placeholder credentials are not allowed in production: "
@@ -202,6 +226,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
+
+
+def mfa_key_bytes(value: SecretStr) -> bytes:
+    raw = value.get_secret_value().strip()
+    try:
+        return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+    except (ValueError, binascii.Error):
+        return b""
 
 
 @lru_cache(maxsize=1)

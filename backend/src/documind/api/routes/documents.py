@@ -72,6 +72,10 @@ async def list_documents(
     format_filter: Annotated[DocumentFormat | None, Query(alias="format")] = None,
     collection_id: uuid.UUID | None = None,
     uploaded_by: uuid.UUID | None = None,
+    archived: Annotated[
+        Literal["exclude", "only", "include"],
+        Query(description="Archived documents are hidden unless requested"),
+    ] = "exclude",
     sort: Literal["created_at", "updated_at", "title", "size_bytes"] = "created_at",
     order: Literal["asc", "desc"] = "desc",
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
@@ -85,6 +89,7 @@ async def list_documents(
             format=format_filter.value if format_filter else None,
             collection_id=collection_id,
             uploaded_by=uploaded_by,
+            archived=archived,
             sort=sort,
             descending=order == "desc",
             limit=limit,
@@ -113,7 +118,33 @@ async def rename_document(
     return _doc(await documents.rename(ctx, document_id, body.title))
 
 
-@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/documents/{document_id}/archive",
+    response_model=DocumentResponse,
+    summary="Archive (members: own uploads; admins: any). Read-only and hidden by default.",
+)
+async def archive_document(
+    document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
+) -> DocumentResponse:
+    return _doc(await documents.archive(ctx, document_id))
+
+
+@router.post("/documents/{document_id}/restore", response_model=DocumentResponse)
+async def restore_document(
+    document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
+) -> DocumentResponse:
+    return _doc(await documents.restore(ctx, document_id))
+
+
+@router.delete(
+    "/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Permanently delete (admins/owners; requires a recent 2FA step-up token)",
+    description=(
+        "Call POST /auth/mfa/verify first and use the returned access token. Errors: 403 "
+        "`mfa_enrollment_required` (2FA not set up) or `mfa_step_up_required` (no recent check)."
+    ),
+)
 async def delete_document(
     document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
 ) -> Response:

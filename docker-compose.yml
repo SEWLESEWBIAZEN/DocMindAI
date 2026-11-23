@@ -23,6 +23,7 @@ x-backend-environment: &backend-environment
   S3_BUCKET: ${S3_BUCKET:?set in .env}
   PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5173}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
+  MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?set in .env}
   AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"

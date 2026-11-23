@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse
 
 from documind.api.dependencies import (
     AuthServiceDep,
+    ContainerDep,
     CurrentUser,
+    MfaServiceDep,
     SettingsDep,
     require_csrf_header,
 )
@@ -18,8 +20,10 @@ from documind.api.schemas.identity import (
     EmailRequest,
     LoginRequest,
     MessageResponse,
+    MfaSecondFactorRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    StepUpResponse,
     TokenRequest,
     TokenResponse,
 )
@@ -131,3 +135,29 @@ async def forgot_password(body: EmailRequest, auth: AuthServiceDep) -> MessageRe
 async def reset_password(body: ResetPasswordRequest, auth: AuthServiceDep) -> Response:
     await auth.reset_password(body.token, body.new_password)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/mfa/verify",
+    response_model=StepUpResponse,
+    tags=["mfa"],
+    summary="Step-up: verify 2FA and get a short-lived elevated access token",
+    description=(
+        "Required before sensitive actions such as deleting documents. The returned access "
+        "token proves a recent 2FA check for MFA_STEP_UP_TTL_SECONDS. The refresh cookie is "
+        "not changed, so refreshed tokens are never elevated."
+    ),
+)
+async def mfa_verify(
+    body: MfaSecondFactorRequest,
+    response: Response,
+    user: CurrentUser,
+    mfa: MfaServiceDep,
+    container: ContainerDep,
+) -> StepUpResponse:
+    verified_at = await mfa.verify(user, body.code, body.recovery_code)
+    issued = container.access_tokens.issue(user.id, user.auth_version, mfa_verified_at=verified_at)
+    response.headers["Cache-Control"] = "no-store"
+    return StepUpResponse(
+        access_token=issued.token, expires_in=issued.expires_in, mfa_verified_at=verified_at
+    )

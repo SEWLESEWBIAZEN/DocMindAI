@@ -21,9 +21,11 @@ class JwtAccessTokenService:
         self._audience = audience
         self._ttl = ttl_seconds
 
-    def issue(self, user_id: uuid.UUID, auth_version: int) -> IssuedAccessToken:
+    def issue(
+        self, user_id: uuid.UUID, auth_version: int, *, mfa_verified_at: datetime | None = None
+    ) -> IssuedAccessToken:
         now = datetime.now(UTC)
-        claims = {
+        claims: dict[str, object] = {
             "iss": self._issuer,
             "aud": self._audience,
             "sub": str(user_id),
@@ -34,6 +36,8 @@ class JwtAccessTokenService:
             "typ": _TOKEN_TYPE,
             "ver": auth_version,
         }
+        if mfa_verified_at is not None:
+            claims["mfa"] = int(mfa_verified_at.timestamp())
         return IssuedAccessToken(
             token=jwt.encode(claims, self._secret, algorithm=_ALGORITHM), expires_in=self._ttl
         )
@@ -51,8 +55,13 @@ class JwtAccessTokenService:
             )
             if claims.get("typ") != _TOKEN_TYPE:
                 raise AuthenticationError("Invalid token.")
+            mfa = claims.get("mfa")
             return AccessTokenClaims(
-                user_id=uuid.UUID(str(claims["sub"])), auth_version=int(claims["ver"])
+                user_id=uuid.UUID(str(claims["sub"])),
+                auth_version=int(claims["ver"]),
+                mfa_verified_at=datetime.fromtimestamp(int(mfa), tz=UTC)
+                if mfa is not None
+                else None,
             )
         except AuthenticationError:
             raise

@@ -21,6 +21,7 @@ _BASE: dict[str, Any] = {
     "s3_bucket": "documind-test",
     "jwt_secret_key": "test-jwt-secret-key-that-is-long-enough-0123456789",
     "auth_cookie_secure": False,
+    "mfa_encryption_key": "dGVzdC1tZmEta2V5LTAxMjM0NTY3ODlhYmNkZWZnaGk=",
     "password_hash_time_cost": 1,
     "password_hash_memory_kib": 8,
     "password_hash_parallelism": 1,

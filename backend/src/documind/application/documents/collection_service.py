@@ -163,7 +163,7 @@ class CollectionService:
 
     async def delete(self, ctx: WorkspaceContext, collection_id: uuid.UUID) -> None:
         """Delete the collection only; its documents stay in the workspace."""
-        ctx.require(Permission.DOCUMENTS_DELETE)
+        ctx.require(Permission.DOCUMENTS_WRITE)
         collection = await self._require(ctx, collection_id)
         name = collection.name
         await self._collections.delete(collection)
@@ -182,8 +182,13 @@ class CollectionService:
     ) -> None:
         ctx.require(Permission.DOCUMENTS_WRITE)
         await self._require(ctx, collection_id)
-        if await self._documents.get(ctx.workspace_id, document_id) is None:
+        doc = await self._documents.get(ctx.workspace_id, document_id)
+        if doc is None:
             raise NotFoundError("Document not found.")
+        if doc.archived_at is not None:
+            raise ConflictError(
+                "This document is archived. Restore it to make changes.", code="document_archived"
+            )
         if await self._collections.add_document(
             ctx.workspace_id, collection_id, document_id, ctx.user_id
         ):

@@ -334,15 +334,19 @@ def test_documents_are_isolated_between_workspaces(api: Api) -> None:
             method, f"/api/v1/workspaces/{ada_ws}{path}", json={"title": "x"}, headers=eve
         )
         assert r.status_code == 404, (method, path)
-    # ...nor use Ada's document ID through her own workspace (IDOR).
+    # ...nor use Ada's document ID through her own workspace (IDOR), even with
+    # every privilege there, including a fresh 2FA step-up.
+    eve_elevated = api.elevated(eve)
     for method, path in [
         ("GET", f"/documents/{doc['id']}"),
         ("PATCH", f"/documents/{doc['id']}"),
         ("DELETE", f"/documents/{doc['id']}"),
+        ("POST", f"/documents/{doc['id']}/archive"),
+        ("POST", f"/documents/{doc['id']}/restore"),
         ("GET", f"/documents/{doc['id']}/download-url"),
     ]:
         r = api.client.request(
-            method, f"/api/v1/workspaces/{eve_ws}{path}", json={"title": "x"}, headers=eve
+            method, f"/api/v1/workspaces/{eve_ws}{path}", json={"title": "x"}, headers=eve_elevated
         )
         assert r.status_code == 404, (method, path)
     titles = [
@@ -480,7 +484,7 @@ def test_rename_and_delete(api: Api, s3: Any) -> None:
     assert api.client.patch(base, json={"title": "   "}, headers=ada).status_code == 422
 
     (key,) = storage_key(api, doc["id"])
-    assert api.client.delete(base, headers=ada).status_code == 204
+    assert api.client.delete(base, headers=api.elevated(ada)).status_code == 204
     assert api.client.get(base, headers=ada).status_code == 404
     assert not object_exists(s3, api.settings.s3_bucket, key)
     # The content can be uploaded again once deleted.
@@ -522,7 +526,7 @@ def test_versions(api: Api, s3: Any) -> None:
 
     keys = storage_key(api, doc["id"])
     assert len(keys) == 2
-    api.client.delete(base, headers=ada)
+    assert api.client.delete(base, headers=api.elevated(ada)).status_code == 204
     assert not any(object_exists(s3, api.settings.s3_bucket, k) for k in keys)
 
 
@@ -585,7 +589,7 @@ def test_document_audit_events(api: Api) -> None:
     org = api.create_org(ada)["id"]
     doc = upload(api, org, ada, pdf("r"), "a.pdf").json()
     api.client.get(f"/api/v1/workspaces/{org}/documents/{doc['id']}/download-url", headers=ada)
-    api.client.delete(f"/api/v1/workspaces/{org}/documents/{doc['id']}", headers=ada)
+    api.client.delete(f"/api/v1/workspaces/{org}/documents/{doc['id']}", headers=api.elevated(ada))
     actions = [
         e["action"]
         for e in api.client.get(f"/api/v1/workspaces/{org}/audit-logs", headers=ada).json()

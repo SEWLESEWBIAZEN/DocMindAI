@@ -85,14 +85,18 @@ class WorkspaceService:
 
     # ------------------------------------------------------------- resolution
 
-    async def resolve_context(self, user: User, workspace_id: uuid.UUID) -> WorkspaceContext:
+    async def resolve_context(
+        self, user: User, workspace_id: uuid.UUID, *, mfa_verified_at: datetime | None = None
+    ) -> WorkspaceContext:
         """Authorize entry into a workspace. Non-members get 'not found', never 'forbidden'."""
         view = await self._workspaces.membership(workspace_id, user.id)
         if view is None:
             raise NotFoundError(WORKSPACE_NOT_FOUND)
-        return await self._context(user, view)
+        return await self._context(user, view, mfa_verified_at)
 
-    async def _context(self, user: User, view: MembershipView) -> WorkspaceContext:
+    async def _context(
+        self, user: User, view: MembershipView, mfa_verified_at: datetime | None
+    ) -> WorkspaceContext:
         keys = await self._roles.permission_keys(view.role.id)
         known = {p.value for p in Permission}
         unknown = keys - known
@@ -107,6 +111,8 @@ class WorkspaceService:
             member_id=view.member.id,
             role=RoleKey(view.role.key),
             permissions=frozenset(Permission(k) for k in keys & known),
+            mfa_enabled=user.mfa_enabled,
+            mfa_verified_at=mfa_verified_at,
         )
 
     # -------------------------------------------------------------- listing

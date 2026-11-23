@@ -22,7 +22,7 @@ from documind.application.ports import (
     PasswordHasher,
     RateLimiter,
 )
-from documind.core.config import Settings
+from documind.core.config import Settings, mfa_key_bytes
 from documind.infrastructure.cache.health import RedisHealthCheck
 from documind.infrastructure.cache.redis import create_redis_client
 from documind.infrastructure.database.engine import create_engine, create_session_factory
@@ -32,6 +32,7 @@ from documind.infrastructure.ratelimit.redis_limiter import RedisRateLimiter
 from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
 from documind.infrastructure.security.malware import ClamAVScanner, NoopMalwareScanner
 from documind.infrastructure.security.passwords import Argon2PasswordHasher
+from documind.infrastructure.security.secret_box import SecretBox
 from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
@@ -53,6 +54,7 @@ class Container:
     rate_limiter: RateLimiter
     storage: ObjectStorageProvider
     malware_scanner: MalwareScanner
+    secret_box: SecretBox
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -103,6 +105,7 @@ def build_container(settings: Settings) -> Container:
             ),
         ),
         malware_scanner=_build_scanner(settings),
+        secret_box=SecretBox(mfa_key_bytes(settings.mfa_encryption_key)),
     )
 
 

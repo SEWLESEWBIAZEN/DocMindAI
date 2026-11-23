@@ -14,8 +14,9 @@ from documind.application.documents.document_service import DocumentService
 from documind.application.health_service import HealthService
 from documind.application.identity.account_service import AccountService
 from documind.application.identity.auth_service import AuthService
-from documind.application.identity.common import RequestMeta
+from documind.application.identity.common import Principal, RequestMeta
 from documind.application.identity.invitation_service import InvitationService
+from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
 from documind.application.ports import EmailMessage, EmailSender
 from documind.container import Container
@@ -147,28 +148,52 @@ def get_account_service(
     )
 
 
+def get_mfa_service(
+    session: SessionDep, container: ContainerDep, email: EmailDep, meta: MetaDep
+) -> MfaService:
+    return MfaService(
+        session,
+        container.settings,
+        container.password_hasher,
+        container.secret_box,
+        email,
+        container.rate_limiter,
+        meta,
+    )
+
+
+MfaServiceDep = Annotated[MfaService, Depends(get_mfa_service)]
 WorkspaceServiceDep = Annotated[WorkspaceService, Depends(get_workspace_service)]
 InvitationServiceDep = Annotated[InvitationService, Depends(get_invitation_service)]
 AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]
 
 
-async def get_current_user(
+async def get_principal(
     auth: AuthServiceDep,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> User:
+) -> Principal:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise AuthenticationError("Sign in to continue.", code="not_authenticated")
     return await auth.authenticate(credentials.credentials)
+
+
+CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
+
+
+def get_current_user(principal: CurrentPrincipal) -> User:
+    return principal.user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 async def get_workspace_context(
-    workspace_id: uuid.UUID, user: CurrentUser, workspaces: WorkspaceServiceDep
+    workspace_id: uuid.UUID, principal: CurrentPrincipal, workspaces: WorkspaceServiceDep
 ) -> WorkspaceContext:
     """Authorize the caller for the workspace in the path (404 for non-members)."""
-    return await workspaces.resolve_context(user, workspace_id)
+    return await workspaces.resolve_context(
+        principal.user, workspace_id, mfa_verified_at=principal.mfa_verified_at
+    )
 
 
 WorkspaceCtx = Annotated[WorkspaceContext, Depends(get_workspace_context)]

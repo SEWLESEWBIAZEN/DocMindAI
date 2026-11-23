@@ -154,6 +154,21 @@ public storage endpoint, forcing an attachment and a safe content type.
 | Documents | `POST/GET /documents` (upload; list and search by `q`, `status`, `format`, `collection_id`, `uploaded_by`, with sort and pagination), `GET/PATCH/DELETE /documents/{id}`, `GET /documents/{id}/download-url`, `GET/POST /documents/{id}/versions` |
 | Collections | `GET/POST /collections`, `GET/PATCH/DELETE /collections/{id}`, `PUT/DELETE /collections/{id}/documents/{document_id}` |
 
+**Archiving and deletion (ADR 0013).**
+
+- Members archive or restore their own uploads; Admins and Owners can archive any.
+- Archived documents are hidden and read-only.
+- Permanent deletion needs `documents.delete` (Admin/Owner) **and** a 2FA
+  step-up token less than 5 minutes old.
+
+| Area | Endpoints |
+| ---- | --------- |
+| Archive | `POST …/documents/{id}/archive`, `POST …/documents/{id}/restore`, `GET …/documents?archived=exclude\|only\|include` |
+| 2FA | `GET /me/mfa`, `POST /me/mfa/totp/setup`, `POST /me/mfa/totp/confirm`, `POST /me/mfa/disable`, `POST /me/mfa/recovery-codes`, `POST /auth/mfa/verify` (step-up → elevated access token) |
+
+Errors added: 403 `mfa_enrollment_required`, `mfa_step_up_required`;
+401 `invalid_mfa_code`; 409 `document_archived`, `mfa_already_enabled`.
+
 Errors added: 413 `payload_too_large`, 415 `unsupported_file` /
 `malware_detected`, 409 `duplicate_document` / `duplicate_collection`,
 503 `service_unavailable` (scanner down).

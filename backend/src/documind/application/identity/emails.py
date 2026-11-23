@@ -120,3 +120,47 @@ def invitation_email(
             url,
         ),
     )
+
+
+def mfa_enabled_email(to: str, name: str) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject="Two-factor authentication is on",
+        text=f"Hi {name},\n\nTwo-factor authentication was just turned on for your DocuMind "
+        "account. Keep your recovery codes somewhere safe. If this wasn't you, reset your "
+        "password immediately.",
+        html=_html(
+            "Two-factor authentication is on",
+            f"<p>Hi {escape(name)},</p><p>Two-factor authentication was just turned on for your "
+            "account. Keep your recovery codes somewhere safe.</p>",
+        ),
+    )
+
+
+def mfa_disabled_email(to: str, name: str) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject="Two-factor authentication was turned off",
+        text=f"Hi {name},\n\nTwo-factor authentication was just turned off for your DocuMind "
+        "account. If this wasn't you, reset your password immediately.",
+        html=_html(
+            "Two-factor authentication was turned off",
+            f"<p>Hi {escape(name)},</p><p>Two-factor authentication was just turned off for your "
+            "account. If this was not you, reset your password immediately.</p>",
+        ),
+    )
+
+
+def recovery_code_used_email(to: str, name: str, remaining: int) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject="A recovery code was used on your account",
+        text=f"Hi {name},\n\nA two-factor recovery code was just used. You have {remaining} "
+        "left. If this wasn't you, reset your password and regenerate your codes.",
+        html=_html(
+            "A recovery code was used",
+            f"<p>Hi {escape(name)},</p><p>A two-factor recovery code was just used. You have "
+            f"{remaining} left. If this was not you, reset your password and regenerate "
+            "your codes.</p>",
+        ),
+    )

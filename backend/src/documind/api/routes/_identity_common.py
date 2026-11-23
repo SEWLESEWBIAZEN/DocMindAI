@@ -18,6 +18,7 @@ def user_response(user: User) -> UserResponse:
         email=user.email,
         display_name=user.display_name,
         email_verified=user.email_verified_at is not None,
+        mfa_enabled=user.mfa_enabled,
         default_workspace_id=user.default_workspace_id,
         created_at=user.created_at,
     )

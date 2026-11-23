@@ -7,12 +7,20 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from documind.infrastructure.database.models import AuditLog
+from documind.infrastructure.database.models import AuditLog, User
 from documind.infrastructure.database.repositories.identity import AuditLogRepository
 
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class Principal:
+    """The authenticated caller, plus what their access token proves."""
+
+    user: User
+    mfa_verified_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

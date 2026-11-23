@@ -71,6 +71,12 @@ class Document(Base):
     uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
+    # Archived documents are read-only and hidden by default (and, from
+    # Phase 5, excluded from retrieval). Restorable; deletion is separate.
+    archived_at: Mapped[datetime | None] = mapped_column(TZ)
+    archived_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now(), onupdate=func.now())
 

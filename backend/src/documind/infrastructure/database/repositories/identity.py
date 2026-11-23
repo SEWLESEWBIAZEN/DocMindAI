@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager, joinedload
 
@@ -26,6 +26,7 @@ from documind.infrastructure.database.models import (
     AccountToken,
     AuditLog,
     Invitation,
+    MfaRecoveryCode,
     Organization,
     Permission,
     RefreshToken,
@@ -344,4 +345,36 @@ class AuditLogRepository:
 
     async def count(self, **filters: Any) -> int:
         stmt = select(func.count()).select_from(AuditLog).filter_by(**filters)
+        return int((await self._s.execute(stmt)).scalar_one())
+
+
+class MfaRecoveryCodeRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def replace_all(self, user_id: uuid.UUID, code_hashes: list[str]) -> None:
+        await self.delete_all(user_id)
+        self._s.add_all(MfaRecoveryCode(user_id=user_id, code_hash=h) for h in code_hashes)
+
+    async def delete_all(self, user_id: uuid.UUID) -> None:
+        await self._s.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id))
+
+    async def consume(self, user_id: uuid.UUID, code_hash: str, now: datetime) -> bool:
+        """Mark an unused code as used. Atomic, so a code works exactly once."""
+        stmt = (
+            update(MfaRecoveryCode)
+            .where(
+                MfaRecoveryCode.user_id == user_id,
+                MfaRecoveryCode.code_hash == code_hash,
+                MfaRecoveryCode.used_at.is_(None),
+            )
+            .values(used_at=now)
+            .returning(MfaRecoveryCode.id)
+        )
+        return (await self._s.execute(stmt)).first() is not None
+
+    async def remaining(self, user_id: uuid.UUID) -> int:
+        stmt = select(func.count()).where(
+            MfaRecoveryCode.user_id == user_id, MfaRecoveryCode.used_at.is_(None)
+        )
         return int((await self._s.execute(stmt)).scalar_one())

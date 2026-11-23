@@ -8,6 +8,7 @@ import asyncio
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -120,6 +121,7 @@ def identity_settings(live_settings: Settings, migrated_test_db: str, test_bucke
             "rate_limit_login_per_email": 1000,
             "rate_limit_auth_per_ip": 1000,
             "rate_limit_refresh_per_ip": 1000,
+            "rate_limit_mfa_per_user": 1000,
             "public_app_url": "https://app.test.example",
             "s3_bucket": test_bucket,
         }
@@ -165,6 +167,44 @@ class Api:
     client: TestClient
     mail: Mailbox
     settings: Settings
+    clock: dict[str, float] = field(default_factory=lambda: {"offset": 0.0})
+
+    # ---- two-factor helpers -----------------------------------------------
+
+    def totp(self, secret: str) -> str:
+        """A code for a fresh time step. The server's TOTP clock is shifted by the
+        same offset (see make_api), so each call yields a new, unreplayed step."""
+        from documind.domain.identity import totp as totp_lib
+
+        # Advance exactly one period first, so client and server agree on the step
+        # and every call yields a step later than any previously used one.
+        self.clock["offset"] += totp_lib.PERIOD_SECONDS
+        now = time.time() + self.clock["offset"]
+        return totp_lib.code_at_step(secret, totp_lib.time_step(now))
+
+    def enable_mfa(self, headers: dict[str, str]) -> tuple[str, list[str]]:
+        setup = self.client.post(
+            "/api/v1/me/mfa/totp/setup", json={"password": PASSWORD}, headers=headers
+        )
+        assert setup.status_code == 200, setup.text
+        secret = str(setup.json()["secret"])
+        confirm = self.client.post(
+            "/api/v1/me/mfa/totp/confirm", json={"code": self.totp(secret)}, headers=headers
+        )
+        assert confirm.status_code == 200, confirm.text
+        return secret, list(confirm.json()["recovery_codes"])
+
+    def step_up(self, headers: dict[str, str], secret: str) -> dict[str, str]:
+        response = self.client.post(
+            "/api/v1/auth/mfa/verify", json={"code": self.totp(secret)}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    def elevated(self, headers: dict[str, str]) -> dict[str, str]:
+        """Enable 2FA for this user and return step-up (delete-capable) headers."""
+        secret, _ = self.enable_mfa(headers)
+        return self.step_up(headers, secret)
 
     # ---- convenience flows -------------------------------------------------
 
@@ -241,9 +281,15 @@ def mailbox() -> Mailbox:
 
 
 @pytest.fixture
-def make_api(identity_settings: Settings, mailbox: Mailbox) -> Iterator[Any]:
+def make_api(
+    identity_settings: Settings, mailbox: Mailbox, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Any]:
     """Factory so a test can tweak settings (e.g. rate limits) before the app starts."""
+    from documind.application.identity import mfa_service
+
     clients: list[TestClient] = []
+    clock = {"offset": 0.0}
+    monkeypatch.setattr(mfa_service, "_totp_clock", lambda: time.time() + clock["offset"])
 
     def _make(container_overrides: dict[str, Any] | None = None, **overrides: Any) -> Api:
         settings = identity_settings.model_copy(update=overrides)
@@ -261,7 +307,7 @@ def make_api(identity_settings: Settings, mailbox: Mailbox) -> Iterator[Any]:
         )
         client.__enter__()
         clients.append(client)
-        return Api(client=client, mail=mailbox, settings=settings)
+        return Api(client=client, mail=mailbox, settings=settings, clock=clock)
 
     yield _make
     for client in clients:

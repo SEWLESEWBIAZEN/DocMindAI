@@ -19,6 +19,7 @@ from documind.infrastructure.database.models import (
 )
 
 SortField = Literal["created_at", "updated_at", "title", "size_bytes"]
+ArchivedFilter = Literal["exclude", "only", "include"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,7 @@ class DocumentFilter:
     format: str | None = None
     collection_id: uuid.UUID | None = None
     uploaded_by: uuid.UUID | None = None
+    archived: ArchivedFilter = "exclude"
     sort: SortField = "created_at"
     descending: bool = True
     limit: int = 25
@@ -65,6 +67,10 @@ class DocumentRepository:
 
     def _filtered(self, workspace_id: uuid.UUID, f: DocumentFilter) -> Select[Document]:
         stmt = select(Document).where(Document.workspace_id == workspace_id)
+        if f.archived == "exclude":
+            stmt = stmt.where(Document.archived_at.is_(None))
+        elif f.archived == "only":
+            stmt = stmt.where(Document.archived_at.is_not(None))
         if f.query:
             pattern = _like_pattern(f.query.strip())
             stmt = stmt.where(

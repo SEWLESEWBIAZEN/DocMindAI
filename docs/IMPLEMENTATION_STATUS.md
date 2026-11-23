@@ -134,10 +134,35 @@ Tests: 151 unit and 78 integration (backend, all passing); live browser upload, 
   RAM; the adapter is tested against a protocol-level fake, not a live clamd.
 - Orphaned objects (if an object delete fails after commit) are logged; add a sweeper.
 - Duplicate detection is exact-bytes, per workspace.
-- In organizations, Members can delete any document; consider uploader- or admin-only.
+- ~~In organizations, Members can delete any document~~ → resolved by the change request below.
 - Production Nginx must set `client_max_body_size` to match `MAX_UPLOAD_BYTES` (Phase 10).
 - A filename containing `"` is received as `%22` (browsers encode it in multipart per the
   HTML spec); it is displayed as sent.
+
+## Change request (2026-11-23): archiving and 2FA-protected deletion ✅
+
+Product decision: *Members can archive, not delete, documents they uploaded.
+Admins can delete any document, with 2FA.* See ADR 0013.
+
+- [x] Permissions `documents.archive_own` (Member+) and `documents.archive_any` (Admin+);
+      Members lose `documents.delete` (migration `0004`, frozen data, up/down tested)
+- [x] Archive and restore endpoints; archived documents hidden by default, read-only, downloadable
+- [x] TOTP 2FA: setup (password), confirm (code), 10 recovery codes, disable (password + factor),
+      regenerate; RFC 6238 test vectors; replay protection; AES-GCM-encrypted secrets; HMAC-hashed
+      recovery codes; per-user rate limits; audit events; security emails
+- [x] Step-up: `POST /auth/mfa/verify` issues an elevated access token (`mfa` claim, 5 minutes);
+      refreshed tokens are never elevated
+- [x] `DELETE` document requires Admin/Owner **and** recent 2FA; same rule for Owners and personal workspaces
+- [x] Tests: 186 unit + 97 integration (backend); live end-to-end against the Compose stack
+      (archive, 403 paths, enrollment, real SMTP security email, step-up delete, object removed)
+
+Follow-ups:
+
+- [ ] Require 2FA at sign-in for users who enabled it (recommended), and optionally enforce
+      enrollment for Admins/Owners per organization
+- [ ] Support-assisted 2FA reset for users who lose both authenticator and recovery codes
+- [ ] Passkeys (WebAuthn) as an additional factor; email OTP as an accessible fallback (ADR 0011)
+- [ ] Frontend 2FA screens (QR code, manual secret, recovery codes) in Phase 7
 
 ## Phase 4: Document processing engine
 

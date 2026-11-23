@@ -18,5 +18,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0010](0010-application-layer-persistence.md) | Application services use concrete repositories (amends 0001) | Accepted |
 | [0011](0011-voice-and-accessibility.md) | Voice assistant and accessibility for blind and low-vision users | Accepted (roadmap) |
 | [0012](0012-document-storage-and-upload-security.md) | Document storage and upload security | Accepted |
+| [0013](0013-archiving-and-2fa-protected-deletion.md) | Document archiving and 2FA-protected deletion (amends 0009, 0012) | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

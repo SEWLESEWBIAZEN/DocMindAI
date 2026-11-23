@@ -10,6 +10,7 @@ from documind.api.dependencies import (
     AccountServiceDep,
     CurrentUser,
     InvitationServiceDep,
+    MfaServiceDep,
     SettingsDep,
     WorkspaceServiceDep,
 )
@@ -20,7 +21,13 @@ from documind.api.schemas.identity import (
     ActiveWorkspaceRequest,
     ChangePasswordRequest,
     InvitationResponse,
+    MfaCodeRequest,
+    MfaDisableRequest,
+    MfaSetupRequest,
+    MfaSetupResponse,
+    MfaStatusResponse,
     ProfileUpdateRequest,
+    RecoveryCodesResponse,
     TokenResponse,
     UserResponse,
     WorkspaceResponse,
@@ -98,3 +105,61 @@ async def decline_invitation(
 ) -> Response:
     await invitations.decline_by_id(user, invitation_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Two-factor authentication -----------------------------------------------
+
+
+@router.get("/mfa", response_model=MfaStatusResponse, tags=["mfa"])
+async def mfa_status(user: CurrentUser, mfa: MfaServiceDep) -> MfaStatusResponse:
+    status_ = await mfa.status(user)
+    return MfaStatusResponse(
+        enabled=status_.enabled,
+        enabled_at=status_.enabled_at,
+        recovery_codes_remaining=status_.recovery_codes_remaining,
+    )
+
+
+@router.post(
+    "/mfa/totp/setup",
+    response_model=MfaSetupResponse,
+    tags=["mfa"],
+    summary="Start authenticator-app setup (requires your password)",
+)
+async def mfa_setup(
+    body: MfaSetupRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
+) -> MfaSetupResponse:
+    setup = await mfa.begin_setup(user, body.password)
+    response.headers["Cache-Control"] = "no-store"
+    return MfaSetupResponse(
+        secret=setup.secret, otpauth_uri=setup.otpauth_uri, expires_at=setup.expires_at
+    )
+
+
+@router.post(
+    "/mfa/totp/confirm",
+    response_model=RecoveryCodesResponse,
+    tags=["mfa"],
+    summary="Confirm with a code from the app; turns 2FA on and returns recovery codes",
+)
+async def mfa_confirm(
+    body: MfaCodeRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
+) -> RecoveryCodesResponse:
+    codes = await mfa.confirm_setup(user, body.code)
+    response.headers["Cache-Control"] = "no-store"
+    return RecoveryCodesResponse(recovery_codes=codes)
+
+
+@router.post("/mfa/disable", status_code=status.HTTP_204_NO_CONTENT, tags=["mfa"])
+async def mfa_disable(body: MfaDisableRequest, user: CurrentUser, mfa: MfaServiceDep) -> Response:
+    await mfa.disable(user, body.password, body.code, body.recovery_code)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/mfa/recovery-codes", response_model=RecoveryCodesResponse, tags=["mfa"])
+async def mfa_regenerate_codes(
+    body: MfaCodeRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
+) -> RecoveryCodesResponse:
+    codes = await mfa.regenerate_recovery_codes(user, body.code)
+    response.headers["Cache-Control"] = "no-store"
+    return RecoveryCodesResponse(recovery_codes=codes)

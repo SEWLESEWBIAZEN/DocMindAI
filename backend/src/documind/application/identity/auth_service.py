@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.identity import emails
-from documind.application.identity.common import AuditRecorder, RequestMeta, utcnow
+from documind.application.identity.common import AuditRecorder, Principal, RequestMeta, utcnow
 from documind.application.ports import AccessTokenService, EmailSender, PasswordHasher, RateLimiter
 from documind.core.config import Settings
 from documind.domain.errors import (
@@ -374,13 +374,13 @@ class AuthService:
         )
         await self._session.commit()
 
-    async def authenticate(self, access_token: str) -> User:
-        """Resolve the user for an access token, enforcing revocation via auth_version."""
+    async def authenticate(self, access_token: str) -> Principal:
+        """Resolve the caller for an access token, enforcing revocation via auth_version."""
         claims = self._tokens.decode(access_token)
         user = await self._users.get(claims.user_id)
         if user is None or not user.is_active or user.auth_version != claims.auth_version:
             raise AuthenticationError("Your session is no longer valid. Please sign in again.")
-        return user
+        return Principal(user=user, mfa_verified_at=claims.mfa_verified_at)
 
     # ----------------------------------------------------------- password flows
 

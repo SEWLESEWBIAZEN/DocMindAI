@@ -81,6 +81,17 @@ Required variables have no default; the backend refuses to start without them.
 | `PASSWORD_HASH_PARALLELISM`       |          | `4`                | Argon2id lanes.                                                     |
 | `PUBLIC_APP_URL`                  |          | `http://localhost:5173` | Web app base URL used in email links. Must be `https://` in production. |
 
+## Two-factor authentication
+
+| Variable                          | Required | Default    | Description                                                              |
+| --------------------------------- | -------- | ---------- | ------------------------------------------------------------------------ |
+| `MFA_ENCRYPTION_KEY`              | yes      |            | 32 random bytes, base64url. Encrypts TOTP secrets (AES-256-GCM) and keys recovery-code hashes. Generate with `python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Placeholders are rejected in production. |
+| `MFA_ISSUER`                      |          | `DocuMind` | Name shown in authenticator apps.                                        |
+| `MFA_STEP_UP_TTL_SECONDS`         |          | `300`      | How long a 2FA check authorizes sensitive actions such as deleting documents (30–3600). |
+| `MFA_SETUP_TTL_MINUTES`           |          | `15`       | Time allowed to confirm a started setup.                                 |
+| `RATE_LIMIT_MFA_PER_USER`         |          | `5`        | 2FA attempts (setup, confirm, verify, disable, regenerate) per user per window. |
+| `RATE_LIMIT_MFA_WINDOW_SECONDS`   |          | `300`      | Window for the above.                                                    |
+
 ## Rate limits
 
 Fixed windows in Redis. Exceeding one returns 429 with `Retry-After`. If
@@ -115,7 +126,7 @@ Redis is unavailable, requests are allowed and an error is logged.
 With `ENVIRONMENT=production` the backend refuses to start if:
 
 - `DATABASE_URL`, `REDIS_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` or
-  `JWT_SECRET_KEY` contains a development placeholder marker (`change-me`,
+  `JWT_SECRET_KEY` (or the decoded `MFA_ENCRYPTION_KEY`) contains a development placeholder marker (`change-me`,
   `dev-only`, `insecure`);
 - `CORS_ALLOWED_ORIGINS` contains `*`;
 - `AUTH_COOKIE_SECURE` is false;

@@ -100,6 +100,12 @@ class TestJwt:
         with pytest.raises(AuthenticationError):
             tokens.decode(self._forge(**overrides))
 
+    def test_mfa_claim_round_trip(self, tokens: JwtAccessTokenService) -> None:
+        verified = datetime(2026, 11, 23, 12, 0, 5, tzinfo=UTC)
+        claims = tokens.decode(tokens.issue(uuid.uuid4(), 1, mfa_verified_at=verified).token)
+        assert claims.mfa_verified_at == verified
+        assert tokens.decode(tokens.issue(uuid.uuid4(), 1).token).mfa_verified_at is None
+
     def test_wrong_key_and_tampering_rejected(self, tokens: JwtAccessTokenService) -> None:
         other = JwtAccessTokenService(
             secret="another-secret-key-0123456789abcdefghijkl",
@@ -115,7 +121,7 @@ class TestJwt:
             tokens.decode(f"{header}.{payload}x.{signature}")
 
     def test_alg_none_rejected(self, tokens: JwtAccessTokenService) -> None:
-        unsigned = jwt.encode({"sub": str(uuid.uuid4())}, key=None, algorithm="none")
+        unsigned = jwt.encode({"sub": str(uuid.uuid4())}, key="", algorithm="none")
         with pytest.raises(AuthenticationError):
             tokens.decode(unsigned)
 

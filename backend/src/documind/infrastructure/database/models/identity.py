@@ -56,8 +56,31 @@ class User(Base):
     )
     last_login_at: Mapped[datetime | None] = mapped_column(TZ)
     password_changed_at: Mapped[datetime | None] = mapped_column(TZ)
+    # Two-factor (TOTP). Secrets are AES-GCM encrypted, bound to the user ID.
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(TZ)
+    totp_last_used_step: Mapped[int | None] = mapped_column(BigInteger)
+    totp_pending_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    totp_pending_expires_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
+
+    @property
+    def mfa_enabled(self) -> bool:
+        return self.totp_enabled_at is not None
+
+
+class MfaRecoveryCode(Base):
+    """Single-use 2FA recovery codes, stored as keyed (HMAC-SHA256) hashes."""
+
+    __tablename__ = "mfa_recovery_codes"
+    __table_args__ = (UniqueConstraint("user_id", "code_hash"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    code_hash: Mapped[str] = mapped_column(String(64))
+    used_at: Mapped[datetime | None] = mapped_column(TZ)
+    created_at: Mapped[datetime] = _created()
 
 
 class Organization(Base):

@@ -1,4 +1,6 @@
+import dataclasses
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -13,9 +15,11 @@ from documind.domain.identity.permissions import (
 from documind.domain.identity.policies import (
     WorkspaceContext,
     WorkspaceKind,
+    ensure_can_archive,
     ensure_can_assign_role,
     ensure_can_manage_member,
     ensure_owner_remains,
+    ensure_recent_mfa,
     ensure_shared_workspace,
 )
 from documind.domain.identity.values import (
@@ -62,6 +66,12 @@ class TestCatalog:
             (VIE, Permission.MEMBERS_INVITE, False),
             (MEM, Permission.DOCUMENTS_WRITE, True),
             (MEM, Permission.MEMBERS_INVITE, False),
+            (MEM, Permission.DOCUMENTS_DELETE, False),
+            (MEM, Permission.DOCUMENTS_ARCHIVE_OWN, True),
+            (MEM, Permission.DOCUMENTS_ARCHIVE_ANY, False),
+            (VIE, Permission.DOCUMENTS_ARCHIVE_OWN, False),
+            (ADM, Permission.DOCUMENTS_DELETE, True),
+            (ADM, Permission.DOCUMENTS_ARCHIVE_ANY, True),
             (ADM, Permission.MEMBERS_MANAGE, True),
             (ADM, Permission.AUDIT_READ, True),
             (ADM, Permission.BILLING_MANAGE, False),
@@ -148,3 +158,45 @@ class TestValues:
             clean_display_name("   ")
         with pytest.raises(ValidationFailedError):
             clean_display_name("x" * 101)
+
+
+class TestArchivePolicy:
+    def test_members_archive_only_their_own_uploads(self) -> None:
+        c = ctx(MEM)
+        ensure_can_archive(c, c.user_id)
+        with pytest.raises(PermissionDeniedError, match="you uploaded"):
+            ensure_can_archive(c, uuid.uuid4())
+        with pytest.raises(PermissionDeniedError):
+            ensure_can_archive(c, None)  # uploader unknown (e.g. deleted account)
+
+    @pytest.mark.parametrize("role", [ADM, OWN])
+    def test_admins_and_owners_archive_anything(self, role: RoleKey) -> None:
+        ensure_can_archive(ctx(role), uuid.uuid4())
+        ensure_can_archive(ctx(role), None)
+
+    def test_viewers_cannot_archive(self) -> None:
+        c = ctx(VIE)
+        with pytest.raises(PermissionDeniedError):
+            ensure_can_archive(c, c.user_id)
+
+
+class TestRecentMfa:
+    now = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
+
+    def mfa_ctx(self, *, enabled: bool = True, seconds_ago: float | None = 10) -> WorkspaceContext:
+        verified = None if seconds_ago is None else self.now - timedelta(seconds=seconds_ago)
+        return dataclasses.replace(ctx(ADM), mfa_enabled=enabled, mfa_verified_at=verified)
+
+    def test_recent_verification_passes(self) -> None:
+        ensure_recent_mfa(self.mfa_ctx(seconds_ago=299), self.now, 300)
+
+    def test_requires_enrollment(self) -> None:
+        with pytest.raises(PermissionDeniedError) as exc:
+            ensure_recent_mfa(self.mfa_ctx(enabled=False), self.now, 300)
+        assert exc.value.code == "mfa_enrollment_required"
+
+    @pytest.mark.parametrize("seconds_ago", [None, 301, -120])
+    def test_missing_stale_or_future_verification(self, seconds_ago: float | None) -> None:
+        with pytest.raises(PermissionDeniedError) as exc:
+            ensure_recent_mfa(self.mfa_ctx(seconds_ago=seconds_ago), self.now, 300)
+        assert exc.value.code == "mfa_step_up_required"

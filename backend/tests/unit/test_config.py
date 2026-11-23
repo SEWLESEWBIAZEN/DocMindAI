@@ -52,6 +52,7 @@ def test_cors_origins_from_environment(
         "s3_access_key_id",
         "s3_secret_access_key",
         "jwt_secret_key",
+        "mfa_encryption_key",
     ):
         monkeypatch.setenv(key.upper(), base[key].get_secret_value())
     monkeypatch.setenv("S3_BUCKET", "documind-test")
@@ -99,3 +100,17 @@ def test_jwt_secret_minimum_length(make_settings: SettingsFactory) -> None:
 def test_smtp_tls_modes_are_exclusive(make_settings: SettingsFactory) -> None:
     with pytest.raises(ValidationError, match="either"):
         make_settings(smtp_starttls=True, smtp_use_ssl=True)
+
+
+def test_mfa_key_must_be_32_bytes(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="32 bytes"):
+        make_settings(mfa_encryption_key="dG9vLXNob3J0")  # "too-short"
+    with pytest.raises(ValidationError, match="32 bytes"):
+        make_settings(mfa_encryption_key="not base64 !!")
+
+
+def test_production_rejects_placeholder_mfa_key(make_settings: SettingsFactory) -> None:
+    with pytest.raises(ValidationError, match="MFA_ENCRYPTION_KEY"):
+        make_settings(
+            **PRODUCTION, mfa_encryption_key="Y2hhbmdlLW1lLWRldi1vbmx5LW1mYS1rZXktMDAwMDA="
+        )

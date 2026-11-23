@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.documents.uploads import InspectedUpload, inspect_upload
-from documind.application.identity.common import AuditRecorder, RequestMeta
+from documind.application.identity.common import AuditRecorder, RequestMeta, utcnow
 from documind.application.ports import (
     MalwareScanner,
     ObjectStorageProvider,
@@ -34,7 +34,11 @@ from documind.domain.errors import (
     UnsupportedMediaTypeError,
 )
 from documind.domain.identity.permissions import Permission
-from documind.domain.identity.policies import WorkspaceContext
+from documind.domain.identity.policies import (
+    WorkspaceContext,
+    ensure_can_archive,
+    ensure_recent_mfa,
+)
 from documind.infrastructure.database.models import (
     Document,
     DocumentCollectionItem,
@@ -68,6 +72,8 @@ class DocumentInfo:
     current_version_id: uuid.UUID | None
     collection_ids: list[uuid.UUID]
     uploaded_by_user_id: uuid.UUID | None
+    archived_at: datetime | None
+    archived_by_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -145,9 +151,18 @@ class DocumentService:
             current_version_id=doc.current_version_id,
             collection_ids=collection_ids or [],
             uploaded_by_user_id=doc.uploaded_by_user_id,
+            archived_at=doc.archived_at,
+            archived_by_user_id=doc.archived_by_user_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
+
+    @staticmethod
+    def _ensure_active(doc: Document) -> None:
+        if doc.archived_at is not None:
+            raise ConflictError(
+                "This document is archived. Restore it to make changes.", code="document_archived"
+            )
 
     async def _require(
         self, ctx: WorkspaceContext, document_id: uuid.UUID, *, for_update: bool = False
@@ -182,8 +197,9 @@ class DocumentService:
     async def _ensure_not_duplicate(self, ctx: WorkspaceContext, checksum: str) -> None:
         existing = await self._documents.by_checksum(ctx.workspace_id, checksum)
         if existing is not None:
+            where = " (archived; restore it instead)" if existing.archived_at else ""
             raise ConflictError(
-                f"This file is already in the workspace as “{existing.title}”.",
+                f"This file is already in the workspace as “{existing.title}”{where}.",
                 code="duplicate_document",
             )
 
@@ -300,6 +316,7 @@ class DocumentService:
         await self._require(ctx, document_id)
         inspected, scan_status = await self._inspect_and_scan(file, filename)
         doc = await self._require(ctx, document_id, for_update=True)
+        self._ensure_active(doc)
         if doc.checksum_sha256 == inspected.checksum_sha256:
             raise ConflictError(
                 "This file is identical to the current version.", code="duplicate_document"
@@ -442,6 +459,7 @@ class DocumentService:
         ctx.require(Permission.DOCUMENTS_WRITE)
         new_title = clean_title(title)
         doc = await self._require(ctx, document_id, for_update=True)
+        self._ensure_active(doc)
         old = doc.title
         doc.title = new_title
         self._audit.record(
@@ -455,8 +473,45 @@ class DocumentService:
         await self._session.commit()
         return await self.get(ctx, document_id)
 
+    async def archive(self, ctx: WorkspaceContext, document_id: uuid.UUID) -> DocumentInfo:
+        """Hide a document and make it read-only. Members: own uploads; admins: any."""
+        doc = await self._require(ctx, document_id, for_update=True)
+        ensure_can_archive(ctx, doc.uploaded_by_user_id)
+        if doc.archived_at is None:
+            doc.archived_at = utcnow()
+            doc.archived_by_user_id = ctx.user_id
+            self._audit.record(
+                "document.archived",
+                actor_user_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target_type="document",
+                target_id=doc.id,
+                details={"title": doc.title},
+            )
+            await self._session.commit()
+        return await self.get(ctx, document_id)
+
+    async def restore(self, ctx: WorkspaceContext, document_id: uuid.UUID) -> DocumentInfo:
+        doc = await self._require(ctx, document_id, for_update=True)
+        ensure_can_archive(ctx, doc.uploaded_by_user_id)
+        if doc.archived_at is not None:
+            doc.archived_at = None
+            doc.archived_by_user_id = None
+            self._audit.record(
+                "document.restored",
+                actor_user_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target_type="document",
+                target_id=doc.id,
+                details={"title": doc.title},
+            )
+            await self._session.commit()
+        return await self.get(ctx, document_id)
+
     async def delete(self, ctx: WorkspaceContext, document_id: uuid.UUID) -> None:
+        """Permanent deletion: admins/owners only, after a recent 2FA check (ADR 0013)."""
         ctx.require(Permission.DOCUMENTS_DELETE)
+        ensure_recent_mfa(ctx, utcnow(), self._settings.mfa_step_up_ttl_seconds)
         doc = await self._require(ctx, document_id, for_update=True)
         keys = [
             v.storage_key for v in await self._documents.versions(ctx.workspace_id, document_id)
@@ -469,7 +524,7 @@ class DocumentService:
             workspace_id=ctx.workspace_id,
             target_type="document",
             target_id=document_id,
-            details={"title": title, "versions": len(keys)},
+            details={"title": title, "versions": len(keys), "mfa_verified": True},
         )
         await self._session.commit()
         # After commit: a failed object delete leaves an orphan in a private

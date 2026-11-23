@@ -181,6 +181,7 @@ def test_profile_update(api: Api) -> None:
         "email",
         "display_name",
         "email_verified",
+        "mfa_enabled",
         "default_workspace_id",
         "created_at",
     }

@@ -22,6 +22,8 @@ class Permission(StrEnum):
     USAGE_READ = "usage.read"
     DOCUMENTS_READ = "documents.read"
     DOCUMENTS_WRITE = "documents.write"
+    DOCUMENTS_ARCHIVE_OWN = "documents.archive_own"
+    DOCUMENTS_ARCHIVE_ANY = "documents.archive_any"
     DOCUMENTS_DELETE = "documents.delete"
     CONVERSATIONS_USE = "conversations.use"
     BILLING_MANAGE = "billing.manage"
@@ -38,7 +40,11 @@ PERMISSION_DESCRIPTIONS: MappingProxyType[Permission, str] = MappingProxyType(
         Permission.USAGE_READ: "View usage and quotas",
         Permission.DOCUMENTS_READ: "View and download documents",
         Permission.DOCUMENTS_WRITE: "Upload and edit documents and collections",
-        Permission.DOCUMENTS_DELETE: "Delete documents and collections",
+        Permission.DOCUMENTS_ARCHIVE_OWN: "Archive and restore documents you uploaded",
+        Permission.DOCUMENTS_ARCHIVE_ANY: "Archive and restore any document",
+        Permission.DOCUMENTS_DELETE: (
+            "Permanently delete documents (requires two-factor verification)"
+        ),
         Permission.CONVERSATIONS_USE: "Ask questions and hold conversations",
         Permission.BILLING_MANAGE: "Manage plan and billing",
     }
@@ -74,13 +80,15 @@ _VIEWER = frozenset(
         Permission.CONVERSATIONS_USE,
     }
 )
-_MEMBER = _VIEWER | {Permission.DOCUMENTS_WRITE, Permission.DOCUMENTS_DELETE}
+_MEMBER = _VIEWER | {Permission.DOCUMENTS_WRITE, Permission.DOCUMENTS_ARCHIVE_OWN}
 _ADMIN = _MEMBER | {
     Permission.WORKSPACE_UPDATE,
     Permission.MEMBERS_INVITE,
     Permission.MEMBERS_MANAGE,
     Permission.AUDIT_READ,
     Permission.USAGE_READ,
+    Permission.DOCUMENTS_ARCHIVE_ANY,
+    Permission.DOCUMENTS_DELETE,
 }
 _OWNER = frozenset(Permission)
 

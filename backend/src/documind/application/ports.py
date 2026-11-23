@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import BinaryIO, Protocol
 from uuid import UUID
 
@@ -29,10 +30,14 @@ class IssuedAccessToken:
 class AccessTokenClaims:
     user_id: UUID
     auth_version: int
+    # When the user last completed a 2FA check, if this token was issued by step-up.
+    mfa_verified_at: datetime | None = None
 
 
 class AccessTokenService(Protocol):
-    def issue(self, user_id: UUID, auth_version: int) -> IssuedAccessToken: ...
+    def issue(
+        self, user_id: UUID, auth_version: int, *, mfa_verified_at: datetime | None = None
+    ) -> IssuedAccessToken: ...
 
     def decode(self, token: str) -> AccessTokenClaims:
         """Raise AuthenticationError if the token is invalid or expired."""
