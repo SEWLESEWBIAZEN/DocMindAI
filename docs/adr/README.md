@@ -1,0 +1,17 @@
+# Architecture decision records
+
+Each ADR captures one significant decision: its context, the decision, the
+alternatives considered and the consequences. ADRs are immutable once
+accepted. To change a decision, add a new ADR that supersedes the old one.
+
+| ADR | Title | Status |
+| --- | ----- | ------ |
+| [0001](0001-monorepo-and-layered-backend.md) | Monorepo and layered (ports-and-adapters) backend | Accepted |
+| [0002](0002-python-toolchain.md) | Python toolchain: Python 3.12, uv, pyproject + uv.lock | Accepted |
+| [0003](0003-async-data-access-and-migrations.md) | Async SQLAlchemy + asyncpg, Alembic, pgvector in the primary database | Accepted |
+| [0004](0004-configuration-and-secrets.md) | Environment-based configuration with fail-fast validation | Accepted |
+| [0005](0005-logging-and-health-checks.md) | Structured stdlib logging, request IDs, liveness vs readiness | Accepted |
+| [0006](0006-local-object-storage-image.md) | Local object storage image after MinIO's distribution change | Accepted (development) / Open (production) |
+| [0007](0007-frontend-toolchain.md) | Frontend toolchain: Vite, TypeScript 7, oxlint, Vitest | Accepted |
+
+Template: Context, Decision, Alternatives, Consequences.

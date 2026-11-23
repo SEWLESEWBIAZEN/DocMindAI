@@ -1,0 +1,143 @@
+# DocuMind AI: Architecture
+
+This document describes the system as it exists now and the shape it is
+designed to grow into. Decisions with trade-offs are recorded as ADRs in
+[`docs/adr`](adr/README.md).
+
+## 1. System context
+
+```
+            Browser (React SPA)
+                    │  same-origin /api/*
+                    ▼
+     Nginx (Phase 10) / Vite dev proxy (development)
+                    │
+                    ▼
+           FastAPI backend (documind) ─────────────► OpenAI (Phase 4+, via provider port)
+             │          │           │
+             ▼          ▼           ▼
+       PostgreSQL     Redis      S3-compatible storage
+       + pgvector   (cache,      (MinIO locally)
+                    Celery broker)
+                        ▲
+                        │
+             Celery workers (Phase 4)
+```
+
+The browser only talks to the backend, always same-origin under `/api`.
+Storage credentials never reach the frontend. Downloads will use short-lived
+pre-signed URLs (Phase 3).
+
+## 2. Backend layering
+
+The backend lives in `backend/src/documind` and is organised in layers with
+dependencies pointing inward:
+
+```
+api  ──►  application  ──►  domain  ◄──  infrastructure
+ │                                            ▲
+ └──────────── container.py (composition root) ┘
+```
+
+| Layer            | Responsibility                                                                 | May import                         |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| `domain`         | Business concepts and **ports** (Protocols). No framework or I/O imports.      | stdlib only                        |
+| `application`    | Use-case services that orchestrate domain logic through ports.                 | `domain`                           |
+| `infrastructure` | **Adapters** that implement ports: SQLAlchemy, Redis, boto3, later OpenAI.     | `domain`, `core`, third-party libs |
+| `api`            | FastAPI routes, request/response schemas, dependencies, middleware.            | `application`, `domain`, `core`    |
+| `core`           | Cross-cutting: configuration, logging.                                         | stdlib, pydantic                   |
+| `container.py`   | The **only** place concrete adapters are instantiated and wired into services. | everything                         |
+
+**Dependency inversion in practice (Phase 1 example).** `domain/health.py`
+defines the `HealthCheck` port. `infrastructure/{database,cache,storage}/health.py`
+implement it. `application/health_service.py` depends only on the port, and
+`container.py` wires the concrete checks in. Unit tests substitute fakes without
+touching any infrastructure.
+
+**Request flow.** Routes obtain services via FastAPI dependencies
+(`api/dependencies.py`), which read the `Container` that the app lifespan stores
+on `app.state`. Nothing uses module-level singletons for I/O resources. That
+makes tests able to inject a different container (`create_app(container_factory=...)`).
+
+### Planned modules (later phases)
+
+The same structure will hold the product features. For example:
+
+- `domain/identity`, `application/identity`, `infrastructure/database/models/identity.py` (Phase 2)
+- `domain/storage.ObjectStorageProvider` port + `infrastructure/storage/s3_provider.py` (Phase 3)
+- `application/processing/*` orchestrator + Celery tasks in `infrastructure/tasks` (Phase 4)
+- `domain/rag` ports (`LLMProvider`, `EmbeddingProvider`, `VectorRepository`) (Phase 5)
+
+Tenant isolation will be enforced in application services and in repository
+queries (workspace ID is a mandatory filter parameter, never optional), not
+only in routes. Phase 2 establishes this pattern.
+
+## 3. Runtime resources and lifecycle
+
+`create_app()` builds the app. The lifespan:
+
+1. Builds the `Container`: async SQLAlchemy engine (pooled, `pool_pre_ping`),
+   async Redis client (pooled), boto3 S3 client. All of them connect lazily.
+2. Starts serving. **The API starts even if a dependency is down.** Readiness
+   reports it, and the dependency recovers without a restart.
+3. On shutdown, closes Redis, disposes the engine pool and closes the S3 client.
+
+## 4. Health model
+
+| Endpoint                   | Purpose   | Touches dependencies | Failure                                                         |
+| -------------------------- | --------- | -------------------- | --------------------------------------------------------------- |
+| `GET /api/v1/health/live`  | Liveness  | No                   | n/a. Used by container health checks so a DB outage does not restart the API |
+| `GET /api/v1/health`       | Readiness | Yes                  | 503 with per-component status                                   |
+
+Checks run concurrently, each bounded by `HEALTH_CHECK_TIMEOUT_SECONDS`. The
+database check also asserts that the `vector` extension is installed. Raw
+exception messages are logged but never returned; clients see either a
+curated message (`DependencyCheckError`) or the exception type. In
+production, details and error reasons are hidden from the response.
+
+## 5. Data and migrations
+
+- SQLAlchemy 2.x async with asyncpg. All models share `infrastructure/database/base.Base`
+  with a deterministic constraint naming convention.
+- Alembic reads `DATABASE_URL` from settings (never from `alembic.ini`).
+  `alembic -x database_url=...` targets another database, which the tests use.
+- pgvector is created both by the Postgres first-boot init script (as
+  superuser) and by migration `0001` (idempotent). This supports managed
+  databases where no init script runs.
+
+## 6. Observability
+
+- Structured logs via the standard library: JSON in production
+  (`LOG_FORMAT=json`), human-readable in development.
+- `RequestContextMiddleware` (pure ASGI, so it is safe for future SSE streaming)
+  assigns or propagates `X-Request-ID`, binds it to a context variable included
+  in every log line, logs one access line per request (health probes at DEBUG),
+  and converts unhandled exceptions into a generic JSON 500 that carries the
+  request ID.
+- Client-supplied request IDs are accepted only if they match
+  `[A-Za-z0-9._-]{1,128}`, which prevents log injection.
+
+## 7. Frontend
+
+- Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
+- `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
+  interceptor normalises all failures into `ApiError` (status, message,
+  request ID). Auth interceptors arrive in Phase 2.
+- TanStack Query for server state. The query client does not retry 4xx errors.
+- Phase 1 ships a system status page that exercises the full path:
+  browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
+
+## 8. Environments
+
+| Environment   | Config source                              | Notes                                                        |
+| ------------- | ------------------------------------------ | ------------------------------------------------------------ |
+| development   | `.env` (from `.env.example`) + Compose     | Docs enabled, console logs, all ports on 127.0.0.1            |
+| test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
+| production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
+
+## 9. Deployment target
+
+The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
+Compose behind Nginx with TLS (Phase 10). The backend image has a separate
+`runtime` target: no build tools or uv, a non-root user, and a liveness
+`HEALTHCHECK`.
