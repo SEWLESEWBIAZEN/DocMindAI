@@ -122,6 +122,29 @@ class Settings(BaseSettings):
     embedding_max_retries: int = Field(default=5, ge=0, le=10)
     embedding_timeout_seconds: float = Field(default=60.0, gt=0)
 
+    # --- Answer generation (LLM) --------------------------------------------
+    # "local" is an offline extractive stand-in for development and tests; it
+    # is rejected in production. The OpenAI provider shares OPENAI_API_KEY.
+    llm_provider: Literal["openai", "local"] = "openai"
+    llm_model: str = Field(default="gpt-5.4-mini", min_length=1, max_length=100)
+    # None = provider default. Reasoning models reject custom temperatures.
+    llm_temperature: float | None = Field(default=None, ge=0, le=2)
+    llm_max_output_tokens: int = Field(default=1200, ge=64, le=32_000)
+    llm_timeout_seconds: float = Field(default=60.0, gt=0)
+    llm_max_retries: int = Field(default=2, ge=0, le=10)
+
+    # --- Retrieval ------------------------------------------------------------
+    retrieval_top_k: int = Field(default=8, ge=1, le=50)
+    # Candidates fetched from each retriever before fusion.
+    retrieval_candidates: int = Field(default=40, ge=1, le=500)
+    # Minimum cosine similarity for a vector hit (0 disables the threshold).
+    retrieval_min_score: float = Field(default=0.2, ge=0, le=1)
+    retrieval_hybrid: bool = True
+    retrieval_ef_search: int = Field(default=100, ge=10, le=1000)
+    rag_context_max_tokens: int = Field(default=6000, ge=500, le=100_000)
+    rate_limit_ai_per_user: int = Field(default=30, ge=1)
+    rate_limit_ai_window_seconds: int = Field(default=60, ge=1)
+
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 
@@ -221,6 +244,8 @@ class Settings(BaseSettings):
     def _validate_embeddings(self) -> Settings:
         if self.embedding_provider == "openai" and self.openai_api_key is None:
             raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
+        if self.llm_provider == "openai" and self.openai_api_key is None:
+            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
         if self.chunk_overlap_tokens >= self.chunk_max_tokens // 2:
             raise ValueError("CHUNK_OVERLAP_TOKENS must be less than half of CHUNK_MAX_TOKENS")
         return self
@@ -269,6 +294,8 @@ class Settings(BaseSettings):
             raise ValueError("SMTP must use STARTTLS or SSL in production")
         if self.embedding_provider != "openai":
             raise ValueError("EMBEDDING_PROVIDER=local is for development only")
+        if self.llm_provider != "openai":
+            raise ValueError("LLM_PROVIDER=local is for development only")
         return self
 
     @model_validator(mode="after")

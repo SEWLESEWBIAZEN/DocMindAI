@@ -29,6 +29,8 @@ x-backend-environment: &backend-environment
   SMTP_PORT: "1025"
   EMAIL_FROM: ${EMAIL_FROM:-DocuMind AI <no-reply@documind.local>}
   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+  LLM_PROVIDER: ${LLM_PROVIDER:-local}
+  LLM_MODEL: ${LLM_MODEL:-gpt-5.4-mini}
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 

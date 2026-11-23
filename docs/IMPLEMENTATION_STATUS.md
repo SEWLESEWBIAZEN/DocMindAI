@@ -199,15 +199,58 @@ Tests: 236 unit and 116 integration tests (backend), including a real Celery wor
 - Token counts are estimates (conservative); a tokenizer can replace the estimator when its data is available.
 - The image's `apt-get install tesseract-ocr` step couldn't run here (`deb.debian.org` is blocked by this
   environment's network policy). OCR was verified with the same language data mounted from the host; CI builds the images.
-- Figure and chart descriptions (ADR 0011) move to Phase 5, where a vision-capable LLM provider exists.
+- Figure and chart descriptions (ADR 0011) moved to Phase 5, then deferred to Phase 6b (see Phase 5).
 - The development worker does not auto-reload; restart it after backend code changes (`docker compose restart worker`).
 
-## Phase 5: AI search and RAG engine
+## Phase 5: AI search and RAG engine ✅
 
-- [ ] Query embedding, vector search with in-query tenant filtering, hybrid search
-- [ ] Context builder, prompt manager, LLM provider abstraction, citation resolver
-- [ ] `SpeechToTextProvider` / `TextToSpeechProvider` ports; speakable citation labels (ADR 0011)
-- [ ] Grounded answers with page-level citations; insufficient-context handling
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Query embedding through the provider abstraction | [x] | `RetrievalService`; embedding failures → 503 `embedding_unavailable` |
+| Vector search with tenant filtering **inside the query** | [x] | `repositories/retrieval.py`: workspace on chunk and document, `ready`, not archived, current version, embedding model; isolation tests for other workspaces, archived, unprocessed, superseded and other-model chunks |
+| Hybrid search (vector + keyword) | [x] | Migration `0006` (generated `tsvector` + GIN); RRF fusion; exact-identifier test; `-term` exclusion test |
+| Document / collection scoping | [x] | Filters validated first (foreign or unknown id → 404); warnings for selected archived or unready documents |
+| Context builder | [x] | Numbered `<source>` blocks, token budget, near-duplicate skip, escaping and tag neutralization (`test_rag_domain.py`) |
+| Prompt manager (versioned) | [x] | `rag-answer-v1`, returned with every answer; system prompt sent unchanged (integration test) |
+| LLM provider abstraction | [x] | `LLMProvider` port; OpenAI Chat Completions adapter (mocked HTTP: generate, SSE stream with usage, error classes); offline extractive provider |
+| Citation resolver | [x] | Markers verified against the sources sent; invalid markers removed; excerpt, page and section labels |
+| Speakable citation labels (ADR 0011) | [x] | `spoken_label`: "MSA, pages 14 to 15" |
+| Speech-to-text / text-to-speech ports (ADR 0011) | [x] | `SpeechToTextProvider`, `TextToSpeechProvider` in `application/ports.py` (adapters in Phase 6b) |
+| Insufficient-context handling | [x] | No passages → no model call (spy test); sentinel → `insufficient_context`, no citations, sentinel never shown or streamed |
+| Prompt-injection resistance | [x] | Document trying to close `<source>` and inject `<system>` stays inside its block (integration and live); same for the question |
+| Streaming-ready orchestrator | [x] | `RAGOrchestrator.stream()`: sentinel split across deltas is never shown; final verified answer event |
+| API | [x] | `POST /workspaces/{id}/search` (documents.read), `POST /workspaces/{id}/ask` (conversations.use); per-user AI rate limit (429 test); request validation |
+
+Acceptance criteria (verified 2026-11-23):
+
+- [x] Semantic search returns relevant chunks (including OCR text from a scanned page, live).
+- [x] Answers are grounded in retrieved chunks; every citation points to a real current chunk and page.
+- [x] Answers span multiple documents with separate citations.
+- [x] Insufficient evidence is reported instead of guessed.
+- [x] Retrieval never crosses workspaces or includes archived, unprocessed or superseded content.
+- [x] Instructions inside documents are treated as data.
+- [x] **Not yet verified against the real OpenAI API.** `api.openai.com` is blocked by this environment's
+      network policy and no key is configured. The adapters are tested against mocked HTTP; the pipeline
+      ran end to end with the local providers.
+
+Tests: 273 unit and 138 integration tests (backend); live end-to-end on the Compose stack
+(real Celery worker with OCR → search → ask → isolation → archive exclusion, 15/15 checks).
+
+### Phase 5 follow-ups / known issues
+
+- Answer quality with the real model is unmeasured. An evaluation set (questions, expected pages, "no
+  answer" cases) should run against OpenAI once a key is available; tune `RETRIEVAL_MIN_SCORE` and
+  `RETRIEVAL_TOP_K` with it.
+- The local providers are lexical only (no stemming or semantics). They demonstrate the plumbing, not
+  quality; the "LLM" quotes matching sentences.
+- Keyword search uses the `english` configuration; per-workspace language is a follow-up.
+- Streamed text can briefly contain a citation marker that verification then removes; Phase 6 clients
+  render the final answer from the completion event.
+- Figure and chart descriptions (ADR 0011) are deferred to Phase 6b: they need a vision model call per
+  image, which belongs with the accessibility work.
+- Answers are not persisted yet (conversations, messages and citations come in Phase 6); usage is
+  returned per response but not recorded (Phase 8).
+- No search or answer UI yet (Phases 6 and 7).
 
 ## Phase 6: Conversation and chat system
 
@@ -215,6 +258,9 @@ Tests: 236 unit and 116 integration tests (backend), including a real Celery wor
 - [ ] SSE streaming with cancellation and disconnect handling
 
 ## Phase 6b: Voice and accessible reading (new, ADR 0011)
+
+- [ ] Figure and chart descriptions generated at processing time (vision model), searchable and read aloud
+- [ ] Speech adapters for the Phase 5 ports (speech-to-text, text-to-speech)
 
 - [ ] Ask questions by voice (speech-to-text → existing RAG pipeline, same authorization)
 - [ ] Answers read aloud, streamed sentence by sentence, with spoken citations

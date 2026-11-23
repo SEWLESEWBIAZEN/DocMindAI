@@ -20,6 +20,8 @@ from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
 from documind.application.ports import EmailMessage, EmailSender
 from documind.application.processing.queries import ProcessingQueries
+from documind.application.rag.orchestrator import GenerationOptions, RAGOrchestrator
+from documind.application.rag.retrieval import RetrievalOptions, RetrievalService
 from documind.container import Container
 from documind.core.config import Settings
 from documind.core.logging import get_request_id
@@ -244,3 +246,52 @@ def get_processing_queries(session: SessionDep) -> ProcessingQueries:
 
 
 ProcessingQueriesDep = Annotated[ProcessingQueries, Depends(get_processing_queries)]
+
+
+# --------------------------------------------------------------------------- #
+# Search and answers (RAG)
+# --------------------------------------------------------------------------- #
+
+
+def get_retrieval_service(session: SessionDep, container: ContainerDep) -> RetrievalService:
+    s = container.settings
+    return RetrievalService(
+        session,
+        container.embedding_provider,
+        RetrievalOptions(
+            top_k=s.retrieval_top_k,
+            candidates=s.retrieval_candidates,
+            min_similarity=s.retrieval_min_score,
+            hybrid=s.retrieval_hybrid,
+            ef_search=s.retrieval_ef_search,
+        ),
+    )
+
+
+RetrievalServiceDep = Annotated[RetrievalService, Depends(get_retrieval_service)]
+
+
+def get_rag_orchestrator(
+    retrieval: RetrievalServiceDep, container: ContainerDep
+) -> RAGOrchestrator:
+    s = container.settings
+    return RAGOrchestrator(
+        retrieval,
+        container.llm_provider,
+        GenerationOptions(
+            max_output_tokens=s.llm_max_output_tokens,
+            temperature=s.llm_temperature,
+            context_max_tokens=s.rag_context_max_tokens,
+        ),
+    )
+
+
+RAGOrchestratorDep = Annotated[RAGOrchestrator, Depends(get_rag_orchestrator)]
+
+
+async def limit_ai_requests(ctx: WorkspaceCtx, container: ContainerDep) -> None:
+    """Per-user budget for embedding/LLM-backed requests (search and answers)."""
+    s = container.settings
+    await container.rate_limiter.hit(
+        "ai:user", str(ctx.user_id), s.rate_limit_ai_per_user, s.rate_limit_ai_window_seconds
+    )

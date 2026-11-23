@@ -123,6 +123,28 @@ Required variables have no default; the backend refuses to start without them.
 | `EMBEDDING_MAX_RETRIES`      | `5`                       | SDK retries for 429/5xx/connection errors (honours `Retry-After`). |
 | `EMBEDDING_TIMEOUT_SECONDS`  | `60`                      | Per-request timeout.                                          |
 
+## Answer generation (LLM)
+
+| Variable                  | Default         | Description                                                   |
+| ------------------------- | --------------- | ------------------------------------------------------------- |
+| `LLM_PROVIDER`            | `openai`        | `openai`, or `local` (offline extractive stand-in; development and tests only; rejected in production). Uses `OPENAI_API_KEY` / `OPENAI_BASE_URL`. |
+| `LLM_MODEL`               | `gpt-5.4-mini`  | Chat model for answers.                                       |
+| `LLM_TEMPERATURE`         | *(unset)*       | Sent only when set (reasoning models reject custom values).   |
+| `LLM_MAX_OUTPUT_TOKENS`   | `1200`          | Upper bound for an answer (`max_completion_tokens`).          |
+| `LLM_TIMEOUT_SECONDS`     | `60`            | Per-request timeout.                                          |
+| `LLM_MAX_RETRIES`         | `2`             | SDK retries for 429/5xx/connection errors.                    |
+
+## Retrieval
+
+| Variable                  | Default | Description                                                          |
+| ------------------------- | ------- | -------------------------------------------------------------------- |
+| `RETRIEVAL_TOP_K`         | `8`     | Passages returned by search and given to the model (requests may set 1–50). |
+| `RETRIEVAL_CANDIDATES`    | `40`    | Candidates fetched from each retriever before fusion.                |
+| `RETRIEVAL_MIN_SCORE`     | `0.2`   | Minimum cosine similarity for a vector hit (`0` disables it).        |
+| `RETRIEVAL_HYBRID`        | `true`  | Combine vector and keyword (Postgres full-text) results with reciprocal-rank fusion. |
+| `RETRIEVAL_EF_SEARCH`     | `100`   | HNSW `ef_search` (recall vs speed).                                  |
+| `RAG_CONTEXT_MAX_TOKENS`  | `6000`  | Token budget for the sources sent to the model.                      |
+
 ## Rate limits
 
 Fixed windows in Redis. Exceeding one returns 429 with `Retry-After`. If
@@ -138,6 +160,8 @@ Redis is unavailable, requests are allowed and an error is logged.
 | `RATE_LIMIT_AUTH_WINDOW_SECONDS`      | `600`   | Window for the above.                                   |
 | `RATE_LIMIT_REFRESH_PER_IP`           | `60`    | Token refreshes per IP per window.                      |
 | `RATE_LIMIT_REFRESH_WINDOW_SECONDS`   | `60`    | Refresh window.                                         |
+| `RATE_LIMIT_AI_PER_USER`              | `30`    | Search and answer requests per user per window.         |
+| `RATE_LIMIT_AI_WINDOW_SECONDS`        | `60`    | Window for the above.                                   |
 
 ## Email (SMTP)
 
@@ -163,7 +187,7 @@ With `ENVIRONMENT=production` the backend refuses to start if:
 - `AUTH_COOKIE_SECURE` is false;
 - `PUBLIC_APP_URL` is not `https://`;
 - SMTP uses neither STARTTLS nor SSL;
-- `EMBEDDING_PROVIDER` is not `openai`.
+- `EMBEDDING_PROVIDER` or `LLM_PROVIDER` is not `openai`.
 
 ## Docker Compose (development) variables
 
@@ -191,7 +215,8 @@ Read by `docker-compose.yml` from the repository-root `.env`:
 Inside Compose, the backend container receives `DATABASE_URL`, `REDIS_URL` and
 the `S3_*` values built from the infrastructure variables above, using service
 hostnames (`postgres`, `redis`, `minio`). The `localhost` URLs in `.env` apply
-only to native runs.
+only to native runs. Compose defaults `EMBEDDING_PROVIDER` and `LLM_PROVIDER`
+to `local`, so the stack runs without an API key.
 
 ## Frontend
 

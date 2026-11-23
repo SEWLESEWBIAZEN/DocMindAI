@@ -129,6 +129,8 @@ def identity_settings(live_settings: Settings, migrated_test_db: str, test_bucke
             "public_app_url": "https://app.test.example",
             "s3_bucket": test_bucket,
             "embedding_provider": "local",
+            "llm_provider": "local",
+            "rate_limit_ai_per_user": 1000,
             "processing_retry_base_seconds": 1,
         }
     )

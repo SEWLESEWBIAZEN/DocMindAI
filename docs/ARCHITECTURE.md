@@ -66,7 +66,8 @@ The same structure will hold the product features. For example:
 - `domain/identity`, `application/identity`, `infrastructure/database/models/identity.py` (Phase 2)
 - `domain/storage.ObjectStorageProvider` port + `infrastructure/storage/s3_provider.py` (Phase 3)
 - `application/processing/*` orchestrator + Celery tasks in `infrastructure/tasks` (Phase 4)
-- `domain/rag` ports (`LLMProvider`, `EmbeddingProvider`, `VectorRepository`) (Phase 5)
+- `domain/rag` + `application/rag` retrieval and answers, `LLMProvider` port (Phase 5, done)
+- `application/conversations` with SSE streaming (Phase 6)
 
 Tenant isolation will be enforced in application services and in repository
 queries (workspace ID is a mandatory filter parameter, never optional), not
@@ -196,7 +197,35 @@ Celery beat ── sweep every 30 s: re-dispatch lost jobs,       ▼
 | `GET /pages` | Extracted text per page (OCR flag, headings) |
 | `GET /chunks` | Indexed chunks with page and heading metadata |
 
-## 6. Runtime resources and lifecycle
+## 6. Search and grounded answers (Phase 5)
+
+See ADR 0015.
+
+```
+POST /search ─┐
+POST /ask ────┴─► RetrievalService ── embed query (EmbeddingProvider)
+                     │   validate document/collection filters (404 if not in workspace)
+                     ├─► vector:  pgvector HNSW cosine, iterative scan  ┐  tenant + ready + not archived
+                     └─► keyword: tsvector GIN, websearch_to_tsquery     ┘  + current version, all in SQL
+                              └──► reciprocal-rank fusion ─► top-k chunks
+/ask:  build_context (numbered, budgeted, injection-neutralized <source> blocks)
+       → PromptManager (versioned system prompt) → LLMProvider (OpenAI | local)
+       → resolve_citations (verify [n], drop invalid, excerpt, visual + spoken labels)
+       → { answer, status: grounded | insufficient_context, citations[], usage, model, prompt_version }
+```
+
+| Module | Role |
+| --- | --- |
+| `domain/rag` | Pure logic: models, prompt text, context builder, RRF fusion, citation resolver |
+| `application/rag/retrieval.py` | Query validation, filter checks, hybrid retrieval |
+| `application/rag/orchestrator.py` | `answer()` and `stream()` (sentinel-safe streaming for Phase 6 SSE) |
+| `infrastructure/database/repositories/retrieval.py` | The tenant-filtered SQL |
+| `infrastructure/llm` | OpenAI Chat Completions adapter; offline extractive stand-in |
+
+Speech ports (`SpeechToTextProvider`, `TextToSpeechProvider`) live in
+`application/ports.py`; adapters ship in Phase 6b (ADR 0011).
+
+## 7. Runtime resources and lifecycle
 
 `create_app()` builds the app. The lifespan:
 
@@ -206,7 +235,7 @@ Celery beat ── sweep every 30 s: re-dispatch lost jobs,       ▼
    reports it, and the dependency recovers without a restart.
 3. On shutdown, closes Redis, disposes the engine pool and closes the S3 client.
 
-## 7. Health model
+## 8. Health model
 
 | Endpoint                   | Purpose   | Touches dependencies | Failure                                                         |
 | -------------------------- | --------- | -------------------- | --------------------------------------------------------------- |
@@ -219,7 +248,7 @@ exception messages are logged but never returned; clients see either a
 curated message (`DependencyCheckError`) or the exception type. In
 production, details and error reasons are hidden from the response.
 
-## 8. Data and migrations
+## 9. Data and migrations
 
 - SQLAlchemy 2.x async with asyncpg. All models share `infrastructure/database/base.Base`
   with a deterministic constraint naming convention.
@@ -229,7 +258,7 @@ production, details and error reasons are hidden from the response.
   superuser) and by migration `0001` (idempotent). This supports managed
   databases where no init script runs.
 
-## 9. Observability
+## 10. Observability
 
 - Structured logs via the standard library: JSON in production
   (`LOG_FORMAT=json`), human-readable in development.
@@ -241,7 +270,7 @@ production, details and error reasons are hidden from the response.
 - Client-supplied request IDs are accepted only if they match
   `[A-Za-z0-9._-]{1,128}`, which prevents log injection.
 
-## 10. Frontend
+## 11. Frontend
 
 - Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
 - `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
@@ -251,7 +280,7 @@ production, details and error reasons are hidden from the response.
 - Phase 1 ships a system status page that exercises the full path:
   browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
 
-## 11. Environments
+## 12. Environments
 
 | Environment   | Config source                              | Notes                                                        |
 | ------------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -259,7 +288,7 @@ production, details and error reasons are hidden from the response.
 | test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
 | production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
 
-## 12. Deployment target
+## 13. Deployment target
 
 The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
 Compose behind Nginx with TLS (Phase 10). The backend image has a separate

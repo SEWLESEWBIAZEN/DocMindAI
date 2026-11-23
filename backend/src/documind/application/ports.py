@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import BinaryIO, Protocol
@@ -159,3 +160,88 @@ class JobDispatcher(Protocol):
     failure (the sweeper re-dispatches queued jobs, so nothing is lost)."""
 
     async def dispatch(self, job_id: UUID, *, countdown_seconds: int | None = None) -> bool: ...
+
+
+# --------------------------------------------------------------------------- #
+# Language model
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True, slots=True)
+class ChatMessage:
+    role: str  # "system" | "user" | "assistant"
+    content: str
+
+
+@dataclass(frozen=True, slots=True)
+class LLMUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class LLMResult:
+    text: str
+    usage: LLMUsage
+    model: str
+    finish_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LLMDelta:
+    """A streamed piece of the answer."""
+
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class LLMStreamEnd:
+    """Last event of a stream: token usage and why generation stopped."""
+
+    usage: LLMUsage
+    model: str
+    finish_reason: str | None = None
+
+
+LLMStreamEvent = LLMDelta | LLMStreamEnd
+
+
+class LLMProvider(Protocol):
+    """Chat model. Raises Transient/PermanentProcessingError on provider failures."""
+
+    @property
+    def model(self) -> str: ...
+
+    async def generate(
+        self, messages: list[ChatMessage], *, max_output_tokens: int, temperature: float | None
+    ) -> LLMResult: ...
+
+    def stream(
+        self, messages: list[ChatMessage], *, max_output_tokens: int, temperature: float | None
+    ) -> AsyncIterator[LLMStreamEvent]: ...
+
+
+# --------------------------------------------------------------------------- #
+# Speech (ADR 0011; adapters arrive with Phase 6b)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True, slots=True)
+class Transcript:
+    text: str
+    language: str | None = None
+    duration_seconds: float | None = None
+
+
+class SpeechToTextProvider(Protocol):
+    async def transcribe(
+        self, audio: bytes, *, media_type: str, language: str | None = None
+    ) -> Transcript: ...
+
+
+class TextToSpeechProvider(Protocol):
+    def synthesize(
+        self, text: str, *, voice: str | None = None, speed: float = 1.0, audio_format: str = "mp3"
+    ) -> AsyncIterator[bytes]:
+        """Stream encoded audio so playback can start before synthesis finishes."""
+        ...

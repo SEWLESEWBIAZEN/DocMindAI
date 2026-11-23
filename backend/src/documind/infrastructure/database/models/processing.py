@@ -10,6 +10,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -21,7 +22,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from documind.domain.processing.vectors import VECTOR_DIMENSIONS
@@ -138,6 +139,7 @@ class DocumentChunk(Base):
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index("ix_document_chunks_search_tsv", "search_tsv", postgresql_using="gin"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -158,4 +160,8 @@ class DocumentChunk(Base):
     embedding: Mapped[list[float]] = mapped_column(Vector(VECTOR_DIMENSIONS))
     embedding_model: Mapped[str] = mapped_column(String(100))
     embedding_dimensions: Mapped[int] = mapped_column(Integer)
+    # Keyword side of hybrid search; maintained by Postgres (migration 0006).
+    search_tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('english'::regconfig, text)", persisted=True)
+    )
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())

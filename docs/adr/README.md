@@ -20,5 +20,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0012](0012-document-storage-and-upload-security.md) | Document storage and upload security | Accepted |
 | [0013](0013-archiving-and-2fa-protected-deletion.md) | Document archiving and 2FA-protected deletion (amends 0009, 0012) | Accepted |
 | [0014](0014-document-processing-pipeline.md) | Document processing pipeline | Accepted |
+| [0015](0015-retrieval-and-grounded-answers.md) | Retrieval and grounded answers (RAG) | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

@@ -57,6 +57,7 @@ def test_cors_origins_from_environment(
         monkeypatch.setenv(key.upper(), base[key].get_secret_value())
     monkeypatch.setenv("S3_BUCKET", "documind-test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("LLM_PROVIDER", "local")
     s = Settings(_env_file=None)
     assert s.cors_allowed_origins == ["http://a.test", "http://b.test"]
 
@@ -127,6 +128,23 @@ def test_openai_provider_requires_key(make_settings: SettingsFactory) -> None:
 def test_production_rejects_local_embeddings(make_settings: SettingsFactory) -> None:
     with pytest.raises(ValidationError, match="development only"):
         make_settings(**{**PRODUCTION, "embedding_provider": "local"})
+
+
+def test_llm_provider_requires_key_and_is_openai_in_production(
+    make_settings: SettingsFactory,
+) -> None:
+    with pytest.raises(ValidationError, match="LLM_PROVIDER=openai"):
+        make_settings(llm_provider="openai")
+    assert make_settings(llm_provider="openai", openai_api_key="sk-x").llm_model == "gpt-5.4-mini"
+    with pytest.raises(ValidationError, match="LLM_PROVIDER=local"):
+        make_settings(**{**PRODUCTION, "llm_provider": "local"})
+
+
+def test_llm_temperature_optional(make_settings: SettingsFactory) -> None:
+    assert make_settings().llm_temperature is None
+    assert make_settings(llm_temperature=0.2).llm_temperature == 0.2
+    with pytest.raises(ValidationError):
+        make_settings(llm_temperature=3)
 
 
 def test_embedding_dimensions_fixed_by_schema(make_settings: SettingsFactory) -> None:

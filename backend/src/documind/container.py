@@ -19,6 +19,7 @@ from documind.application.ports import (
     EmailSender,
     EmbeddingProvider,
     JobDispatcher,
+    LLMProvider,
     MalwareScanner,
     ObjectStorageProvider,
     PasswordHasher,
@@ -32,6 +33,8 @@ from documind.infrastructure.database.health import PostgresHealthCheck
 from documind.infrastructure.email.smtp import SmtpEmailSender
 from documind.infrastructure.embeddings.local_provider import LocalHashingEmbeddingProvider
 from documind.infrastructure.embeddings.openai_provider import OpenAIEmbeddingProvider
+from documind.infrastructure.llm.local_provider import LocalExtractiveLLM
+from documind.infrastructure.llm.openai_provider import OpenAIChatProvider
 from documind.infrastructure.processing.extractors import (
     CompositeExtractor,
     ExtractionLimits,
@@ -69,6 +72,7 @@ class Container:
     extractor: CompositeExtractor
     embedding_provider: EmbeddingProvider
     job_dispatcher: JobDispatcher
+    llm_provider: LLMProvider
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -132,6 +136,7 @@ def build_container(settings: Settings) -> Container:
         job_dispatcher=CeleryJobDispatcher(
             create_celery(settings), task_name=PROCESS_TASK, queue=QUEUE
         ),
+        llm_provider=_build_llm_provider(settings),
     )
 
 
@@ -147,6 +152,20 @@ def _build_embedding_provider(settings: Settings) -> EmbeddingProvider:
         base_url=settings.openai_base_url,
         timeout_seconds=settings.embedding_timeout_seconds,
         max_retries=settings.embedding_max_retries,
+    )
+
+
+def _build_llm_provider(settings: Settings) -> LLMProvider:
+    if settings.llm_provider == "local":
+        return LocalExtractiveLLM()
+    if settings.openai_api_key is None:  # also enforced by settings validation
+        raise ValueError("OPENAI_API_KEY is required for LLM_PROVIDER=openai")
+    return OpenAIChatProvider(
+        api_key=settings.openai_api_key.get_secret_value(),
+        model=settings.llm_model,
+        base_url=settings.openai_base_url,
+        timeout_seconds=settings.llm_timeout_seconds,
+        max_retries=settings.llm_max_retries,
     )
 
 

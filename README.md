@@ -4,11 +4,11 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–4 complete.** Foundation, identity and tenancy, document
-> management, and the asynchronous processing pipeline are in place: uploads are
-> extracted (with OCR for scanned PDFs), chunked by page and section, embedded
-> into pgvector and observable per document. AI search, RAG and chat arrive in
-> later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+> **Status: Phases 1–5 complete.** Foundation, identity and tenancy, document
+> management, the asynchronous processing pipeline (with OCR for scanned PDFs),
+> and AI search with grounded, page-cited answers are in place. Conversations
+> with streaming arrive in Phase 6, and the app UI in Phase 7. See
+> [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
 and low-vision professionals too: full screen-reader support, questions by
@@ -67,8 +67,11 @@ docker compose up --build
 | http://localhost:8025               | Mailpit: every email the app sends (verification, reset, invitations) |
 
 Background services: `worker` (Celery; processes uploads) and `beat` (runs the
-recovery sweep). In development, embeddings use the offline `local` provider;
-set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY` for real embeddings.
+recovery sweep). In development, embeddings and answers use offline `local`
+providers, so no API key is needed. They match words rather than meaning, and the
+local "model" only quotes matching sentences. For real results set
+`EMBEDDING_PROVIDER=openai`, `LLM_PROVIDER=openai` and `OPENAI_API_KEY` (then run
+`documind-manage reindex` so existing chunks get real embeddings).
 
 The backend container applies migrations and creates the private storage
 bucket on start. All ports are bound to `127.0.0.1`.
@@ -108,6 +111,22 @@ With the stack running, open http://localhost:8000/api/docs:
    link, and call `POST /api/v1/auth/verify-email`.
 3. `POST /api/v1/auth/login` returns an access token. Click **Authorize** and paste it.
 4. Try `POST /api/v1/organizations`, invitations, members and `GET /api/v1/me/workspaces`.
+
+## Trying search and answers
+
+After signing in (above), using your personal workspace id from `GET /api/v1/me/workspaces`:
+
+1. `POST /api/v1/workspaces/{id}/documents` with a PDF, DOCX, TXT or Markdown file. Wait for
+   `status: "ready"` (`GET …/documents/{doc}`).
+2. `POST /api/v1/workspaces/{id}/search` with `{"query": "renewal notice"}` returns ranked passages
+   with pages and sections.
+3. `POST /api/v1/workspaces/{id}/ask` with `{"question": "How much notice is needed?"}` returns an
+   answer with `[n]` markers and matching `citations` (document, page, excerpt, plus a
+   `spoken_label` for screen readers). If the documents don't contain the answer, `status` is
+   `insufficient_context`.
+
+Both accept `document_ids`, `collection_ids` and `top_k`. They only ever see the workspace's
+ready, non-archived documents.
 
 ## Health endpoints
 
