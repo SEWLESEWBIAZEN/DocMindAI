@@ -10,6 +10,11 @@ grounded conversations across them.
 > an audit log, all exposed through the API. Documents, RAG and chat arrive in
 > later phases. See [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
+**Accessibility is a product goal.** DocuMind is being designed for blind
+and low-vision professionals too: full screen-reader support, questions by
+voice, answers read aloud with spoken citations, and a listening mode for
+studying documents. See [ADR 0011](docs/adr/0011-voice-and-accessibility.md).
+
 ## Stack
 
 | Layer            | Technology                                                       |

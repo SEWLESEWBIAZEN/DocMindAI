@@ -104,6 +104,8 @@ Acceptance criteria (verified 2026-11-23):
 
 - [ ] Celery + Redis; reliable dispatch (outbox or equivalent)
 - [ ] Extractor (PyMuPDF, python-docx, text), normaliser, chunker
+- [ ] **OCR for scanned PDFs (required, ADR 0011)**; preserve reading order, headings and page numbers
+- [ ] Text descriptions for figures and charts (vision model; ADR 0011)
 - [ ] Embedding provider abstraction (OpenAI), batching, retries, dedup
 - [ ] pgvector repository; idempotency; retries; failed-job handling
 
@@ -111,12 +113,23 @@ Acceptance criteria (verified 2026-11-23):
 
 - [ ] Query embedding, vector search with in-query tenant filtering, hybrid search
 - [ ] Context builder, prompt manager, LLM provider abstraction, citation resolver
+- [ ] `SpeechToTextProvider` / `TextToSpeechProvider` ports; speakable citation labels (ADR 0011)
 - [ ] Grounded answers with page-level citations; insufficient-context handling
 
 ## Phase 6: Conversation and chat system
 
 - [ ] Conversation, ConversationDocument, Message, MessageCitation
 - [ ] SSE streaming with cancellation and disconnect handling
+
+## Phase 6b: Voice and accessible reading (new, ADR 0011)
+
+- [ ] Ask questions by voice (speech-to-text → existing RAG pipeline, same authorization)
+- [ ] Answers read aloud, streamed sentence by sentence, with spoken citations
+- [ ] Document reading mode: read page or section, next/previous, summarize, ask in context
+- [ ] Opt-in voice, never auto-play over screen readers; pause/stop shortcuts; adjustable speed
+- [ ] Spoken confirmation for destructive actions
+- [ ] Per-workspace voice policy; audio not stored by default
+- [ ] Testing sessions with blind and low-vision users
 
 ## Phase 7: Frontend implementation
 
@@ -133,14 +146,19 @@ Acceptance criteria (verified 2026-11-23):
   - `/login` and `/register` show a "coming soon" page until authentication ships (Phase 2)
   - Routing is a minimal pathname switch (`src/app/routes.tsx`); a full router comes with the app shell
 - [ ] Remaining pages (login, registration, dashboard, library, chat, etc.), navigation shell, chat UI
+- [ ] **Accessibility acceptance (ADR 0011):** WCAG 2.2 AA, full keyboard operation, polite live regions
+      for streamed answers, citation links, heading and page navigation; axe checks plus NVDA, JAWS
+      and VoiceOver testing
 
 ## Phase 8: Usage, administration and SaaS readiness
 
 - [ ] Usage tracking, quotas, plans/entitlements model, audit log views
+- [ ] Audio-minute usage; per-workspace voice policy (ADR 0011)
 
 ## Phase 9: Security, testing and performance
 
 - [ ] Security review, Playwright E2E, load tests on the 4 vCPU / 8 GB target
+- [ ] Accessibility audit and testing with blind users (ADR 0011)
 
 ## Phase 10: Production deployment
 
