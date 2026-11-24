@@ -441,22 +441,38 @@ Acceptance (verified 2026-11-24):
 
 ## Phase 9: Security, testing and performance
 
-Original scope:
+Report: [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md). Load tests: [`loadtest/README.md`](../loadtest/README.md).
+Backups: [`runbooks/backup-and-restore.md`](runbooks/backup-and-restore.md). Accessibility:
+[`accessibility/`](accessibility/).
 
-- [ ] Full security review
-- [ ] Playwright end-to-end testing (extended to Phase 8 features)
-- [ ] Load tests on the 4 vCPU / 8 GB target
-- [ ] Accessibility audit; manual NVDA, JAWS and VoiceOver verification
-- [ ] Testing with blind and low-vision users (ADR 0011)
-- [ ] BYOK review: credential storage and rotation, secret leakage prevention (logs, errors, backups), SSRF
-- [ ] Backup security and restoration tests
+### Original scope
 
-Multi-infrastructure verification:
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Full security review | [x] | `SECURITY_REVIEW.md`: 8 findings fixed (headers, 422 echo, log redaction, outbound probe limit, DNS re-check, outage handling, secret rotation, contrast); dependency audits clean (pip-audit, npm audit). **An independent penetration test is still recommended** |
+| Playwright end-to-end testing (extended to Phase 8) | [x] | `journey`, `voice`, `saas`, `a11y` specs (8 tests) on the live stack |
+| Load tests on the 4 vCPU / 8 GB target | [x] | Compose limits (8 GB, 4 vCPU split); about 135 requests/s with 0 errors at 25 and 50 busy users; answer p95 under 0.9 s; uploads ready p95 1.6 s (`loadtest/README.md`). Local AI providers: OpenAI latency not included |
+| Accessibility audit | [x] | axe WCAG 2.2 A/AA on every page in light **and** dark mode; keyboard-only journey (skip link, menus, dialogs, composer, focus indicators); 1 contrast issue fixed |
+| Manual NVDA, JAWS and VoiceOver verification | [ ] | Protocol ready (`accessibility/screen-reader-test-protocol.md`); **needs testers with real screen readers** |
+| Testing with blind and low-vision users | [ ] | Study plan ready (`accessibility/user-testing-plan.md`); **needs recruited participants** |
+| BYOK review: storage, rotation, leakage (logs, errors, backups), SSRF | [x] | Vault rotation (rewrap) and revocation; no key in logs, responses, audit or `pg_dump` (`test_secrets_never_leak_*`); SSRF policy with re-check at connect |
+| Backup security and restoration tests | [x] | Encrypted, authenticated archives (tampering, truncation and wrong passphrase rejected); full restore drill into a fresh database and bucket, signed in and used (`test_backup_restore.py`) |
 
-- [ ] Shared and dedicated database isolation; external database security; storage provider isolation
-- [ ] Worker authentication and revocation (MI-7 connector)
-- [ ] Infrastructure profile integrity; configuration version pinning; secret rotation
-- [ ] Infrastructure migration safety (MI-8); customer network security; infrastructure failure behaviour
+### Multi-infrastructure verification
+
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Shared and dedicated database isolation | [x] | Two dedicated databases, tenant anchor FKs, cross-organization 404s (`test_dedicated_databases_isolate_organizations`, `test_organizations_cannot_reach_each_others_documents`) |
+| External database security | [x] | Non-superuser check, TLS modes (`verify-full` in production), SSRF, consent to manage the schema, password rotation |
+| Storage provider isolation | [x] | Customer bucket under a prefix, signed URLs for that bucket, other organizations get 404 |
+| Worker authentication and revocation | [~] | `POST /worker/v1/heartbeat` authenticates hashed tokens; wrong, unknown, user and revoked tokens get 401. **The job protocol (MI-7) is not built yet** |
+| Infrastructure profile integrity; configuration version pinning | [x] | Checksums verified on load (`test_tampered_profile_is_refused`); immutable versions; jobs resolve the pinned version |
+| Secret rotation | [x] | Credential key ring rewrap; database password rotation without migration; old credential revoked |
+| Infrastructure migration safety | [~] | Moving data is refused and planned, never run (`migration_required`). **Execution (MI-8) not built** |
+| Customer network security | [x] | SSRF policy (private, loopback, link-local, metadata, CGNAT, IPv4-mapped); outbound validation rate limit |
+| Infrastructure failure behaviour | [x] | Customer database outage: 503 for that organization only; others and identity unaffected; jobs left for the sweeper |
+
+Tests at the end of Phase 9 (2026-11-24): backend 390 unit and 206 integration tests (real PostgreSQL, Redis and MinIO); frontend 82 Vitest; Playwright 8/8 (journey, voice, Phase 8, accessibility). Lint, format and `mypy --strict` clean.
 
 ## Phase 10: Production deployment
 

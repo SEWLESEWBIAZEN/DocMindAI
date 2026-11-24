@@ -1,0 +1,32 @@
+# Load-test profile: the whole stack within the 4 vCPU / 8 GB target (Phase 9).
+#   docker compose -f docker-compose.yml -f loadtest/docker-compose.loadtest.yml up -d
+# Memory limits add up to 8 GB; CPU shares split the host's 4 vCPUs.
+x-limits: &rate-limits
+  RATE_LIMIT_AUTH_PER_IP: "100000"
+  RATE_LIMIT_LOGIN_PER_IP: "100000"
+  RATE_LIMIT_LOGIN_PER_EMAIL: "100000"
+  RATE_LIMIT_AI_PER_USER: "100000"
+  LOG_LEVEL: WARNING
+
+services:
+  postgres:
+    deploy: { resources: { limits: { cpus: "1.5", memory: 2560M } } }
+  redis:
+    deploy: { resources: { limits: { cpus: "0.25", memory: 384M } } }
+  minio:
+    deploy: { resources: { limits: { cpus: "0.5", memory: 768M } } }
+  mailpit:
+    deploy: { resources: { limits: { cpus: "0.1", memory: 128M } } }
+  backend:
+    environment: *rate-limits
+    # Production-style: several worker processes, no auto-reload.
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && exec uvicorn documind.asgi:app --host 0.0.0.0 --port 8000 --workers 3 --no-access-log
+    deploy: { resources: { limits: { cpus: "2", memory: 2560M } } }
+  worker:
+    environment: *rate-limits
+    deploy: { resources: { limits: { cpus: "1", memory: 1536M } } }
+  beat:
+    deploy: { resources: { limits: { cpus: "0.1", memory: 192M } } }

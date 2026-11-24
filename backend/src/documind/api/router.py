@@ -13,6 +13,7 @@ from documind.api.routes import (
     rag,
     usage,
     voice,
+    worker_api,
     workspaces,
 )
 
@@ -30,3 +31,4 @@ api_router.include_router(usage.router)
 api_router.include_router(voice.router)
 api_router.include_router(ai_providers.router)
 api_router.include_router(infrastructure.router)
+api_router.include_router(worker_api.router)

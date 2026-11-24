@@ -522,9 +522,25 @@ def test_customer_worker_tokens_are_hashed_and_revocable(iapi: Api) -> None:
             await c.aclose()
 
     assert asyncio.run(auth())
+    beat = api.client.post(
+        "/api/v1/worker/v1/heartbeat", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert beat.status_code == 200, beat.text
+    assert beat.json()["workspace_id"] == w
+    assert "jobs:claim" in beat.json()["scopes"]
+    for bad in (f"{token}x", "dmw_" + "a" * 43, h["Authorization"].split()[1]):
+        rejected = api.client.post(
+            "/api/v1/worker/v1/heartbeat", headers={"Authorization": f"Bearer {bad}"}
+        )
+        assert rejected.status_code == 401  # wrong token, unknown token, a user's token
     wid = issued.json()["id"]
     assert api.client.delete(url(w, f"/workers/{wid}"), headers=h).status_code == 204
     assert not asyncio.run(auth())
+    revoked = api.client.post(
+        "/api/v1/worker/v1/heartbeat", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert revoked.status_code == 401
+    assert revoked.json()["code"] == "invalid_worker_token"
     assert "on-prem-1" not in str(
         api.client.get(url(w), headers=h).json()["workers"][0].get("token")
     )

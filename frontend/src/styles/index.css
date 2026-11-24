@@ -234,13 +234,14 @@ code {
   white-space: nowrap;
 }
 
+/* Text uses the "strong" tones: ≥ 4.5:1 on the tinted backgrounds (WCAG AA). */
 .badge--ok {
-  color: var(--color-ok);
+  color: var(--color-ok-strong);
   background: var(--color-ok-bg);
 }
 
 .badge--error {
-  color: var(--color-error);
+  color: var(--color-error-strong);
   background: var(--color-error-bg);
 }
 

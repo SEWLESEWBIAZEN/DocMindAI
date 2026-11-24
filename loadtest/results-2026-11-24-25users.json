@@ -1,0 +1,54 @@
+{
+  "users": 25,
+  "duration_s": 60.3,
+  "setup_s": 9.3,
+  "documents_indexed": 50,
+  "time_to_ready_s": {
+    "p50": 0.73,
+    "p95": 1.36,
+    "max": 1.65
+  },
+  "total_rps": 139.4,
+  "endpoints": {
+    "ask": {
+      "requests": 1663,
+      "rps": 27.6,
+      "p50_ms": 81,
+      "p95_ms": 779,
+      "p99_ms": 908,
+      "errors": {}
+    },
+    "conversations.list": {
+      "requests": 434,
+      "rps": 7.2,
+      "p50_ms": 43,
+      "p95_ms": 490,
+      "p99_ms": 671,
+      "errors": {}
+    },
+    "documents.list": {
+      "requests": 3344,
+      "rps": 55.4,
+      "p50_ms": 38,
+      "p95_ms": 395,
+      "p99_ms": 510,
+      "errors": {}
+    },
+    "search": {
+      "requests": 2164,
+      "rps": 35.9,
+      "p50_ms": 58,
+      "p95_ms": 545,
+      "p99_ms": 669,
+      "errors": {}
+    },
+    "usage.plan": {
+      "requests": 801,
+      "rps": 13.3,
+      "p50_ms": 53,
+      "p95_ms": 485,
+      "p99_ms": 604,
+      "errors": {}
+    }
+  }
+}

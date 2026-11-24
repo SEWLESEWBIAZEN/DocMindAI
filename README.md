@@ -4,14 +4,15 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–8 complete.** The full product works in the browser:
+> **Status: Phases 1–9 complete** (manual screen-reader and blind-user testing pending). The full product works in the browser:
 > sign-up and 2FA, personal and organization workspaces with roles,
 > uploads with OCR and indexing, search, and conversations with streamed,
 > page-cited answers that link back to the highlighted source passage.
 > Phase 8 added plans, metered usage and quotas, bring-your-own AI key, and
 > per-organization infrastructure: a dedicated or customer-run PostgreSQL and
-> the customer's own S3-compatible storage. Security verification (Phase 9) and
-> production deployment (Phase 10) follow. See
+> the customer's own S3-compatible storage. Phase 9 added a security review with
+> fixes, encrypted backups with a tested restore, accessibility and load tests.
+> Production deployment (Phase 10) is next. See
 > [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
@@ -125,6 +126,9 @@ make test-integration  # backend tests against real Postgres/Redis/MinIO
 make e2e               # Playwright journey + axe accessibility scans (needs the running stack)
 make api-types         # regenerate the frontend's typed API contract after API changes
 ```
+
+Load tests: `loadtest/README.md`. Backups: `infra/backup/backup.sh` and `restore.sh`, see
+`docs/runbooks/backup-and-restore.md`.
 
 Backend integration tests are opt-in (`pytest -m integration`) and require
 `make infra bootstrap`. They use a separate `<db>_test` database for migration

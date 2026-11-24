@@ -4239,6 +4239,45 @@
         "title": "WorkerRequest",
         "type": "object"
       },
+      "WorkerSessionResponse": {
+        "properties": {
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "worker_id": {
+            "format": "uuid",
+            "title": "Worker Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "workspace_id",
+          "name",
+          "scopes",
+          "last_seen_at"
+        ],
+        "title": "WorkerSessionResponse",
+        "type": "object"
+      },
       "WorkerTokenResponse": {
         "properties": {
           "id": {
@@ -4529,7 +4568,7 @@
     },
     "securitySchemes": {
       "HTTPBearer": {
-        "description": "Access token from /auth/login",
+        "description": "Worker token from registration",
         "scheme": "bearer",
         "type": "http"
       }
@@ -5591,6 +5630,32 @@
         "summary": "Create Organization",
         "tags": [
           "organizations"
+        ]
+      }
+    },
+    "/api/v1/worker/v1/heartbeat": {
+      "post": {
+        "operationId": "heartbeat_api_v1_worker_v1_heartbeat_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Authenticate and check in",
+        "tags": [
+          "customer workers"
         ]
       }
     },
