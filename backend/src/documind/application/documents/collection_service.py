@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from documind.application.identity.common import AuditRecorder, RequestMeta
+from documind.application.identity.common import AuditRecorder, RequestMeta, audit_repository
 from documind.domain.errors import ConflictError, NotFoundError, ValidationFailedError
 from documind.domain.identity.permissions import Permission
 from documind.domain.identity.policies import WorkspaceContext
@@ -18,7 +18,6 @@ from documind.infrastructure.database.repositories.documents import (
     CollectionRepository,
     DocumentRepository,
 )
-from documind.infrastructure.database.repositories.identity import AuditLogRepository
 
 NAME_MAX = 100
 DESCRIPTION_MAX = 500
@@ -58,7 +57,7 @@ class CollectionService:
         self._session = session
         self._collections = CollectionRepository(session)
         self._documents = DocumentRepository(session)
-        self._audit = AuditRecorder(AuditLogRepository(session), meta)
+        self._audit = AuditRecorder(audit_repository(session), meta)
 
     async def _require(self, ctx: WorkspaceContext, collection_id: uuid.UUID) -> DocumentCollection:
         collection = await self._collections.get(ctx.workspace_id, collection_id)

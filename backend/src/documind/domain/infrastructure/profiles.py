@@ -13,7 +13,7 @@ import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from documind.domain.billing.plans import Entitlements
 
@@ -169,10 +169,10 @@ def parse_config(raw: dict[str, Any]) -> InfrastructureConfig:
     if mode not in ("shared", "dedicated", "external"):
         raise ProfileError("Database mode must be shared, dedicated or external.")
     if mode == "external":
-        port = db_raw.get("port", 5432)
+        port = db_raw.get("port") or 5432
         if not isinstance(port, int) or not 1 <= port <= 65535:
             raise ProfileError("Database port isn't valid.")
-        sslmode = db_raw.get("sslmode", "verify-full")
+        sslmode = db_raw.get("sslmode") or "verify-full"
         if sslmode not in ("disable", "require", "verify-ca", "verify-full"):
             raise ProfileError("TLS mode isn't valid.")
         host = _opt_str(db_raw, "host", _HOST, "Database host")
@@ -186,7 +186,7 @@ def parse_config(raw: dict[str, Any]) -> InfrastructureConfig:
             port=port,
             database=database,
             username=username,
-            sslmode=sslmode,
+            sslmode=cast(SslMode, sslmode),
             password_credential_id=_uuid(db_raw.get("password_credential_id")),
             manage_schema=bool(db_raw.get("manage_schema", False)),
         )

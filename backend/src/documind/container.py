@@ -20,6 +20,7 @@ from documind.application.ai.processing import ResolvedProcessingAI
 from documind.application.ai.resolver import AIResolver, CapabilityAdapter, PlatformAI
 from documind.application.billing.service import CachedEntitlements
 from documind.application.health_service import HealthService
+from documind.application.infrastructure.resolver import InfrastructureResolver
 from documind.application.ports import (
     AccessTokenService,
     CancellationRegistry,
@@ -102,6 +103,12 @@ class Container:
     cipher: EnvelopeCipher | None = None
     provider_factory: ProviderFactory | None = None
     workspace_keys: SqlWorkspaceKeys | None = None
+    infra: InfrastructureResolver | None = None
+
+    def infrastructure(self) -> InfrastructureResolver:
+        if self.infra is None:  # pragma: no cover - always set by build_container
+            raise RuntimeError("infrastructure resolver not configured")
+        return self.infra
 
     def require_provider_factory(self) -> ProviderFactory:
         if self.provider_factory is None:  # pragma: no cover - always set by build_container
@@ -116,6 +123,8 @@ class Container:
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
         try:
+            if self.infra is not None:
+                await self.infra.aclose()
             await self.redis.aclose()
         finally:
             await self.engine.dispose()
@@ -214,6 +223,13 @@ def build_container(settings: Settings) -> Container:
         cache_seconds=settings.tenant_settings_cache_seconds,
     )
     container.workspace_keys.invalidated.append(container.ai.invalidate)
+    container.infra = InfrastructureResolver(
+        session_factory,
+        settings,
+        container.cipher,
+        container.storage,
+        cache_seconds=settings.tenant_settings_cache_seconds,
+    )
     return container
 
 
@@ -230,7 +246,7 @@ def processing_ai(c: Container) -> ResolvedProcessingAI:
     return ResolvedProcessingAI(
         c.ai_resolver(),
         c.session_factory,
-        SessionEmbeddingCache(c.session_factory),
+        SessionEmbeddingCache,
         batch_size=c.settings.embedding_batch_size,
     )
 

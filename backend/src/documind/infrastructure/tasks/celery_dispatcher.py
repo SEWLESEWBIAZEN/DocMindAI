@@ -17,12 +17,19 @@ class CeleryJobDispatcher:
         self._task = task_name
         self._queue = queue
 
-    async def dispatch(self, job_id: uuid.UUID, *, countdown_seconds: int | None = None) -> bool:
+    async def dispatch(
+        self,
+        job_id: uuid.UUID,
+        *,
+        workspace_id: uuid.UUID | None = None,
+        countdown_seconds: int | None = None,
+    ) -> bool:
+        args = [str(job_id)] if workspace_id is None else [str(job_id), str(workspace_id)]
         try:
             await asyncio.to_thread(
                 self._app.send_task,
                 self._task,
-                args=[str(job_id)],
+                args=args,
                 queue=self._queue,
                 countdown=countdown_seconds,
             )

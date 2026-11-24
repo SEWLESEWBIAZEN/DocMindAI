@@ -47,6 +47,12 @@ DATA_TABLES = [
     "audit_logs",
     "usage_records",
     "workspace_plans",
+    "infrastructure_events",
+    "infrastructure_migrations",
+    "worker_registrations",
+    "workspace_infrastructure",
+    "infrastructure_profile_versions",
+    "infrastructure_profiles",
     "workspace_ai_providers",
     "workspace_ai_settings",
     "credentials",
@@ -189,12 +195,20 @@ class RecordingDispatcher:
     """JobDispatcher for API tests: records job IDs instead of publishing to Celery."""
 
     dispatched: list[uuid.UUID] = field(default_factory=list)
+    calls: list[tuple[uuid.UUID, uuid.UUID | None]] = field(default_factory=list)
     fail: bool = False
 
-    async def dispatch(self, job_id: uuid.UUID, *, countdown_seconds: int | None = None) -> bool:
+    async def dispatch(
+        self,
+        job_id: uuid.UUID,
+        *,
+        workspace_id: uuid.UUID | None = None,
+        countdown_seconds: int | None = None,
+    ) -> bool:
         if self.fail:
             return False
         self.dispatched.append(job_id)
+        self.calls.append((job_id, workspace_id))
         return True
 
 

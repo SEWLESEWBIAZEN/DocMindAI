@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from documind.api.dependencies import BillingServiceDep, SessionDep, WorkspaceCtx
+from documind.api.dependencies import BillingServiceDep, DataSessionDep, SessionDep, WorkspaceCtx
 from documind.application.usage.summary import UsageQueries
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["usage"])
@@ -69,8 +69,8 @@ class UsageSummaryResponse(BaseModel):
     members: list[MemberUsageResponse]
 
 
-def get_usage_queries(session: SessionDep) -> UsageQueries:
-    return UsageQueries(session)
+def get_usage_queries(session: SessionDep, data: DataSessionDep) -> UsageQueries:
+    return UsageQueries(session, data_session=data)
 
 
 @router.get(

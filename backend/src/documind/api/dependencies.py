@@ -23,6 +23,7 @@ from documind.application.identity.common import Principal, RequestMeta
 from documind.application.identity.invitation_service import InvitationService
 from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
+from documind.application.infrastructure.resolver import ResolvedInfrastructure
 from documind.application.ports import EmailMessage, EmailSender
 from documind.application.processing.queries import ProcessingQueries
 from documind.application.rag.condense import QueryCondenser
@@ -34,6 +35,7 @@ from documind.core.logging import get_request_id
 from documind.domain.billing.plans import Capability
 from documind.domain.errors import AuthenticationError, PermissionDeniedError
 from documind.domain.identity.policies import WorkspaceContext
+from documind.infrastructure.database.dataplane_runtime import relay_outbox
 from documind.infrastructure.database.models import User
 
 
@@ -223,6 +225,42 @@ def require_csrf_header(
 
 
 # --------------------------------------------------------------------------- #
+# Data planes (ADR 0021)
+# --------------------------------------------------------------------------- #
+
+
+async def get_infrastructure(ctx: WorkspaceCtx, container: ContainerDep) -> ResolvedInfrastructure:
+    """Where this workspace's data lives. Resolved only from the authorized workspace."""
+    return await container.infrastructure().resolve(ctx.workspace_id)
+
+
+InfrastructureDep = Annotated[ResolvedInfrastructure, Depends(get_infrastructure)]
+
+
+async def get_data_session(
+    infra: InfrastructureDep, session: SessionDep, container: ContainerDep
+) -> AsyncIterator[AsyncSession]:
+    """The workspace's data-plane session.
+
+    Shared data plane: the request's own session (one transaction with audit
+    entries, exactly as before). Dedicated or external: a session on that
+    database; audit entries go to its outbox and are relayed afterwards.
+    """
+    if not infra.isolated:
+        yield session
+        return
+    async with infra.data_plane.sessions() as data:
+        yield data
+    try:
+        await relay_outbox(infra.data_plane.sessions, container.session_factory)
+    except Exception:  # the beat sweep relays anything left behind
+        logging.getLogger(__name__).exception("audit outbox relay failed")
+
+
+DataSessionDep = Annotated[AsyncSession, Depends(get_data_session)]
+
+
+# --------------------------------------------------------------------------- #
 # AI providers, plans and quotas (ADR 0019, 0020)
 # --------------------------------------------------------------------------- #
 
@@ -235,8 +273,8 @@ async def get_workspace_ai(ctx: WorkspaceCtx, container: ContainerDep) -> Worksp
 WorkspaceAIDep = Annotated[WorkspaceAI, Depends(get_workspace_ai)]
 
 
-def get_billing_service(session: SessionDep, meta: MetaDep) -> BillingService:
-    return BillingService(session, meta)
+def get_billing_service(session: SessionDep, data: DataSessionDep, meta: MetaDep) -> BillingService:
+    return BillingService(session, meta, data_session=data)
 
 
 BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
@@ -302,19 +340,19 @@ async def admit_member(quotas: QuotasDep) -> None:
 
 
 def get_document_service(
-    session: SessionDep, container: ContainerDep, meta: MetaDep
+    session: DataSessionDep, container: ContainerDep, meta: MetaDep, infra: InfrastructureDep
 ) -> DocumentService:
     return DocumentService(
         session,
         container.settings,
-        container.storage,
+        infra.storage,
         container.malware_scanner,
         meta,
         container.job_dispatcher,
     )
 
 
-def get_collection_service(session: SessionDep, meta: MetaDep) -> CollectionService:
+def get_collection_service(session: DataSessionDep, meta: MetaDep) -> CollectionService:
     return CollectionService(session, meta)
 
 
@@ -322,7 +360,7 @@ DocumentServiceDep = Annotated[DocumentService, Depends(get_document_service)]
 CollectionServiceDep = Annotated[CollectionService, Depends(get_collection_service)]
 
 
-def get_processing_queries(session: SessionDep) -> ProcessingQueries:
+def get_processing_queries(session: DataSessionDep) -> ProcessingQueries:
     return ProcessingQueries(session)
 
 
@@ -335,7 +373,7 @@ ProcessingQueriesDep = Annotated[ProcessingQueries, Depends(get_processing_queri
 
 
 def get_retrieval_service(
-    session: SessionDep, container: ContainerDep, ai: WorkspaceAIDep
+    session: DataSessionDep, container: ContainerDep, ai: WorkspaceAIDep
 ) -> RetrievalService:
     s = container.settings
     return RetrievalService(
@@ -393,15 +431,16 @@ async def limit_ai_requests(ctx: WorkspaceCtx, container: ContainerDep) -> None:
 
 
 def get_conversation_service(
-    session: SessionDep,
+    session: DataSessionDep,
     container: ContainerDep,
     meta: MetaDep,
     orchestrator: RAGOrchestratorDep,
+    infra: InfrastructureDep,
 ) -> ConversationService:
     s = container.settings
     runner = ReplyRunner(
         orchestrator,
-        ReplyFinalizer(container.session_factory),
+        ReplyFinalizer(infra.data_plane.sessions),
         container.cancellation,
         StreamOptions(
             heartbeat_seconds=s.chat_stream_heartbeat_seconds,

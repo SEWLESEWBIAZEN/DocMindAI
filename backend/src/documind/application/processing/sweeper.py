@@ -52,7 +52,7 @@ class ProcessingSweeper:
     async def sweep(self) -> SweepResult:
         now = utcnow()
         requeued = dead = created = 0
-        to_dispatch: list[uuid.UUID] = []
+        to_dispatch: list[tuple[uuid.UUID, uuid.UUID]] = []
         async with self._sessions() as session:
             jobs = ProcessingJobRepository(session)
             for job in await jobs.expired_leases(now):
@@ -80,12 +80,12 @@ class ProcessingSweeper:
                 now, self._settings.processing_dispatch_grace_seconds
             ):
                 job.dispatched_at = now
-                to_dispatch.append(job.id)
+                to_dispatch.append((job.id, job.workspace_id))
             await session.commit()
 
         dispatched = 0
-        for job_id in to_dispatch:
-            if await self._dispatcher.dispatch(job_id):
+        for job_id, workspace_id in to_dispatch:
+            if await self._dispatcher.dispatch(job_id, workspace_id=workspace_id):
                 dispatched += 1
         result = SweepResult(requeued=requeued, dead=dead, created=created, dispatched=dispatched)
         if any((requeued, dead, created, dispatched)):

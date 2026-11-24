@@ -13,9 +13,9 @@ import socket
 from collections.abc import Coroutine
 from typing import Any
 
-from documind.application.conversations.sweeper import StaleReplySweeper
+from documind.application.infrastructure.resolver import InfrastructureTargets
+from documind.application.infrastructure.sweeps import sweep_processing, sweep_replies
 from documind.application.processing.orchestrator import ProcessingOrchestrator
-from documind.application.processing.sweeper import ProcessingSweeper
 from documind.container import Container, build_container, processing_ai
 from documind.core.config import get_settings
 
@@ -50,16 +50,17 @@ def orchestrator() -> ProcessingOrchestrator:
         c.extractor,
         worker=f"{socket.gethostname()}:{os.getpid()}",
         ai=processing_ai(c),
+        targets=InfrastructureTargets(c.infrastructure()),
     )
 
 
-def sweeper() -> ProcessingSweeper:
+async def sweep() -> object:
     c = container()
-    return ProcessingSweeper(c.session_factory, c.settings, c.job_dispatcher)
+    return await sweep_processing(c.infrastructure(), c.settings, c.job_dispatcher)
 
 
-def reply_sweeper() -> StaleReplySweeper:
+async def sweep_replies_all() -> int:
     c = container()
-    return StaleReplySweeper(
-        c.session_factory, stale_after_seconds=c.settings.chat_stream_stale_seconds
+    return await sweep_replies(
+        c.infrastructure(), stale_after_seconds=c.settings.chat_stream_stale_seconds
     )

@@ -71,12 +71,23 @@ class JobOutcome:
     retry_in_seconds: int | None = None
 
 
+Sessions = async_sessionmaker[AsyncSession]
+
+
 class ProcessingAI(Protocol):
     """Per-workspace embedding and figure services (ADR 0019: workspace keys)."""
 
     async def for_workspace(
-        self, workspace_id: uuid.UUID
+        self, workspace_id: uuid.UUID, data_sessions: Sessions
     ) -> tuple[EmbeddingService, FigureDescriber]: ...
+
+
+class ProcessingTargets(Protocol):
+    """Where a workspace's data lives (ADR 0021): data-plane sessions and storage."""
+
+    async def for_workspace(
+        self, workspace_id: uuid.UUID | None
+    ) -> tuple[Sessions, ObjectStorageProvider]: ...
 
 
 class StaticProcessingAI:
@@ -87,9 +98,22 @@ class StaticProcessingAI:
         self._figures = figures
 
     async def for_workspace(
-        self, workspace_id: uuid.UUID
+        self, workspace_id: uuid.UUID, data_sessions: Sessions
     ) -> tuple[EmbeddingService, FigureDescriber]:
         return self._embeddings, self._figures
+
+
+class SharedTargets:
+    """Every workspace in the shared database and the platform bucket."""
+
+    def __init__(self, sessions: Sessions, storage: ObjectStorageProvider) -> None:
+        self._sessions = sessions
+        self._storage = storage
+
+    async def for_workspace(
+        self, workspace_id: uuid.UUID | None
+    ) -> tuple[Sessions, ObjectStorageProvider]:
+        return self._sessions, self._storage
 
 
 class ProcessingOrchestrator:
@@ -104,12 +128,14 @@ class ProcessingOrchestrator:
         worker: str = "worker",
         figures: FigureDescriber | None = None,
         ai: ProcessingAI | None = None,
+        targets: ProcessingTargets | None = None,
     ) -> None:
         if ai is None:
             if embeddings is None:
                 raise ValueError("Pass either embeddings or a ProcessingAI")
             ai = StaticProcessingAI(embeddings, figures or FigureDescriber(None))
         self._ai = ai
+        self._targets = targets or SharedTargets(session_factory, storage)
         self._sessions = session_factory
         self._settings = settings
         self._storage = storage
@@ -118,9 +144,9 @@ class ProcessingOrchestrator:
 
     # ------------------------------------------------------------------ helpers
 
-    async def _set_stage(self, job_id: uuid.UUID, stage: str) -> None:
+    async def _set_stage(self, sessions: Sessions, job_id: uuid.UUID, stage: str) -> None:
         """Record progress and renew the lease (proof the worker is alive)."""
-        async with self._sessions() as session:
+        async with sessions() as session:
             job = await ProcessingJobRepository(session).get(job_id, for_update=True)
             if job is not None and job.status == "running":
                 job.stage = stage
@@ -136,9 +162,11 @@ class ProcessingOrchestrator:
 
     # ---------------------------------------------------------------------- run
 
-    async def run(self, job_id: uuid.UUID) -> JobOutcome:
+    async def run(self, job_id: uuid.UUID, *, workspace_id: uuid.UUID | None = None) -> JobOutcome:
+        """``workspace_id`` selects the data plane (None: the shared database)."""
         started = time.perf_counter()
-        async with self._sessions() as session:
+        sessions, storage = await self._targets.for_workspace(workspace_id)
+        async with sessions() as session:
             jobs = ProcessingJobRepository(session)
             job = await jobs.claim(
                 job_id, utcnow(), self._settings.processing_lease_seconds, self._worker
@@ -182,9 +210,9 @@ class ProcessingOrchestrator:
         workspace_id, document_id, version_id, key, fmt, title = snapshot
         log = {"job_id": str(job_id), "document_id": str(document_id)}
         try:
-            embeddings, figures = await self._ai.for_workspace(workspace_id)
+            embeddings, figures = await self._ai.for_workspace(workspace_id, sessions)
             buffer = io.BytesIO()
-            await self._storage.download_to(key, buffer)
+            await storage.download_to(key, buffer)
             extracted = await asyncio.to_thread(self._extractor.extract, buffer.getvalue(), fmt)
             with usage_source("processing_job", job_id):
                 extracted, _, _ = await figures.describe(extracted)
@@ -194,7 +222,7 @@ class ProcessingOrchestrator:
                     "No readable text was found in this document.", code="no_text"
                 )
 
-            await self._set_stage(job_id, "chunking")
+            await self._set_stage(sessions, job_id, "chunking")
             chunks = chunk_document(
                 document,
                 ChunkingOptions(
@@ -204,14 +232,15 @@ class ProcessingOrchestrator:
                 ),
             )
 
-            await self._set_stage(job_id, "embedding")
+            await self._set_stage(sessions, job_id, "embedding")
             with usage_source("processing_job", job_id):
                 embedded = await embeddings.embed(
                     workspace_id, [embedding_input(title, c.heading_path, c.text) for c in chunks]
                 )
 
-            await self._set_stage(job_id, "indexing")
+            await self._set_stage(sessions, job_id, "indexing")
             return await self._complete(
+                sessions,
                 job_id,
                 workspace_id,
                 document_id,
@@ -224,14 +253,15 @@ class ProcessingOrchestrator:
             )
         except PermanentProcessingError as exc:
             logger.warning("Processing failed permanently", extra={**log, "code": exc.code})
-            return await self._fail(job_id, exc.code, exc.message, permanent=True)
+            return await self._fail(sessions, job_id, exc.code, exc.message, permanent=True)
         except TransientProcessingError as exc:
             logger.warning("Processing failed transiently", extra={**log, "code": exc.code})
-            return await self._fail(job_id, exc.code, exc.message, permanent=False)
+            return await self._fail(sessions, job_id, exc.code, exc.message, permanent=False)
         except Exception:
             # Unknown errors are treated as transient; details go to the log only.
             logger.exception("Unexpected processing error", extra=log)
             return await self._fail(
+                sessions,
                 job_id,
                 "internal_error",
                 "An unexpected error occurred while processing.",
@@ -240,6 +270,7 @@ class ProcessingOrchestrator:
 
     async def _complete(
         self,
+        sessions: Sessions,
         job_id: uuid.UUID,
         workspace_id: uuid.UUID,
         document_id: uuid.UUID,
@@ -250,7 +281,7 @@ class ProcessingOrchestrator:
         started: float,
         embeddings: EmbeddingService,
     ) -> JobOutcome:
-        async with self._sessions() as session:
+        async with sessions() as session:
             jobs = ProcessingJobRepository(session)
             job = await jobs.get(job_id, for_update=True)
             doc = await DocumentRepository(session).get(workspace_id, document_id, for_update=True)
@@ -328,9 +359,9 @@ class ProcessingOrchestrator:
         return JobOutcome("succeeded")
 
     async def _fail(
-        self, job_id: uuid.UUID, code: str, message: str, *, permanent: bool
+        self, sessions: Sessions, job_id: uuid.UUID, code: str, message: str, *, permanent: bool
     ) -> JobOutcome:
-        async with self._sessions() as session:
+        async with sessions() as session:
             job = await ProcessingJobRepository(session).get(job_id, for_update=True)
             if job is None or job.status != "running":
                 await session.commit()

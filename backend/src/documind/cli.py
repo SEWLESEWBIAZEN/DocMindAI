@@ -26,9 +26,10 @@ from sqlalchemy import select
 from documind.application.billing.service import BillingService
 from documind.application.credentials.vault import CredentialVault
 from documind.application.identity.common import utcnow
+from documind.application.infrastructure.resolver import InfrastructureTargets
+from documind.application.infrastructure.sweeps import sweep_processing
 from documind.application.processing.jobs import new_job
 from documind.application.processing.orchestrator import ProcessingOrchestrator
-from documind.application.processing.sweeper import ProcessingSweeper
 from documind.container import Container, build_container, processing_ai
 from documind.core.config import get_settings
 from documind.core.logging import configure_logging
@@ -107,14 +108,16 @@ async def _jobs(container: Container, status: str | None, limit: int) -> int:
 
 
 async def _sweep(container: Container) -> int:
-    result = await ProcessingSweeper(
-        container.session_factory, container.settings, container.job_dispatcher
-    ).sweep()
+    result = await sweep_processing(
+        container.infrastructure(), container.settings, container.job_dispatcher
+    )
     _print(dataclasses.asdict(result))
     return 0
 
 
-async def _process(container: Container, job_id: uuid.UUID) -> int:
+async def _process(
+    container: Container, job_id: uuid.UUID, workspace_id: uuid.UUID | None = None
+) -> int:
     orchestrator = ProcessingOrchestrator(
         container.session_factory,
         container.settings,
@@ -122,8 +125,9 @@ async def _process(container: Container, job_id: uuid.UUID) -> int:
         container.extractor,
         worker="cli",
         ai=processing_ai(container),
+        targets=InfrastructureTargets(container.infrastructure()),
     )
-    outcome = await orchestrator.run(job_id)
+    outcome = await orchestrator.run(job_id, workspace_id=workspace_id)
     _print(
         {"job_id": job_id, "outcome": outcome.status, "retry_in_seconds": outcome.retry_in_seconds}
     )
@@ -147,7 +151,7 @@ async def _reindex(container: Container, workspace_id: uuid.UUID | None, include
                     )
                 ).scalars()
             )
-    queued: list[uuid.UUID] = []
+    queued: list[tuple[uuid.UUID, uuid.UUID]] = []
     models: dict[str, int] = {}
     for ws in workspaces:
         model = (await container.ai_resolver().resolve(ws)).embeddings.model
@@ -163,11 +167,11 @@ async def _reindex(container: Container, workspace_id: uuid.UUID | None, include
                     )
                     jobs.add(job)
                     doc.status = "pending"
-                    queued.append(job.id)
+                    queued.append((job.id, ws))
                     models[model] = models.get(model, 0) + 1
             await session.commit()
-    for job_id in queued:
-        await container.job_dispatcher.dispatch(job_id)
+    for job_id, ws in queued:
+        await container.job_dispatcher.dispatch(job_id, workspace_id=ws)
     _print({"workspaces": len(workspaces), "queued": len(queued), "by_model": models})
     return 0
 
@@ -229,6 +233,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("sweep", help="re-queue stuck jobs and re-dispatch queued ones")
     process = sub.add_parser("process", help="run one processing job synchronously")
     process.add_argument("job_id", type=uuid.UUID)
+    process.add_argument(
+        "--workspace", type=uuid.UUID, default=None, help="for jobs in a dedicated data plane"
+    )
     reindex = sub.add_parser("reindex", help="re-embed documents indexed with another model")
     reindex.add_argument("--workspace", type=uuid.UUID, default=None)
     reindex.add_argument("--all", action="store_true", help="re-index every ready document")
@@ -275,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     if args.command == "process":
-        return asyncio.run(_with_container(lambda c: _process(c, args.job_id)))
+        return asyncio.run(_with_container(lambda c: _process(c, args.job_id, args.workspace)))
     return asyncio.run(_with_container(lambda c: _reindex(c, args.workspace, args.all)))
 
 

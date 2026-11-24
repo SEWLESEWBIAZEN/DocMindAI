@@ -98,9 +98,11 @@ class ReindexService:
         return queued
 
 
-async def dispatch_all(dispatcher: JobDispatcher, job_ids: list[uuid.UUID]) -> int:
+async def dispatch_all(
+    dispatcher: JobDispatcher, job_ids: list[uuid.UUID], *, workspace_id: uuid.UUID
+) -> int:
     sent = 0
     for job_id in job_ids:
-        if await dispatcher.dispatch(job_id):
+        if await dispatcher.dispatch(job_id, workspace_id=workspace_id):
             sent += 1
     return sent

@@ -13,7 +13,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.documents.uploads import InspectedUpload, inspect_upload
-from documind.application.identity.common import AuditRecorder, RequestMeta, utcnow
+from documind.application.identity.common import (
+    AuditRecorder,
+    RequestMeta,
+    audit_repository,
+    utcnow,
+)
 from documind.application.ports import (
     JobDispatcher,
     MalwareScanner,
@@ -51,7 +56,6 @@ from documind.infrastructure.database.repositories.documents import (
     DocumentFilter,
     DocumentRepository,
 )
-from documind.infrastructure.database.repositories.identity import AuditLogRepository
 from documind.infrastructure.database.repositories.processing import ProcessingJobRepository
 
 logger = logging.getLogger(__name__)
@@ -139,7 +143,7 @@ class DocumentService:
         self._jobs = ProcessingJobRepository(session)
         self._documents = DocumentRepository(session)
         self._collections = CollectionRepository(session)
-        self._audit = AuditRecorder(AuditLogRepository(session), meta)
+        self._audit = AuditRecorder(audit_repository(session), meta)
 
     # ------------------------------------------------------------------ helpers
 
@@ -321,7 +325,7 @@ class DocumentService:
             await self._session.rollback()
             await self._discard(key)
             raise
-        await self._dispatcher.dispatch(job.id)
+        await self._dispatcher.dispatch(job.id, workspace_id=job.workspace_id)
         await self._session.refresh(doc)
         return self._info(doc, [collection_id] if collection_id else [])
 
@@ -397,7 +401,7 @@ class DocumentService:
             await self._session.rollback()
             await self._discard(key)
             raise
-        await self._dispatcher.dispatch(job.id)
+        await self._dispatcher.dispatch(job.id, workspace_id=job.workspace_id)
         return await self.get(ctx, document_id)
 
     async def _supersede_active_job(self, document_id: uuid.UUID) -> None:
@@ -437,7 +441,7 @@ class DocumentService:
                 "This document is already queued or being processed.",
                 code="processing_in_progress",
             ) from exc
-        await self._dispatcher.dispatch(job.id)
+        await self._dispatcher.dispatch(job.id, workspace_id=job.workspace_id)
         return job.id
 
     # ------------------------------------------------------------------ read

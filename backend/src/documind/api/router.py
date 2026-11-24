@@ -8,6 +8,7 @@ from documind.api.routes import (
     conversations,
     documents,
     health,
+    infrastructure,
     me,
     rag,
     usage,
@@ -28,3 +29,4 @@ api_router.include_router(conversations.router)
 api_router.include_router(usage.router)
 api_router.include_router(voice.router)
 api_router.include_router(ai_providers.router)
+api_router.include_router(infrastructure.router)

@@ -159,7 +159,15 @@ class JobDispatcher(Protocol):
     """Hands a processing job to the worker queue. Best effort: returns False on
     failure (the sweeper re-dispatches queued jobs, so nothing is lost)."""
 
-    async def dispatch(self, job_id: UUID, *, countdown_seconds: int | None = None) -> bool: ...
+    async def dispatch(
+        self,
+        job_id: UUID,
+        *,
+        workspace_id: UUID | None = None,
+        countdown_seconds: int | None = None,
+    ) -> bool:
+        """``workspace_id`` tells the worker which data plane holds the job (ADR 0021)."""
+        ...
 
 
 # --------------------------------------------------------------------------- #

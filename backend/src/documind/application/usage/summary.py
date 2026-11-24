@@ -90,8 +90,11 @@ def _i(value: object) -> int:
 
 
 class UsageQueries:
-    def __init__(self, session: AsyncSession) -> None:
-        self._s = session
+    """Operational totals from the data plane; member names from the control plane."""
+
+    def __init__(self, session: AsyncSession, *, data_session: AsyncSession | None = None) -> None:
+        self._control = session
+        self._s = data_session or session
 
     async def summary(self, ctx: WorkspaceContext, *, days: int) -> UsageSummary:
         ctx.require(Permission.USAGE_READ)
@@ -189,22 +192,36 @@ class UsageQueries:
             q, i, o, docs = by_day.get(current, [0, 0, 0, 0])
             daily.append(DailyUsage(current, q, i, o, docs))
 
-        member_rows = (
+        # The data plane may be another database: count there, name users here.
+        activity = (
             await self._s.execute(
                 select(
-                    User.id,
-                    User.display_name,
+                    Conversation.created_by_user_id,
                     func.count().filter(Message.role == "user"),
                     func.coalesce(func.sum(Message.input_tokens + Message.output_tokens), 0),
                 )
                 .join(Conversation, Conversation.id == Message.conversation_id)
-                .join(User, User.id == Conversation.created_by_user_id)
                 .where(*in_period, Conversation.workspace_id == ws)
-                .group_by(User.id, User.display_name)
-                .order_by(func.count().filter(Message.role == "user").desc(), User.display_name)
-                .limit(20)
+                .group_by(Conversation.created_by_user_id)
             )
         ).all()
+        names = dict(
+            (
+                await self._control.execute(
+                    select(User.id, User.display_name).where(
+                        User.id.in_([row[0] for row in activity])
+                    )
+                )
+            ).all()
+        )
+        member_rows = sorted(
+            (
+                (user_id, names[user_id], questions, tokens)
+                for user_id, questions, tokens in activity
+                if user_id in names
+            ),
+            key=lambda r: (-_i(r[2]), r[1]),
+        )[:20]
 
         return UsageSummary(
             period_start=start,

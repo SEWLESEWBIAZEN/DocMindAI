@@ -12,21 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 @app.task(name=PROCESS_TASK, acks_late=True, reject_on_worker_lost=True, ignore_result=True)  # type: ignore[untyped-decorator]
-def process_document(job_id: str) -> str:
-    outcome = runtime.run(runtime.orchestrator().run(uuid.UUID(job_id)))
+def process_document(job_id: str, workspace_id: str | None = None) -> str:
+    """``workspace_id`` selects the data plane; older messages without it use the shared one."""
+    ws = uuid.UUID(workspace_id) if workspace_id else None
+    outcome = runtime.run(runtime.orchestrator().run(uuid.UUID(job_id), workspace_id=ws))
     if outcome.status == "retry" and outcome.retry_in_seconds is not None:
-        process_document.apply_async(args=[job_id], countdown=outcome.retry_in_seconds, queue=QUEUE)
+        args = [job_id] if workspace_id is None else [job_id, workspace_id]
+        process_document.apply_async(args=args, countdown=outcome.retry_in_seconds, queue=QUEUE)
     return outcome.status
 
 
 @app.task(name=SWEEP_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
 def sweep_processing_jobs() -> None:
-    runtime.run(runtime.sweeper().sweep())
+    runtime.run(runtime.sweep())
 
 
 @app.task(name=REPLY_SWEEP_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
 def sweep_stale_replies() -> int:
-    failed = runtime.run(runtime.reply_sweeper().sweep())
+    failed = runtime.run(runtime.sweep_replies_all())
     if failed:
         logger.warning("marked interrupted answers as failed", extra={"count": failed})
     return failed

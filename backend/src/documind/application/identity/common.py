@@ -36,11 +36,25 @@ class RequestMeta:
         return self.ip_address or "unknown"
 
 
+def audit_repository(session: Any) -> Any:
+    """Audit entries for data-plane changes go to the session's own database.
+
+    Shared data plane: ``audit_logs`` directly (same transaction). Dedicated or
+    external data plane: the transactional outbox, relayed to the control plane.
+    """
+    from documind.infrastructure.database.dataplane_runtime import (
+        OutboxAuditRepository,
+        is_isolated,
+    )
+
+    return OutboxAuditRepository(session) if is_isolated(session) else AuditLogRepository(session)
+
+
 @dataclass(slots=True)
 class AuditRecorder:
     """Adds audit entries to the current unit of work (committed with the change)."""
 
-    repo: AuditLogRepository
+    repo: Any  # AuditLogRepository or OutboxAuditRepository (anything with .add)
     meta: RequestMeta = field(default_factory=RequestMeta)
 
     def record(

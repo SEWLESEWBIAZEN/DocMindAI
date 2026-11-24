@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -24,18 +25,19 @@ class ResolvedProcessingAI:
         self,
         resolver: AIResolver,
         control_sessions: async_sessionmaker[AsyncSession],
-        cache: EmbeddingCache,
+        cache_factory: Callable[[async_sessionmaker[AsyncSession]], EmbeddingCache],
         *,
         batch_size: int,
     ) -> None:
         self._resolver = resolver
         self._control = control_sessions
-        self._cache = cache
+        self._cache_factory = cache_factory
         self._batch_size = batch_size
 
     async def for_workspace(
-        self, workspace_id: uuid.UUID
+        self, workspace_id: uuid.UUID, data_sessions: async_sessionmaker[AsyncSession]
     ) -> tuple[EmbeddingService, FigureDescriber]:
+        """``data_sessions``: the workspace's data plane (the embedding cache reads its chunks)."""
         ai = await self._resolver.resolve(workspace_id)
         limit: int | None = None
         if ai.vision is not None and ai.uses_platform(Capability.VISION):
@@ -44,6 +46,8 @@ class ResolvedProcessingAI:
                     workspace_id, "figure_descriptions", ai.entitlements
                 )
         return (
-            EmbeddingService(ai.embeddings, self._cache, batch_size=self._batch_size),
+            EmbeddingService(
+                ai.embeddings, self._cache_factory(data_sessions), batch_size=self._batch_size
+            ),
             FigureDescriber(ai.vision, limit=limit),
         )

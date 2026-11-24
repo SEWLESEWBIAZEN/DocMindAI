@@ -231,6 +231,9 @@ class Settings(BaseSettings):
     # Host and port that workers and the API use to reach provisioned databases.
     dedicated_database_host: str | None = None
     dedicated_database_port: int = Field(default=5432, ge=1, le=65535)
+    dedicated_database_sslmode: Literal["disable", "require", "verify-ca", "verify-full"] = (
+        "verify-full"
+    )
     dataplane_pool_size: int = Field(default=5, ge=1, le=50)
     dataplane_max_open: int = Field(default=20, ge=1, le=500)
     # How long a successful 2FA check authorizes sensitive actions (e.g. delete).

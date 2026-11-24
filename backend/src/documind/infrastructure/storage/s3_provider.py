@@ -21,10 +21,21 @@ def content_disposition(filename: str) -> str:
 
 
 class S3ObjectStorage:
-    def __init__(self, client: Any, bucket: str, *, presign_client: Any | None = None) -> None:
+    def __init__(
+        self, client: Any, bucket: str, *, presign_client: Any | None = None, prefix: str = ""
+    ) -> None:
         self._client = client
         self._presign = presign_client or client
         self._bucket = bucket
+        # Customer buckets may be shared with other data: keep ours under a prefix.
+        self._prefix = f"{prefix.strip('/')}/" if prefix.strip("/") else ""
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
+
+    def _k(self, key: str) -> str:
+        return f"{self._prefix}{key}"
 
     async def upload(
         self, key: str, file: BinaryIO, *, content_type: str, metadata: dict[str, str] | None = None
@@ -34,24 +45,26 @@ class S3ObjectStorage:
             self._client.upload_fileobj,
             file,
             self._bucket,
-            key,
+            self._k(key),
             ExtraArgs={"ContentType": content_type, "Metadata": metadata or {}},
         )
 
     async def download_to(self, key: str, file: BinaryIO) -> None:
         try:
-            await asyncio.to_thread(self._client.download_fileobj, self._bucket, key, file)
+            await asyncio.to_thread(self._client.download_fileobj, self._bucket, self._k(key), file)
         except ClientError as exc:
             if str(exc.response.get("Error", {}).get("Code")) in _NOT_FOUND:
                 raise ObjectNotFoundError(key) from exc
             raise
 
     async def delete(self, key: str) -> None:
-        await asyncio.to_thread(self._client.delete_object, Bucket=self._bucket, Key=key)
+        await asyncio.to_thread(self._client.delete_object, Bucket=self._bucket, Key=self._k(key))
 
     async def get_metadata(self, key: str) -> ObjectMetadata:
         try:
-            head = await asyncio.to_thread(self._client.head_object, Bucket=self._bucket, Key=key)
+            head = await asyncio.to_thread(
+                self._client.head_object, Bucket=self._bucket, Key=self._k(key)
+            )
         except ClientError as exc:
             if str(exc.response.get("Error", {}).get("Code")) in _NOT_FOUND:
                 raise ObjectNotFoundError(key) from exc
@@ -71,7 +84,7 @@ class S3ObjectStorage:
             "get_object",
             Params={
                 "Bucket": self._bucket,
-                "Key": key,
+                "Key": self._k(key),
                 # Always a download, with a type we chose: stored files are never
                 # rendered as active content on the storage origin.
                 "ResponseContentDisposition": content_disposition(download_filename),

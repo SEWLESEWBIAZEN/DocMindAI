@@ -33,7 +33,12 @@ from documind.application.conversations.views import (
     conversation_info,
     message_info,
 )
-from documind.application.identity.common import AuditRecorder, RequestMeta, utcnow
+from documind.application.identity.common import (
+    AuditRecorder,
+    RequestMeta,
+    audit_repository,
+    utcnow,
+)
 from documind.application.ports import CancellationRegistry
 from documind.application.rag.orchestrator import AnswerRequest, RAGOrchestrator
 from documind.application.rag.retrieval import MAX_QUERY_CHARS
@@ -50,7 +55,6 @@ from documind.infrastructure.database.repositories.conversations import (
     ConversationRepository,
     MessageRepository,
 )
-from documind.infrastructure.database.repositories.identity import AuditLogRepository
 from documind.infrastructure.database.repositories.retrieval import RetrievalRepository
 
 TITLE_MAX = 200
@@ -111,7 +115,7 @@ class ConversationService:
         self._conversations = ConversationRepository(session)
         self._messages = MessageRepository(session)
         self._retrieval = RetrievalRepository(session)
-        self._audit = AuditRecorder(AuditLogRepository(session), meta)
+        self._audit = AuditRecorder(audit_repository(session), meta)
         self._orchestrator = orchestrator
         self._runner = runner
         self._cancellation = cancellation
