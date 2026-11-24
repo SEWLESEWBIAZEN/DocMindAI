@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from documind.application.health_service import HealthService
 from documind.application.ports import (
     AccessTokenService,
+    CancellationRegistry,
     EmailSender,
     EmbeddingProvider,
     JobDispatcher,
@@ -26,6 +27,7 @@ from documind.application.ports import (
     RateLimiter,
 )
 from documind.core.config import Settings, mfa_key_bytes
+from documind.infrastructure.cache.cancellation import RedisCancellationRegistry
 from documind.infrastructure.cache.health import RedisHealthCheck
 from documind.infrastructure.cache.redis import create_redis_client
 from documind.infrastructure.database.engine import create_engine, create_session_factory
@@ -73,6 +75,7 @@ class Container:
     embedding_provider: EmbeddingProvider
     job_dispatcher: JobDispatcher
     llm_provider: LLMProvider
+    cancellation: CancellationRegistry
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -137,6 +140,7 @@ def build_container(settings: Settings) -> Container:
             create_celery(settings), task_name=PROCESS_TASK, queue=QUEUE
         ),
         llm_provider=_build_llm_provider(settings),
+        cancellation=RedisCancellationRegistry(redis),
     )
 
 

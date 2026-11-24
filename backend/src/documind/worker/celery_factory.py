@@ -9,6 +9,7 @@ from documind.core.config import Settings
 QUEUE = "documents"
 PROCESS_TASK = "documind.process_document"
 SWEEP_TASK = "documind.sweep_processing_jobs"
+REPLY_SWEEP_TASK = "documind.sweep_stale_replies"
 
 
 def create_celery(settings: Settings) -> Celery:
@@ -33,7 +34,13 @@ def create_celery(settings: Settings) -> Celery:
                 "task": SWEEP_TASK,
                 "schedule": float(settings.processing_sweep_interval_seconds),
                 "options": {"queue": QUEUE, "expires": settings.processing_sweep_interval_seconds},
-            }
+            },
+            # Answers whose API process died mid-stream (no heartbeat).
+            "sweep-stale-replies": {
+                "task": REPLY_SWEEP_TASK,
+                "schedule": 60.0,
+                "options": {"queue": QUEUE, "expires": 60},
+            },
         },
     )
     return app

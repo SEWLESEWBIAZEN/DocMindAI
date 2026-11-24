@@ -14,7 +14,10 @@ from collections.abc import Sequence
 from documind.domain.processing.tokens import estimate_tokens
 from documind.domain.rag.models import BuiltContext, ContextSource, RetrievedChunk
 
-_TAG = re.compile(r"<(\s*/?\s*)(sources?|question|system|instructions?)\b", re.IGNORECASE)
+# Every tag the prompts use for structure (answer and follow-up condensation).
+_TAG = re.compile(
+    r"<(\s*/?\s*)(sources?|question|system|instructions?|conversation|latest)\b", re.IGNORECASE
+)
 _WORD = re.compile(r"\w+")
 _NEAR_DUPLICATE = 0.8
 

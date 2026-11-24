@@ -1,4 +1,14 @@
-"""Retrieval-augmented answers: retrieve -> build context -> generate -> verify citations."""
+"""Retrieval-augmented answers: (condense) -> retrieve -> build context -> generate -> verify.
+
+Two-step API so callers can do work between retrieval and generation (the
+conversation service persists messages there):
+
+- ``prepare()`` authorizes, condenses follow-ups, retrieves and builds the
+  context. Errors here are ordinary exceptions raised before anything streams.
+- ``generate()`` / ``stream_prepared()`` call the model and verify citations.
+
+``answer()`` and ``stream()`` combine the two for one-shot questions.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +18,9 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
-from documind.application.ports import LLMDelta, LLMProvider, LLMUsage
-from documind.application.rag.prompting import PromptManager
+from documind.application.ports import ChatMessage, LLMDelta, LLMProvider, LLMUsage
+from documind.application.rag.condense import QueryCondenser
+from documind.application.rag.prompting import PromptManager, select_history
 from documind.application.rag.retrieval import (
     RetrievalMode,
     RetrievalResult,
@@ -23,7 +34,7 @@ from documind.domain.processing.errors import ProcessingError
 from documind.domain.processing.tokens import estimate_tokens
 from documind.domain.rag.citations import resolve_citations, split_insufficient
 from documind.domain.rag.context import build_context
-from documind.domain.rag.models import BuiltContext, Citation, ContextSource
+from documind.domain.rag.models import BuiltContext, Citation, ContextSource, Turn
 from documind.domain.rag.prompts import INSUFFICIENT_CONTEXT_ANSWER, INSUFFICIENT_CONTEXT_SENTINEL
 
 AnswerStatus = Literal["grounded", "insufficient_context"]
@@ -47,6 +58,7 @@ class RagAnswer:
     prompt_version: str
     retrieval_mode: RetrievalMode
     usage: AnswerUsage
+    retrieval_query: str = ""
     invalid_citations: int = 0
     latency_ms: int = 0
 
@@ -72,13 +84,27 @@ class GenerationOptions:
     max_output_tokens: int
     temperature: float | None
     context_max_tokens: int
+    history_max_turns: int = 6
+    history_max_tokens: int = 2000
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerRequest:
+    question: str
+    document_ids: Sequence[uuid.UUID] | None = None
+    collection_ids: Sequence[uuid.UUID] | None = None
+    top_k: int | None = None
+    history: Sequence[Turn] = ()
 
 
 @dataclass(slots=True)
-class _Prepared:
+class PreparedAnswer:
     question: str
+    retrieval_query: str
     retrieval: RetrievalResult
     context: BuiltContext
+    history: list[Turn]
+    condense_usage: LLMUsage = field(default_factory=LLMUsage)
     started: float = field(default_factory=time.monotonic)
 
 
@@ -104,35 +130,52 @@ class RAGOrchestrator:
         llm: LLMProvider,
         options: GenerationOptions,
         prompts: PromptManager | None = None,
+        condenser: QueryCondenser | None = None,
     ) -> None:
         self._retrieval = retrieval
         self._llm = llm
         self._options = options
         self._prompts = prompts or PromptManager()
+        self._condenser = condenser or QueryCondenser(
+            llm, enabled=True, temperature=options.temperature
+        )
 
-    async def _prepare(
-        self,
-        ctx: WorkspaceContext,
-        question: str,
-        document_ids: Sequence[uuid.UUID] | None,
-        collection_ids: Sequence[uuid.UUID] | None,
-        top_k: int | None,
-    ) -> _Prepared:
+    @property
+    def prompt_version(self) -> str:
+        return self._prompts.version
+
+    async def prepare(self, ctx: WorkspaceContext, request: AnswerRequest) -> PreparedAnswer:
         ctx.require(Permission.CONVERSATIONS_USE)
         started = time.monotonic()
+        question = " ".join(request.question.split())
+        history = select_history(
+            request.history,
+            max_turns=self._options.history_max_turns,
+            max_tokens=self._options.history_max_tokens,
+        )
+        condensed = await self._condenser.condense(history, question) if question else None
+        query = condensed.query if condensed else question
         retrieval = await self._retrieval.retrieve(
             ctx,
-            question,
-            top_k=top_k,
-            document_ids=document_ids,
-            collection_ids=collection_ids,
+            query,
+            top_k=request.top_k,
+            document_ids=request.document_ids,
+            collection_ids=request.collection_ids,
         )
         context = build_context(retrieval.chunks, max_tokens=self._options.context_max_tokens)
-        return _Prepared(" ".join(question.split()), retrieval, context, started)
+        return PreparedAnswer(
+            question=question,
+            retrieval_query=query,
+            retrieval=retrieval,
+            context=context,
+            history=history,
+            condense_usage=condensed.usage if condensed else LLMUsage(),
+            started=started,
+        )
 
     def _finish(
         self,
-        prep: _Prepared,
+        prep: PreparedAnswer,
         raw: str,
         *,
         model: str | None,
@@ -157,29 +200,26 @@ class RAGOrchestrator:
             prompt_version=self._prompts.version,
             retrieval_mode=prep.retrieval.mode,
             usage=AnswerUsage(
-                input_tokens=usage.input_tokens if usage else 0,
-                output_tokens=usage.output_tokens if usage else 0,
+                input_tokens=(usage.input_tokens if usage else 0)
+                + prep.condense_usage.input_tokens,
+                output_tokens=(usage.output_tokens if usage else 0)
+                + prep.condense_usage.output_tokens,
                 embedding_tokens=prep.retrieval.query_tokens,
             ),
+            retrieval_query=prep.retrieval_query,
             invalid_citations=resolved.invalid_markers,
             latency_ms=round((time.monotonic() - prep.started) * 1000),
         )
 
-    async def answer(
-        self,
-        ctx: WorkspaceContext,
-        question: str,
-        *,
-        document_ids: Sequence[uuid.UUID] | None = None,
-        collection_ids: Sequence[uuid.UUID] | None = None,
-        top_k: int | None = None,
-    ) -> RagAnswer:
-        prep = await self._prepare(ctx, question, document_ids, collection_ids, top_k)
+    def _messages(self, prep: PreparedAnswer) -> list[ChatMessage]:
+        return self._prompts.answer_messages(prep.question, prep.context, prep.history)
+
+    async def generate(self, prep: PreparedAnswer) -> RagAnswer:
         if not prep.context.sources:
             return self._finish(prep, "", model=None, usage=None)
         try:
             result = await self._llm.generate(
-                self._prompts.answer_messages(prep.question, prep.context),
+                self._messages(prep),
                 max_output_tokens=self._options.max_output_tokens,
                 temperature=self._options.temperature,
             )
@@ -187,26 +227,13 @@ class RAGOrchestrator:
             raise _llm_unavailable(exc) from exc
         return self._finish(prep, result.text, model=result.model, usage=result.usage)
 
-    async def stream(
-        self,
-        ctx: WorkspaceContext,
-        question: str,
-        *,
-        document_ids: Sequence[uuid.UUID] | None = None,
-        collection_ids: Sequence[uuid.UUID] | None = None,
-        top_k: int | None = None,
-    ) -> AsyncIterator[AnswerEvent]:
+    async def stream_prepared(self, prep: PreparedAnswer) -> AsyncIterator[AnswerEvent]:
         """Stream answer text, then one ``AnswerCompleted`` with the verified result.
 
-        Retrieval and authorization happen before the first event, so errors
-        there surface as ordinary exceptions. The beginning of the output is
-        buffered until it can no longer be the insufficient-context sentinel,
-        so the sentinel itself is never shown.
+        The beginning of the output is buffered until it can no longer be the
+        insufficient-context sentinel, so the sentinel itself is never shown.
+        Model failures raise ``ServiceUnavailableError`` from the iterator.
         """
-        prep = await self._prepare(ctx, question, document_ids, collection_ids, top_k)
-        return self._stream(prep)
-
-    async def _stream(self, prep: _Prepared) -> AsyncIterator[AnswerEvent]:
         if not prep.context.sources:
             final = self._finish(prep, "", model=None, usage=None)
             yield AnswerDelta(final.answer)
@@ -220,7 +247,7 @@ class RAGOrchestrator:
         model = self._llm.model
         try:
             async for event in self._llm.stream(
-                self._prompts.answer_messages(prep.question, prep.context),
+                self._messages(prep),
                 max_output_tokens=self._options.max_output_tokens,
                 temperature=self._options.temperature,
             ):
@@ -253,3 +280,28 @@ class RAGOrchestrator:
         if not emitted:  # e.g. the model replied with only the sentinel
             yield AnswerDelta(final.answer)
         yield AnswerCompleted(final)
+
+    async def answer(
+        self,
+        ctx: WorkspaceContext,
+        question: str,
+        *,
+        document_ids: Sequence[uuid.UUID] | None = None,
+        collection_ids: Sequence[uuid.UUID] | None = None,
+        top_k: int | None = None,
+    ) -> RagAnswer:
+        request = AnswerRequest(question, document_ids, collection_ids, top_k)
+        return await self.generate(await self.prepare(ctx, request))
+
+    async def stream(
+        self,
+        ctx: WorkspaceContext,
+        question: str,
+        *,
+        document_ids: Sequence[uuid.UUID] | None = None,
+        collection_ids: Sequence[uuid.UUID] | None = None,
+        top_k: int | None = None,
+    ) -> AsyncIterator[AnswerEvent]:
+        """Authorize and retrieve now; return the event stream for generation."""
+        request = AnswerRequest(question, document_ids, collection_ids, top_k)
+        return self.stream_prepared(await self.prepare(ctx, request))

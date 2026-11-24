@@ -145,6 +145,17 @@ Required variables have no default; the backend refuses to start without them.
 | `RETRIEVAL_EF_SEARCH`     | `100`   | HNSW `ef_search` (recall vs speed).                                  |
 | `RAG_CONTEXT_MAX_TOKENS`  | `6000`  | Token budget for the sources sent to the model.                      |
 
+## Conversations
+
+| Variable                           | Default | Description                                                     |
+| ---------------------------------- | ------- | --------------------------------------------------------------- |
+| `CONVERSATION_HISTORY_TURNS`       | `6`     | Earlier completed exchanges sent to the model (`0` disables memory). |
+| `CONVERSATION_HISTORY_MAX_TOKENS`  | `2000`  | Token budget for those turns (most recent kept first).         |
+| `CONVERSATION_CONDENSE_FOLLOWUPS`  | `true`  | Rewrite follow-up questions into standalone search queries with the LLM (falls back to "previous question + this one"). |
+| `CHAT_STREAM_HEARTBEAT_SECONDS`    | `15`    | SSE keep-alive comment interval while the model is silent.     |
+| `CHAT_STREAM_STALE_SECONDS`        | `300`   | An answer still streaming without a heartbeat for this long is marked failed. |
+| `CHAT_CANCEL_POLL_SECONDS`         | `0.5`   | How often a stream checks for a cancel request.                 |
+
 ## Rate limits
 
 Fixed windows in Redis. Exceeding one returns 429 with `Retry-After`. If
@@ -160,7 +171,7 @@ Redis is unavailable, requests are allowed and an error is logged.
 | `RATE_LIMIT_AUTH_WINDOW_SECONDS`      | `600`   | Window for the above.                                   |
 | `RATE_LIMIT_REFRESH_PER_IP`           | `60`    | Token refreshes per IP per window.                      |
 | `RATE_LIMIT_REFRESH_WINDOW_SECONDS`   | `60`    | Refresh window.                                         |
-| `RATE_LIMIT_AI_PER_USER`              | `30`    | Search and answer requests per user per window.         |
+| `RATE_LIMIT_AI_PER_USER`              | `30`    | Search, ask, send and regenerate requests per user per window. |
 | `RATE_LIMIT_AI_WINDOW_SECONDS`        | `60`    | Window for the above.                                   |
 
 ## Email (SMTP)

@@ -145,6 +145,19 @@ class Settings(BaseSettings):
     rate_limit_ai_per_user: int = Field(default=30, ge=1)
     rate_limit_ai_window_seconds: int = Field(default=60, ge=1)
 
+    # --- Conversations -------------------------------------------------------
+    # Earlier turns sent to the model (most recent first, within the budget).
+    conversation_history_turns: int = Field(default=6, ge=0, le=50)
+    conversation_history_max_tokens: int = Field(default=2000, ge=0, le=50_000)
+    # Rewrite follow-ups ("what about the second one?") into standalone queries.
+    conversation_condense_followups: bool = True
+    # SSE keep-alive comment interval while the model is thinking.
+    chat_stream_heartbeat_seconds: float = Field(default=15.0, gt=0, le=120)
+    # An answer still "streaming" after this long is marked failed (crash recovery).
+    chat_stream_stale_seconds: int = Field(default=300, ge=30)
+    # How often a running stream checks for a cancel request.
+    chat_cancel_poll_seconds: float = Field(default=0.5, gt=0, le=10)
+
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 

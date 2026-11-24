@@ -4,10 +4,11 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–5 complete.** Foundation, identity and tenancy, document
+> **Status: Phases 1–6 complete.** Foundation, identity and tenancy, document
 > management, the asynchronous processing pipeline (with OCR for scanned PDFs),
-> and AI search with grounded, page-cited answers are in place. Conversations
-> with streaming arrive in Phase 6, and the app UI in Phase 7. See
+> AI search with grounded, page-cited answers, and persistent conversations with
+> streamed (SSE), cancellable answers are in place. The app UI arrives in
+> Phase 7. See
 > [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
@@ -127,6 +128,20 @@ After signing in (above), using your personal workspace id from `GET /api/v1/me/
 
 Both accept `document_ids`, `collection_ids` and `top_k`. They only ever see the workspace's
 ready, non-archived documents.
+
+## Trying conversations
+
+1. `POST /api/v1/workspaces/{id}/conversations` with `{}` (whole workspace) or
+   `{"document_ids": [...], "collection_ids": [...]}`.
+2. `POST …/conversations/{cid}/messages` with `{"content": "..."}`. Add the header
+   `Accept: text/event-stream` to stream, for example
+   `curl -N -H "Accept: text/event-stream" -H "Authorization: Bearer …" -H "Content-Type: application/json" -d '{"content":"How much notice is needed?"}' http://localhost:8000/api/v1/workspaces/{id}/conversations/{cid}/messages`.
+   You get `message.created`, `answer.delta` events, then `answer.completed` with citations.
+3. Ask follow-ups in the same conversation; `GET …/messages` returns the history.
+4. `POST …/messages/{mid}/cancel` stops an answer; `POST …/messages/{mid}/regenerate` re-answers the
+   latest question.
+
+Conversations are private to the member who created them.
 
 ## Health endpoints
 

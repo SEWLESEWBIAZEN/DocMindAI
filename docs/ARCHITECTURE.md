@@ -67,7 +67,7 @@ The same structure will hold the product features. For example:
 - `domain/storage.ObjectStorageProvider` port + `infrastructure/storage/s3_provider.py` (Phase 3)
 - `application/processing/*` orchestrator + Celery tasks in `infrastructure/tasks` (Phase 4)
 - `domain/rag` + `application/rag` retrieval and answers, `LLMProvider` port (Phase 5, done)
-- `application/conversations` with SSE streaming (Phase 6)
+- `application/conversations` with SSE streaming (Phase 6, done)
 
 Tenant isolation will be enforced in application services and in repository
 queries (workspace ID is a mandatory filter parameter, never optional), not
@@ -225,7 +225,33 @@ POST /ask ────┴─► RetrievalService ── embed query (EmbeddingPr
 Speech ports (`SpeechToTextProvider`, `TextToSpeechProvider`) live in
 `application/ports.py`; adapters ship in Phase 6b (ADR 0011).
 
-## 7. Runtime resources and lifecycle
+## 7. Conversations and streaming (Phase 6)
+
+See ADR 0016.
+
+```
+POST …/conversations/{id}/messages            (Accept: text/event-stream → SSE, else JSON)
+  request tx: lock conversation → fail stale answers → 409 if one is streaming
+              → condense follow-up → retrieve (conversation scope) → build context
+              → commit user message (completed) + assistant message (streaming)
+  stream:     producer task: LLM stream ──queue──► consumer (HTTP response)
+                                                 ├─ answer.delta events, keep-alive comments
+                                                 ├─ polls Redis cancel flag (POST …/cancel)
+                                                 └─ heartbeat → messages.updated_at
+  end:        own short tx → completed (+ citations) | cancelled | failed   (shielded)
+  recovery:   beat task sweep_stale_replies → failed/interrupted after 5 min without heartbeat
+```
+
+| Module | Role |
+| --- | --- |
+| `application/conversations/service.py` | CRUD, sources, history, send, regenerate, cancel, access rule |
+| `application/conversations/streaming.py` | `ReplyRunner`: producer/consumer, cancellation, heartbeats, terminal state |
+| `application/conversations/finalizer.py` | Conditional terminal writes in fresh sessions |
+| `application/rag/condense.py` | Follow-up to standalone query (LLM with deterministic fallback) |
+| `api/sse.py` | SSE event encoding |
+| `infrastructure/cache/cancellation.py` | Redis cancel flags |
+
+## 8. Runtime resources and lifecycle
 
 `create_app()` builds the app. The lifespan:
 
@@ -235,7 +261,7 @@ Speech ports (`SpeechToTextProvider`, `TextToSpeechProvider`) live in
    reports it, and the dependency recovers without a restart.
 3. On shutdown, closes Redis, disposes the engine pool and closes the S3 client.
 
-## 8. Health model
+## 9. Health model
 
 | Endpoint                   | Purpose   | Touches dependencies | Failure                                                         |
 | -------------------------- | --------- | -------------------- | --------------------------------------------------------------- |
@@ -248,7 +274,7 @@ exception messages are logged but never returned; clients see either a
 curated message (`DependencyCheckError`) or the exception type. In
 production, details and error reasons are hidden from the response.
 
-## 9. Data and migrations
+## 10. Data and migrations
 
 - SQLAlchemy 2.x async with asyncpg. All models share `infrastructure/database/base.Base`
   with a deterministic constraint naming convention.
@@ -258,7 +284,7 @@ production, details and error reasons are hidden from the response.
   superuser) and by migration `0001` (idempotent). This supports managed
   databases where no init script runs.
 
-## 10. Observability
+## 11. Observability
 
 - Structured logs via the standard library: JSON in production
   (`LOG_FORMAT=json`), human-readable in development.
@@ -270,7 +296,7 @@ production, details and error reasons are hidden from the response.
 - Client-supplied request IDs are accepted only if they match
   `[A-Za-z0-9._-]{1,128}`, which prevents log injection.
 
-## 11. Frontend
+## 12. Frontend
 
 - Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
 - `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
@@ -280,7 +306,7 @@ production, details and error reasons are hidden from the response.
 - Phase 1 ships a system status page that exercises the full path:
   browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
 
-## 12. Environments
+## 13. Environments
 
 | Environment   | Config source                              | Notes                                                        |
 | ------------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -288,7 +314,7 @@ production, details and error reasons are hidden from the response.
 | test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
 | production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
 
-## 13. Deployment target
+## 14. Deployment target
 
 The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
 Compose behind Nginx with TLS (Phase 10). The backend image has a separate

@@ -9,6 +9,9 @@ from fastapi import BackgroundTasks, Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from documind.application.conversations.finalizer import ReplyFinalizer
+from documind.application.conversations.service import ConversationService
+from documind.application.conversations.streaming import ReplyRunner, StreamOptions
 from documind.application.documents.collection_service import CollectionService
 from documind.application.documents.document_service import DocumentService
 from documind.application.health_service import HealthService
@@ -20,6 +23,7 @@ from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
 from documind.application.ports import EmailMessage, EmailSender
 from documind.application.processing.queries import ProcessingQueries
+from documind.application.rag.condense import QueryCondenser
 from documind.application.rag.orchestrator import GenerationOptions, RAGOrchestrator
 from documind.application.rag.retrieval import RetrievalOptions, RetrievalService
 from documind.container import Container
@@ -282,6 +286,13 @@ def get_rag_orchestrator(
             max_output_tokens=s.llm_max_output_tokens,
             temperature=s.llm_temperature,
             context_max_tokens=s.rag_context_max_tokens,
+            history_max_turns=s.conversation_history_turns,
+            history_max_tokens=s.conversation_history_max_tokens,
+        ),
+        condenser=QueryCondenser(
+            container.llm_provider,
+            enabled=s.conversation_condense_followups,
+            temperature=s.llm_temperature,
         ),
     )
 
@@ -295,3 +306,38 @@ async def limit_ai_requests(ctx: WorkspaceCtx, container: ContainerDep) -> None:
     await container.rate_limiter.hit(
         "ai:user", str(ctx.user_id), s.rate_limit_ai_per_user, s.rate_limit_ai_window_seconds
     )
+
+
+# --------------------------------------------------------------------------- #
+# Conversations
+# --------------------------------------------------------------------------- #
+
+
+def get_conversation_service(
+    session: SessionDep,
+    container: ContainerDep,
+    meta: MetaDep,
+    orchestrator: RAGOrchestratorDep,
+) -> ConversationService:
+    s = container.settings
+    runner = ReplyRunner(
+        orchestrator,
+        ReplyFinalizer(container.session_factory),
+        container.cancellation,
+        StreamOptions(
+            heartbeat_seconds=s.chat_stream_heartbeat_seconds,
+            cancel_poll_seconds=s.chat_cancel_poll_seconds,
+            touch_seconds=max(5.0, s.chat_stream_stale_seconds / 6),
+        ),
+    )
+    return ConversationService(
+        session,
+        meta,
+        orchestrator=orchestrator,
+        runner=runner,
+        cancellation=container.cancellation,
+        stale_after_seconds=s.chat_stream_stale_seconds,
+    )
+
+
+ConversationServiceDep = Annotated[ConversationService, Depends(get_conversation_service)]

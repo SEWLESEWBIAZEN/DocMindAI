@@ -6,7 +6,7 @@ import logging
 import uuid
 
 from documind.worker import runtime
-from documind.worker.celery_app import PROCESS_TASK, QUEUE, SWEEP_TASK, app
+from documind.worker.celery_app import PROCESS_TASK, QUEUE, REPLY_SWEEP_TASK, SWEEP_TASK, app
 
 logger = logging.getLogger(__name__)
 
@@ -22,3 +22,11 @@ def process_document(job_id: str) -> str:
 @app.task(name=SWEEP_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
 def sweep_processing_jobs() -> None:
     runtime.run(runtime.sweeper().sweep())
+
+
+@app.task(name=REPLY_SWEEP_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def sweep_stale_replies() -> int:
+    failed = runtime.run(runtime.reply_sweeper().sweep())
+    if failed:
+        logger.warning("marked interrupted answers as failed", extra={"count": failed})
+    return failed

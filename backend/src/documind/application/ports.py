@@ -245,3 +245,22 @@ class TextToSpeechProvider(Protocol):
     ) -> AsyncIterator[bytes]:
         """Stream encoded audio so playback can start before synthesis finishes."""
         ...
+
+
+# --------------------------------------------------------------------------- #
+# Answer streaming
+# --------------------------------------------------------------------------- #
+
+
+class CancellationRegistry(Protocol):
+    """Cross-process "please stop" flags for answers being generated.
+
+    The process streaming an answer polls ``is_requested``; a cancel request
+    can arrive at any API process.
+    """
+
+    async def request(self, message_id: UUID) -> None: ...
+
+    async def is_requested(self, message_id: UUID) -> bool: ...
+
+    async def clear(self, message_id: UUID) -> None: ...

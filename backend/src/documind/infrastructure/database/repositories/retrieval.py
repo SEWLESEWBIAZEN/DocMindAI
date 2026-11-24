@@ -8,7 +8,8 @@ different model) can ever be returned, even before Python sees a row:
 - the document is ``ready`` and not archived;
 - the chunk belongs to the document's *current* version;
 - the chunk was embedded with the configured model (vector search only);
-- optional document / collection restrictions.
+- optional source selection: chunks of the selected documents *or* of
+  documents in the selected collections (an empty selection matches nothing).
 """
 
 from __future__ import annotations
@@ -18,7 +19,19 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import ColumnElement, Select, Text, and_, case, cast, exists, func, select
+from sqlalchemy import (
+    ColumnElement,
+    Select,
+    Text,
+    and_,
+    case,
+    cast,
+    exists,
+    false,
+    func,
+    or_,
+    select,
+)
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,9 +48,19 @@ _TS_CONFIG = "english"
 
 @dataclass(frozen=True, slots=True)
 class SearchScope:
+    """``None`` for both means the whole workspace; otherwise the union of the two."""
+
     workspace_id: uuid.UUID
     document_ids: frozenset[uuid.UUID] | None = None
     collection_ids: frozenset[uuid.UUID] | None = None
+
+    @property
+    def restricted(self) -> bool:
+        return self.document_ids is not None or self.collection_ids is not None
+
+    @property
+    def empty(self) -> bool:
+        return self.restricted and not (self.document_ids or self.collection_ids)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,16 +79,19 @@ def _visible(scope: SearchScope) -> list[ColumnElement[bool]]:
         Document.archived_at.is_(None),
         DocumentChunk.document_version_id == Document.current_version_id,
     ]
-    if scope.document_ids is not None:
-        conditions.append(DocumentChunk.document_id.in_(scope.document_ids))
-    if scope.collection_ids is not None:
-        conditions.append(
-            exists().where(
-                DocumentCollectionItem.workspace_id == scope.workspace_id,
-                DocumentCollectionItem.document_id == DocumentChunk.document_id,
-                DocumentCollectionItem.collection_id.in_(scope.collection_ids),
+    if scope.restricted:
+        selected: list[ColumnElement[bool]] = []
+        if scope.document_ids:
+            selected.append(DocumentChunk.document_id.in_(scope.document_ids))
+        if scope.collection_ids:
+            selected.append(
+                exists().where(
+                    DocumentCollectionItem.workspace_id == scope.workspace_id,
+                    DocumentCollectionItem.document_id == DocumentChunk.document_id,
+                    DocumentCollectionItem.collection_id.in_(scope.collection_ids),
+                )
             )
-        )
+        conditions.append(or_(*selected) if selected else false())
     return conditions
 
 

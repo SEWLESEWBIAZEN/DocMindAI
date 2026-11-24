@@ -13,6 +13,7 @@ import socket
 from collections.abc import Coroutine
 from typing import Any
 
+from documind.application.conversations.sweeper import StaleReplySweeper
 from documind.application.processing.embedding_service import EmbeddingService
 from documind.application.processing.orchestrator import ProcessingOrchestrator
 from documind.application.processing.sweeper import ProcessingSweeper
@@ -62,3 +63,10 @@ def orchestrator() -> ProcessingOrchestrator:
 def sweeper() -> ProcessingSweeper:
     c = container()
     return ProcessingSweeper(c.session_factory, c.settings, c.job_dispatcher)
+
+
+def reply_sweeper() -> StaleReplySweeper:
+    c = container()
+    return StaleReplySweeper(
+        c.session_factory, stale_after_seconds=c.settings.chat_stream_stale_seconds
+    )

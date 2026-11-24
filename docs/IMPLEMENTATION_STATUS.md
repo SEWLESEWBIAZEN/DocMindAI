@@ -252,10 +252,44 @@ Tests: 273 unit and 138 integration tests (backend); live end-to-end on the Comp
   returned per response but not recorded (Phase 8).
 - No search or answer UI yet (Phases 6 and 7).
 
-## Phase 6: Conversation and chat system
+## Phase 6: Conversation and chat system ✅
 
-- [ ] Conversation, ConversationDocument, Message, MessageCitation
-- [ ] SSE streaming with cancellation and disconnect handling
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Conversation, ConversationDocument, Message, MessageCitation (+ ConversationCollection) | [x] | Migration `0007` (round-trip and `alembic check` clean); composite tenant FKs |
+| Create, rename, delete, list/search, retrieve history | [x] | `test_conversation_lifecycle`; paging by sequence (`before`, `has_more`) |
+| Continue a conversation (memory) | [x] | Earlier turns in the prompt, markers stripped; follow-up condensation with fallback (`test_follow_up_…`, `test_conversation_rag.py`) |
+| Select documents / collections | [x] | Union scope; selection never widens to the workspace when its sources are deleted (`selection_empty`) |
+| Stream responses (SSE) | [x] | Event sequence via TestClient; real uvicorn server; live through the Vite proxy (first delta ≈ 0.07 s) |
+| Citations recorded and displayed | [x] | Snapshot citations; `document_available` after archive; readable after document deletion |
+| Regenerate where appropriate | [x] | Latest answer only; old answer kept as superseded; 409 for older answers and questions |
+| Cancellation | [x] | `POST …/cancel` → Redis flag → generation stops, partial saved as `cancelled` (real-server test) |
+| Client disconnects | [x] | Generation stops; `cancelled` / `client_disconnected` (real-server test and unit tests) |
+| Never leave incomplete messages marked completed | [x] | Conditional terminal writes; shielded finalization; one streaming answer per conversation (partial unique index); stale-stream sweeper (beat, verified live) |
+| Workspace access for read / send / delete / citations | [x] | 404 for other members (including admins), other workspaces and outsiders on all ten endpoints |
+
+Acceptance criteria (verified 2026-11-24):
+
+- [x] Conversation history persists.
+- [x] Users can continue conversations.
+- [x] AI responses stream correctly.
+- [x] Citations are displayed (returned per message and per citation endpoint, with spoken labels).
+- [x] Cross-workspace conversations are inaccessible.
+
+Tests: 295 unit and 160 integration tests (backend), including two against a real uvicorn server
+(mid-stream cancel, client disconnect); live end-to-end on the Compose stack (13/13 checks).
+
+### Phase 6 follow-ups / known issues
+
+- Conversations are private to their creator (ADR 0016). Sharing and admin compliance access are a
+  product decision for Phase 8.
+- A disconnect cancels the answer rather than finishing it in the background; resumable streams
+  (`Last-Event-ID`) are not implemented.
+- Follow-up condensation is verified with scripted models and the fallback only; its quality with the
+  real model is unmeasured (needs the OpenAI key; see Phase 5).
+- If an API process crashes mid-answer, that conversation rejects new questions (409) until the
+  answer is marked stale (5 minutes by default).
+- No chat UI yet (Phase 7).
 
 ## Phase 6b: Voice and accessible reading (new, ADR 0011)
 

@@ -81,8 +81,8 @@ async def search(
         ctx,
         body.query,
         top_k=body.top_k,
-        document_ids=body.document_ids,
-        collection_ids=body.collection_ids,
+        document_ids=body.document_ids or None,
+        collection_ids=body.collection_ids or None,
     )
     return SearchResponse(
         query=" ".join(body.query.split()),
@@ -123,8 +123,8 @@ async def ask(body: AskRequest, ctx: WorkspaceCtx, rag: RAGOrchestratorDep) -> A
     result = await rag.answer(
         ctx,
         body.question,
-        document_ids=body.document_ids,
-        collection_ids=body.collection_ids,
+        document_ids=body.document_ids or None,
+        collection_ids=body.collection_ids or None,
         top_k=body.top_k,
     )
     return answer_response(result)

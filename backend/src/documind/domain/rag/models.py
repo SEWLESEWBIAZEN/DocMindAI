@@ -49,3 +49,11 @@ class Citation:
     # "Halcyon MSA, p. 14" for display; "Halcyon MSA, page 14" for speech (ADR 0011).
     label: str
     spoken_label: str
+
+
+@dataclass(frozen=True, slots=True)
+class Turn:
+    """One earlier exchange of a conversation: a question and its completed answer."""
+
+    question: str
+    answer: str

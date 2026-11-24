@@ -36,7 +36,7 @@ class DocumentFilter:
     offset: int = 0
 
 
-def _like_pattern(text: str) -> str:
+def like_pattern(text: str) -> str:
     """Escape LIKE wildcards so user input is matched literally."""
     escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
@@ -72,7 +72,7 @@ class DocumentRepository:
         elif f.archived == "only":
             stmt = stmt.where(Document.archived_at.is_not(None))
         if f.query:
-            pattern = _like_pattern(f.query.strip())
+            pattern = like_pattern(f.query.strip())
             stmt = stmt.where(
                 or_(
                     Document.title.ilike(pattern, escape="\\"),

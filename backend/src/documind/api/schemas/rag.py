@@ -18,7 +18,10 @@ class _Scoped(BaseModel):
     document_ids: list[uuid.UUID] | None = Field(
         default=None,
         max_length=_MAX_FILTER_IDS,
-        description="Only search these documents (all must belong to the workspace).",
+        description=(
+            "Only search these documents (all must belong to the workspace). Combined with "
+            "`collection_ids` as a union."
+        ),
     )
     collection_ids: list[uuid.UUID] | None = Field(
         default=None,

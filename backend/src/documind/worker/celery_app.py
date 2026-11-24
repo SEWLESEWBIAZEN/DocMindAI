@@ -12,9 +12,15 @@ from celery.signals import setup_logging
 
 from documind.core.config import get_settings
 from documind.core.logging import configure_logging
-from documind.worker.celery_factory import PROCESS_TASK, QUEUE, SWEEP_TASK, create_celery
+from documind.worker.celery_factory import (
+    PROCESS_TASK,
+    QUEUE,
+    REPLY_SWEEP_TASK,
+    SWEEP_TASK,
+    create_celery,
+)
 
-__all__ = ["PROCESS_TASK", "QUEUE", "SWEEP_TASK", "app"]
+__all__ = ["PROCESS_TASK", "QUEUE", "REPLY_SWEEP_TASK", "SWEEP_TASK", "app"]
 
 
 @setup_logging.connect  # type: ignore[untyped-decorator]

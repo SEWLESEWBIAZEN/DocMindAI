@@ -85,9 +85,14 @@ class RetrievalService:
         document_ids: Sequence[uuid.UUID] | None,
         collection_ids: Sequence[uuid.UUID] | None,
     ) -> tuple[SearchScope, list[SearchWarning]]:
+        """``None`` = not restricted; a (possibly empty) list = restrict to it."""
         warnings: list[SearchWarning] = []
         docs: frozenset[uuid.UUID] | None = None
         cols: frozenset[uuid.UUID] | None = None
+        if document_ids is not None:
+            docs = frozenset(document_ids)
+        if collection_ids is not None:
+            cols = frozenset(collection_ids)
         if document_ids:
             wanted = set(document_ids)
             found = await self._repo.documents(ctx.workspace_id, wanted)
@@ -111,13 +116,19 @@ class RetrievalService:
                             doc.id,
                         )
                     )
-            docs = frozenset(wanted)
         if collection_ids:
             wanted = set(collection_ids)
             if await self._repo.collection_ids(ctx.workspace_id, wanted) != wanted:
                 raise NotFoundError("Collection not found.")
-            cols = frozenset(wanted)
-        return SearchScope(ctx.workspace_id, docs, cols), warnings
+        scope = SearchScope(ctx.workspace_id, docs, cols)
+        if scope.empty:
+            warnings.append(
+                SearchWarning(
+                    "selection_empty",
+                    "None of the selected documents or collections are available any more.",
+                )
+            )
+        return scope, warnings
 
     async def retrieve(
         self,
@@ -139,6 +150,9 @@ class RetrievalService:
         opts = self._options
         k = top_k or opts.top_k
         scope, warnings = await self._scope(ctx, document_ids, collection_ids)
+        if scope.empty:
+            mode: RetrievalMode = "hybrid" if opts.hybrid else "vector"
+            return RetrievalResult([], warnings, mode, self._embedder.model, 0)
         try:
             batch = await self._embedder.embed([query])
         except ProcessingError as exc:
@@ -158,7 +172,7 @@ class RetrievalService:
         if opts.hybrid:
             keyword_hits = await self._repo.keyword_search(scope, query, limit=candidates)
             chunks = fuse(vector_hits, keyword_hits, top_k=k)
-            mode: RetrievalMode = "hybrid"
+            mode = "hybrid"
         else:
             chunks, mode = vector_hits[:k], "vector"
         return RetrievalResult(chunks, warnings, mode, self._embedder.model, batch.input_tokens)

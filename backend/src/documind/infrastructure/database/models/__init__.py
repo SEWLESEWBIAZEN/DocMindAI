@@ -1,5 +1,12 @@
 """ORM models. Import every model module here so Alembic autogenerate sees it."""
 
+from documind.infrastructure.database.models.conversations import (
+    Conversation,
+    ConversationCollection,
+    ConversationDocument,
+    Message,
+    MessageCitation,
+)
 from documind.infrastructure.database.models.documents import (
     Document,
     DocumentCollection,
@@ -29,6 +36,9 @@ from documind.infrastructure.database.models.processing import (
 __all__ = [
     "AccountToken",
     "AuditLog",
+    "Conversation",
+    "ConversationCollection",
+    "ConversationDocument",
     "Document",
     "DocumentChunk",
     "DocumentCollection",
@@ -36,6 +46,8 @@ __all__ = [
     "DocumentPage",
     "DocumentVersion",
     "Invitation",
+    "Message",
+    "MessageCitation",
     "MfaRecoveryCode",
     "Organization",
     "Permission",
