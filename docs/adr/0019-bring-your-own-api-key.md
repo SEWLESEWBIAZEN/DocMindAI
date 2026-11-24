@@ -1,6 +1,7 @@
 # ADR 0019: Bring your own API key (BYOK)
 
-- Status: Accepted (roadmap). Scheduled for Phase 8; more providers in later releases; security review in Phase 9.
+- Status: Accepted; implemented in Phase 8 (OpenAI). Key storage is detailed by ADR 0022. More providers in
+  later releases; security review in Phase 9.
 - Date: 2026-11-24
 
 ## Context

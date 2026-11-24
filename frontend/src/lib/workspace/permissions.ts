@@ -19,6 +19,8 @@ export type Permission =
   | 'documents.delete'
   | 'conversations.use'
   | 'billing.manage'
+  | 'ai_providers.manage'
+  | 'infrastructure.manage'
 
 const VIEWER: Permission[] = ['workspace.read', 'members.read', 'documents.read', 'conversations.use']
 const MEMBER: Permission[] = [...VIEWER, 'documents.write', 'documents.archive_own']
@@ -31,8 +33,9 @@ const ADMIN: Permission[] = [
   'usage.read',
   'documents.archive_any',
   'documents.delete',
+  'ai_providers.manage',
 ]
-const OWNER: Permission[] = [...ADMIN, 'billing.manage']
+const OWNER: Permission[] = [...ADMIN, 'billing.manage', 'infrastructure.manage']
 
 export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   viewer: new Set(VIEWER),

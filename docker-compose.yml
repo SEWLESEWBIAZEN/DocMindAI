@@ -25,6 +25,10 @@ x-backend-environment: &backend-environment
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
   MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?set in .env}
   CREDENTIAL_ENCRYPTION_KEYS: ${CREDENTIAL_ENCRYPTION_KEYS:-}
+  # Infrastructure independence (ADR 0021). Dev: dedicated databases on the dev server.
+  INFRASTRUCTURE_ALLOWED_PRIVATE_HOSTS: ${INFRASTRUCTURE_ALLOWED_PRIVATE_HOSTS:-postgres,minio}
+  DEDICATED_DATABASE_ADMIN_URL: ${DEDICATED_DATABASE_ADMIN_URL:-}
+  DEDICATED_DATABASE_SSLMODE: ${DEDICATED_DATABASE_SSLMODE:-disable}
   AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
@@ -125,6 +129,8 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./backend/alembic:/app/alembic
+      - ./backend/alembic_dataplane:/app/alembic_dataplane
+      - ./backend/alembic.ini:/app/alembic.ini:ro
       - ./backend/tests:/app/tests
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:8000"
@@ -165,6 +171,8 @@ services:
       - INFO
     volumes:
       - ./backend/src:/app/src
+      - ./backend/alembic_dataplane:/app/alembic_dataplane
+      - ./backend/alembic.ini:/app/alembic.ini:ro
     depends_on:
       backend:
         condition: service_healthy  # migrations have run

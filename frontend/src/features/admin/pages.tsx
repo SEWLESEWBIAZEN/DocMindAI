@@ -28,6 +28,7 @@ import { useAuth, useUser } from '../auth/AuthProvider'
 import { PasswordMeter } from '../auth/pages'
 import { validatePassword } from '../auth/password'
 import { formatBytes, formatDate, formatDateTime, formatNumber, formatRelative } from '../documents/format'
+import { PlanPanel } from '../saas/PlanPanel'
 import { VoiceSettingsPanel, WorkspaceVoicePolicy } from '../voice/VoiceSettingsPanel'
 
 const ROLE_ORDER: Role[] = ['owner', 'admin', 'member', 'viewer']
@@ -989,6 +990,7 @@ export function UsagePage() {
     <>
       {header}
       <div className="stack" style={{ gap: 24 }}>
+        <PlanPanel />
         <section aria-labelledby="usage-docs" className="stack stack--sm">
           <h2 id="usage-docs" className="section-title">
             Documents (now)
@@ -1047,8 +1049,8 @@ export function UsagePage() {
           </Panel>
         )}
         <p className="muted" style={{ fontSize: '0.82rem' }}>
-          Figures are computed from activity records. One-off answers from the API's /ask endpoint aren't counted yet.
-          Plans and limits arrive with billing.
+          Activity figures above are computed from documents and conversations. Billable usage, including one-off
+          answers, speech and figure descriptions, is metered per call in the plan panel.
         </p>
       </div>
     </>

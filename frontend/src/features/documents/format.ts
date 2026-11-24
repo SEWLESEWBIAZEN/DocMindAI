@@ -75,6 +75,11 @@ export function describeWarning(code: string): string {
     if (count[1] === 'figure_descriptions_failed') return `${figures} couldn't be described.`
     if (count[1] === 'figures_not_described') return `${figures} weren't described (limit per document reached).`
   }
+  const quota = code.match(/^figures_not_described:quota=(\d+)$/)
+  if (quota) {
+    const n = Number(quota[1])
+    return `${n} figure${n === 1 ? '' : 's'} weren't described: the monthly figure-description limit was reached.`
+  }
   const ocr = code.match(/^ocr_applied:pages=([\d,]+)$/)
   if (ocr) return `Text recognition (OCR) was used on page${ocr[1]?.includes(',') ? 's' : ''} ${ocr[1]?.replace(/,/g, ', ')}.`
   return WARNINGS[code] ?? code.replace(/_/g, ' ')

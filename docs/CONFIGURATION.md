@@ -171,6 +171,51 @@ Settings → Voice. Audio is never stored.
 | `FIGURE_MAX_PER_DOCUMENT`      | `20`    | Cap per document; extra figures are noted, not described.        |
 | `FIGURE_MIN_SIZE_POINTS`       | `72`    | Smaller images (icons, bullets) are ignored.                     |
 
+## Plans, usage and quotas (ADR 0020)
+
+Plans live in code (`domain/billing/plans.py`) and are seeded by migration 0009. Every workspace starts
+on **Free**; operators assign plans with `documind-manage plan assign <workspace_id> <plan>
+[--override name=json ...]` (audited) and list them with `documind-manage plan list`.
+
+| Variable                        | Default | Description                                                  |
+| ------------------------------- | ------- | ------------------------------------------------------------ |
+| `TENANT_SETTINGS_CACHE_SECONDS` | `10`    | How long API and worker processes cache a workspace's plan, AI-provider settings and infrastructure pin. Changes made elsewhere apply within this time. |
+
+Quota checks return `402 quota_exceeded` with `{"quota": {"metric", "limit", "used", "resets_at"}}`.
+Only platform-billed AI usage counts toward monthly limits.
+
+## Credential vault and your own AI keys (ADR 0019, ADR 0022)
+
+| Variable                     | Default | Description                                                      |
+| ---------------------------- | ------- | ---------------------------------------------------------------- |
+| `CREDENTIAL_ENCRYPTION_KEYS` | *(unset)* | Key ring `id:base64url(32 bytes)`, comma-separated, newest first. **Required in production.** Without it, AI keys and infrastructure credentials can't be saved (`503 credential_vault_not_configured`). |
+
+Generate a key: `python -c "import os,base64;print('k1:'+base64.urlsafe_b64encode(os.urandom(32)).decode())"`.
+
+Rotation: put the new key first (`k2:...,k1:...`), deploy, run `documind-manage credentials rewrap`, then
+remove `k1`. Rewrapping re-encrypts only the per-credential data keys.
+
+Workspace keys are managed in the app (**AI providers**, owners and admins, 2FA step-up). OpenAI is the
+only available provider; others are listed as planned.
+
+## Infrastructure independence (ADR 0021)
+
+| Variable                                | Default        | Description                                       |
+| --------------------------------------- | -------------- | ------------------------------------------------- |
+| `INFRASTRUCTURE_ALLOWED_PRIVATE_HOSTS`  | *(empty)*      | Hosts that may resolve to private, loopback or link-local addresses (on-premises databases and storage). Everything else must be public. Compose dev default: `postgres,minio`. |
+| `DEDICATED_DATABASE_ADMIN_URL`          | *(unset)*      | A role on a DocuMind-managed PostgreSQL server that may `CREATE DATABASE` and `CREATE ROLE`, and install pgvector. Unset: dedicated databases aren't offered. |
+| `DEDICATED_DATABASE_HOST` / `_PORT`     | *(admin host)* / `5432` | Address the API and workers use for provisioned databases. |
+| `DEDICATED_DATABASE_SSLMODE`            | `verify-full`  | TLS mode for provisioned databases (`disable` in the dev Compose stack). |
+| `DATAPLANE_POOL_SIZE`                   | `5`            | Connections per dedicated or external database, per process. |
+| `DATAPLANE_MAX_OPEN`                    | `20`           | Data-plane engines kept open per process (LRU beyond this). |
+
+Data-plane migrations (dedicated and external databases, `documind` schema):
+`alembic -n dataplane -x database_url=postgresql+asyncpg://... upgrade head`. DocuMind runs them itself for
+dedicated databases, and for external ones only when the customer ticks "DocuMind may manage the schema".
+
+External databases need PostgreSQL 14+, the `vector` extension installed, and a non-superuser role. In
+production `sslmode` must be `verify-full` (system CA bundle).
+
 ## Conversations
 
 | Variable                           | Default | Description                                                     |

@@ -358,7 +358,7 @@ Tests: 62 frontend unit and component tests (Vitest); 3 Playwright end-to-end te
   `RATE_LIMIT_AUTH_PER_IP` for the dev stack or clear the Redis `rl:*` keys.
 - The landing page's scenario companies are illustrative (see the landing notes above).
 
-## Phase 8: SaaS readiness and infrastructure independence
+## Phase 8: SaaS readiness and infrastructure independence ✅ (MI-7/MI-8 foundations only)
 
 Combines the original Phase 8 with the approved multi-infrastructure workstreams MI-1 to MI-5, and lays the
 foundations for MI-6 to MI-8. Impact assessment: [`PHASE_8_IMPACT_ASSESSMENT.md`](PHASE_8_IMPACT_ASSESSMENT.md).
@@ -366,40 +366,78 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 
 ### 8A. Usage, quotas, plans and entitlements (original Phase 8)
 
-- [ ] Plan catalog and entitlements; per-workspace plan with overrides; operator assignment (audited)
-- [ ] Usage ledger (idempotent) for embeddings, chat, summaries, condensation
-- [ ] Audio-minute usage (speech-to-text, text-to-speech)
-- [ ] Figure-description usage
-- [ ] Quotas at admission (documents, storage, members, chat tokens, audio), `402 quota_exceeded`
-- [ ] Usage and plan views (API and UI), audit log views
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Plan catalog and entitlements; per-workspace plan with overrides; operator assignment (audited) | [x] | `domain/billing/plans.py`, migration 0009 (seed matches catalog, `test_billing.py`); `documind-manage plan list/assign`; `workspace.plan_assigned` audit (`test_chat_quota_blocks_answers_with_402`) |
+| Usage ledger (idempotent) for embeddings, chat, summaries, condensation | [x] | `usage_records` + `Metered*` adapters; worker indexing and API answers recorded with user, source and `billed_to` (`test_processing_and_answers_are_metered_to_the_platform`); no document content (`test_usage_records_hold_no_document_content`) |
+| Audio-minute usage | [x] | STT seconds (reported or estimated) and TTS characters → seconds (`test_server_speech_is_metered_and_capped_by_audio_quota`) |
+| Figure-description usage | [x] | Vision calls metered; descriptions stop at the remaining monthly quota with a `figures_not_described:quota` warning (unit test) |
+| Quotas at admission, `402 quota_exceeded` | [x] | Documents, storage, members (incl. pending invitations), chat tokens, embedding tokens, audio seconds (integration tests) |
+| Usage and plan views (API and UI), audit log views | [x] | `GET /plan`; Usage page plan panel with accessible meters (Playwright `saas.spec.ts`, axe clean); audit log panel from Phase 7 |
 
 ### 8B. Bring your own API key (ADR 0019, 0022)
 
-- [ ] Credential vault: envelope encryption, key ring, rewrap rotation, write-only
-- [ ] Workspace-level provider credentials (OpenAI first; provider-neutral model)
-- [ ] 2FA-protected credential changes; audit events
-- [ ] Provider validation on save (sanitized errors)
-- [ ] Per-workspace, per-capability provider resolution in API and worker
-- [ ] No silent platform-key fallback; "use my key only"
-- [ ] Provider usage attribution (`billed_to`), excluded from platform quotas
-- [ ] Clear errors for invalid/revoked keys (`provider_key_invalid`, jobs fail without endless retries)
-- [ ] Re-indexing when the embedding configuration changes
-- [ ] Available on every plan (entitlement)
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Credential vault: envelope encryption, key ring, rewrap rotation, write-only | [x] | `infrastructure/security/vault.py`, `application/credentials/vault.py`; `test_vault.py`; rotation end to end (`test_vault_key_rotation_rewrap`); revoked ciphertext destroyed |
+| Workspace-level provider credentials (OpenAI; provider-neutral) | [x] | `workspace_ai_providers` (provider + settings + capabilities); catalog with planned providers refused (`test_planned_providers_are_refused`) |
+| 2FA-protected credential changes; audit events | [x] | Add/replace/remove and turning "key only" off need a step-up; audit `ai_provider.*` without secrets (`test_adding_a_key_needs_2fa_validation_and_reindex_confirmation`) |
+| Provider validation on save (sanitized errors) | [x] | Model retrieval per required model; key never echoed (`test_validation_errors_are_sanitized`); 422 bodies no longer echo inputs |
+| Per-workspace, per-capability resolution in API and worker | [x] | `AIResolver`; worker decrypts with the same vault (`factory.state["secrets"]`); unsupported capability falls back only if allowed (`test_billing.py`) |
+| No silent platform-key fallback; "use my key only" | [x] | `test_rejected_key_fails_clearly_and_never_falls_back`, `test_key_only_blocks_the_platform` |
+| Provider usage attribution (`billed_to`), excluded from platform quotas | [x] | `test_workspace_key_usage_is_attributed_and_outside_platform_quotas` |
+| Clear errors for invalid/revoked keys | [x] | `provider_key_invalid` (503) with a clear message; key marked invalid, admins emailed, jobs fail permanently, revalidation restores it |
+| Re-indexing when the embedding configuration changes | [x] | `409 reindex_required` → confirm → jobs queued; `GET/POST /reindex`; per-workspace `documind-manage reindex` |
+| Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
+| AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 
 ### 8C. Infrastructure independence (MI-1 to MI-5)
 
-- [ ] MI-1: infrastructure registry, immutable versioned profiles with checksums, workspace pinning, resolver, provider factories
-- [ ] MI-2: storage providers per organization (DocuMind-managed, AWS S3, S3-compatible, MinIO) with validation and SSRF policy
-- [ ] MI-3: dedicated PostgreSQL (provisioning, data-plane migrations, routing for API and workers)
-- [ ] MI-4: external PostgreSQL (validation, TLS, least privilege, schema management consent)
-- [ ] Data-plane isolation (tenant anchor, audit outbox, parity test, two-database isolation tests)
-- [ ] MI-5: organization infrastructure settings UI
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| MI-1: registry, immutable versioned profiles with checksums, pinning, resolver, provider factories | [x] | Migration 0011; `domain/infrastructure/profiles.py`; `InfrastructureResolver`; tampering → 503 `infrastructure_integrity_error` (`test_tampered_profile_is_refused`) |
+| MI-2: storage providers (AWS S3, S3-compatible, MinIO) with validation and SSRF policy | [~] | Customer MinIO bucket with prefix end to end incl. signed downloads (`test_external_database_and_customer_storage`); probe + public-bucket check; SSRF tests. **Real AWS S3 not exercised here** (same boto3 adapter) |
+| MI-3: dedicated PostgreSQL | [x] | `DedicatedProvisioner` (database + least-privilege role + pgvector + migrations), verified in tests and inside the backend container; two organizations isolated (`test_dedicated_databases_isolate_organizations`) |
+| MI-4: external PostgreSQL | [x] | Customer database with a non-superuser role; validation (SSRF, version, superuser, pgvector, schema revision, consent to migrate); TLS modes, `verify-full` enforced in production |
+| Data-plane isolation | [x] | Tenant anchor FKs (foreign workspace insert rejected), audit outbox relayed exactly once, schema parity test, multi-plane sweeps, jobs carry `workspace_id` |
+| MI-5: organization infrastructure settings UI | [x] | `features/saas/InfrastructurePage.tsx`: drafts, validation results, 2FA activation, migration plans, workers, history (Playwright, axe clean) |
+| Existing data untouched | [x] | Workspaces without a profile keep the shared database and platform bucket; activation with data returns `migration_required` and moves nothing (`test_moving_a_workspace_with_data_needs_a_migration`) |
 
 ### 8D. Foundations for MI-6 to MI-8
 
-- [ ] MI-6: Azure Blob registered as planned (not selectable until implemented)
-- [ ] MI-7: processing modes, worker registration model (hashed tokens, revocation), queue routing
-- [ ] MI-8: infrastructure health events, migration state model (no data movement)
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| MI-6: Azure Blob registered as planned | [x] | Listed, not selectable; rejected by parsing (unit test) |
+| MI-7: processing modes, worker registrations (hashed tokens, revocation), queue routing | [~] | Registration, SHA-256 tokens shown once, revocation (`test_customer_worker_tokens_are_hashed_and_revocable`); customer mode fails validation with `not_available`. **Connector protocol and worker package not built (Phase 9–10)** |
+| MI-8: health events, migration state model | [~] | `infrastructure_events`, `infrastructure_migrations` (planned/cancelled). **No migration execution, no periodic health checks, no deprovisioning yet** |
+
+Acceptance (verified 2026-11-24):
+
+- Backend: 367 unit and 200 integration tests (real PostgreSQL, Redis and MinIO), all passing, including
+  13 infrastructure, 8 BYOK and 7 quota tests. Lint, format and `mypy --strict` are clean.
+  Both Alembic environments upgrade, downgrade and pass `alembic check`.
+- Frontend: 82 Vitest tests. Playwright 6/6, including the Phase 7 journey and the new Phase 8 spec, with
+  axe clean and no horizontal scrolling at 390 px.
+- Live: the dev Compose stack migrated to 0011. A dedicated database was provisioned and validated from
+  inside the backend container.
+
+### Phase 8 follow-ups / known issues
+
+- **Not verified against live OpenAI** (no key or network here). BYOK validation and adapters are tested
+  with mocked HTTP and a fake provider factory.
+- **Real AWS S3 not exercised.** MinIO stands in, with the same boto3 adapter. Azure Blob is planned
+  (MI-6).
+- **MI-7 connector and MI-8 execution are not implemented.** Customer processing can't be activated, and
+  migrations are planned but never run. Dedicated databases aren't deprovisioned automatically (there is
+  no organization deletion yet).
+- Plan, AI-key and infrastructure changes made in another process apply within
+  `TENANT_SETTINGS_CACHE_SECONDS` (10 s).
+- Quotas can be exceeded by about one request under concurrency (ADR 0020). Speech seconds are estimates
+  when the provider doesn't report them.
+- External databases use the system CA bundle; uploading a custom CA isn't supported yet. Signed download
+  URLs point at the customer's storage endpoint, so browsers must be able to reach it.
+- There is no payment processing: plans are assigned by operators.
+- The backend Docker image must be rebuilt to include `alembic_dataplane` (the dev Compose file mounts it).
 
 ## Phase 9: Security, testing and performance
 

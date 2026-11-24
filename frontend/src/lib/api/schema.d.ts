@@ -975,6 +975,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/infrastructure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Infrastructure settings (owners) */
+        get: operations["get_infrastructure_api_v1_workspaces__workspace_id__infrastructure_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a planned migration */
+        post: operations["cancel_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a draft version (2FA step-up; secrets are stored encrypted) */
+        post: operations["create_version_api_v1_workspaces__workspace_id__infrastructure_versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/versions/{version_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a validated version (2FA step-up; 409 migration_required if data must move) */
+        post: operations["activate_version_api_v1_workspaces__workspace_id__infrastructure_versions__version_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/versions/{version_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check connectivity, permissions and schema for a draft */
+        post: operations["validate_version_api_v1_workspaces__workspace_id__infrastructure_versions__version_id__validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a customer-hosted worker (MI-7 foundation; 2FA step-up) */
+        post: operations["register_worker_api_v1_workspaces__workspace_id__infrastructure_workers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/workers/{worker_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a worker */
+        delete: operations["revoke_worker_api_v1_workspaces__workspace_id__infrastructure_workers__worker_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/invitations": {
         parameters: {
             query?: never;
@@ -1597,6 +1716,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** CreateVersionRequest */
+        CreateVersionRequest: {
+            database?: components["schemas"]["DatabaseInput"];
+            /** Note */
+            note?: string | null;
+            processing?: components["schemas"]["ProcessingInput"];
+            storage?: components["schemas"]["StorageInput"];
+        };
         /** DailyUsageResponse */
         DailyUsageResponse: {
             /**
@@ -1612,6 +1739,35 @@ export interface components {
             llm_output_tokens: number;
             /** Questions */
             questions: number;
+        };
+        /** DatabaseInput */
+        DatabaseInput: {
+            /** Database */
+            database?: string | null;
+            /** Host */
+            host?: string | null;
+            /**
+             * Manage Schema
+             * @default false
+             */
+            manage_schema: boolean;
+            /**
+             * Mode
+             * @default shared
+             * @enum {string}
+             */
+            mode: "shared" | "dedicated" | "external";
+            /**
+             * Password
+             * @description Write-only; stored encrypted (external only)
+             */
+            password?: string | null;
+            /** Port */
+            port?: number | null;
+            /** Sslmode */
+            sslmode?: ("disable" | "require" | "verify-ca" | "verify-full") | null;
+            /** Username */
+            username?: string | null;
         };
         /**
          * DocumentFormat
@@ -1797,6 +1953,46 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+        };
+        /** InfrastructureResponse */
+        InfrastructureResponse: {
+            /** Active Config */
+            active_config: {
+                [key: string]: unknown;
+            };
+            /**
+             * Active Version Id
+             * @description None: DocuMind platform defaults
+             */
+            active_version_id: string | null;
+            /** Dedicated Available */
+            dedicated_available: boolean;
+            /** Entitlements */
+            entitlements: {
+                [key: string]: boolean;
+            };
+            /** Events */
+            events: {
+                [key: string]: unknown;
+            }[];
+            /** Has Data */
+            has_data: boolean;
+            /** Migrations */
+            migrations: {
+                [key: string]: unknown;
+            }[];
+            /** Storage Providers */
+            storage_providers: {
+                [key: string]: string;
+            }[];
+            /** Versions */
+            versions: components["schemas"]["VersionResponse"][];
+            /** Workers */
+            workers: {
+                [key: string]: unknown;
+            }[];
+            /** Workspace Kind */
+            workspace_kind: string;
         };
         /** InvitationResponse */
         InvitationResponse: {
@@ -2093,6 +2289,15 @@ export interface components {
             quotas: components["schemas"]["QuotaResponse"][];
             /** Usage */
             usage: components["schemas"]["MeteredUsageResponse"][];
+        };
+        /** ProcessingInput */
+        ProcessingInput: {
+            /**
+             * Mode
+             * @default documind
+             * @enum {string}
+             */
+            mode: "documind" | "customer" | "hybrid";
         };
         /** ProcessingJobResponse */
         ProcessingJobResponse: {
@@ -2484,6 +2689,35 @@ export interface components {
              */
             token_type: "bearer";
         };
+        /** StorageInput */
+        StorageInput: {
+            /** Access Key Id */
+            access_key_id?: string | null;
+            /** Bucket */
+            bucket?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
+            /** Force Path Style */
+            force_path_style?: boolean | null;
+            /**
+             * Prefix
+             * @default
+             */
+            prefix: string;
+            /**
+             * Provider
+             * @default documind
+             * @enum {string}
+             */
+            provider: "documind" | "aws_s3" | "s3_compatible" | "minio" | "azure_blob";
+            /** Region */
+            region?: string | null;
+            /**
+             * Secret Access Key
+             * @description Write-only; stored encrypted
+             */
+            secret_access_key?: string | null;
+        };
         /** SummaryRequest */
         SummaryRequest: {
             /** Page End */
@@ -2592,6 +2826,47 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** VersionResponse */
+        VersionResponse: {
+            /** Activated At */
+            activated_at: string | null;
+            /** Checksum */
+            checksum: string;
+            /**
+             * Config
+             * @description Non-secret configuration; secrets are references
+             */
+            config: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Status
+             * @description draft, validated, failed, active or retired
+             */
+            status: string;
+            /** Validated At */
+            validated_at: string | null;
+            /** Validation */
+            validation: {
+                [key: string]: unknown;
+            };
+            /** Version */
+            version: number;
+        };
         /** VoicePolicyRequest */
         VoicePolicyRequest: {
             /**
@@ -2630,6 +2905,26 @@ export interface components {
             document_id?: string | null;
             /** Message */
             message: string;
+        };
+        /** WorkerRequest */
+        WorkerRequest: {
+            /** Name */
+            name: string;
+        };
+        /** WorkerTokenResponse */
+        WorkerTokenResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Token
+             * @description Shown once. Store it in the worker's configuration.
+             */
+            token: string;
         };
         /**
          * WorkspaceKind
@@ -4960,6 +5255,231 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_infrastructure_api_v1_workspaces__workspace_id__infrastructure_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InfrastructureResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                migration_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_version_api_v1_workspaces__workspace_id__infrastructure_versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_version_api_v1_workspaces__workspace_id__infrastructure_versions__version_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_version_api_v1_workspaces__workspace_id__infrastructure_versions__version_id__validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_worker_api_v1_workspaces__workspace_id__infrastructure_workers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_worker_api_v1_workspaces__workspace_id__infrastructure_workers__worker_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worker_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -4,11 +4,14 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–7 and 6b complete.** The full product works in the browser:
+> **Status: Phases 1–8 complete.** The full product works in the browser:
 > sign-up and 2FA, personal and organization workspaces with roles,
 > uploads with OCR and indexing, search, and conversations with streamed,
-> page-cited answers that link back to the highlighted source passage. Usage
-> tracking, plans and production deployment follow in Phases 8–10. See
+> page-cited answers that link back to the highlighted source passage.
+> Phase 8 added plans, metered usage and quotas, bring-your-own AI key, and
+> per-organization infrastructure: a dedicated or customer-run PostgreSQL and
+> the customer's own S3-compatible storage. Security verification (Phase 9) and
+> production deployment (Phase 10) follow. See
 > [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
@@ -104,6 +107,14 @@ make frontend-dev # Vite on :5173, proxies /api to :8000
    with their sources, and use **Listen** in a document to have it read aloud (Escape stops,
    Ctrl+Shift+Space pauses). Browser speech works out of the box; set `SPEECH_PROVIDER=openai` for
    DocuMind voices. Admins choose what each workspace allows under **Settings → Voice**.
+7. **Usage** shows the workspace's plan and monthly quotas. Operators assign plans with
+   `docker compose exec backend documind-manage plan assign <workspace_id> business`.
+8. **AI providers** (owners and admins) lets a workspace use its own OpenAI key. The key is encrypted,
+   never shown again and protected by 2FA, and the workspace can choose to use its own key only.
+9. **Infrastructure** (organization owners, Business or Enterprise plan) moves an organization to a
+   dedicated database, its own PostgreSQL, or its own S3-compatible bucket. For dedicated databases in
+   development, set `DEDICATED_DATABASE_ADMIN_URL=postgresql+asyncpg://documind:<password>@postgres:5432/postgres`
+   in `.env`.
 
 ## Testing and quality
 

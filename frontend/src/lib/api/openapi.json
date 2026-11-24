@@ -1067,6 +1067,34 @@
         "title": "CreateOrganizationRequest",
         "type": "object"
       },
+      "CreateVersionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "$ref": "#/components/schemas/DatabaseInput"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/ProcessingInput"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageInput"
+          }
+        },
+        "title": "CreateVersionRequest",
+        "type": "object"
+      },
       "DailyUsageResponse": {
         "properties": {
           "day": {
@@ -1099,6 +1127,107 @@
           "documents_processed"
         ],
         "title": "DailyUsageResponse",
+        "type": "object"
+      },
+      "DatabaseInput": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "anyOf": [
+              {
+                "maxLength": 63,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "maxLength": 253,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "manage_schema": {
+            "default": false,
+            "title": "Manage Schema",
+            "type": "boolean"
+          },
+          "mode": {
+            "default": "shared",
+            "enum": [
+              "shared",
+              "dedicated",
+              "external"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Write-only; stored encrypted (external only)",
+            "title": "Password"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "sslmode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "disable",
+                  "require",
+                  "verify-ca",
+                  "verify-full"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sslmode"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 63,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "DatabaseInput",
         "type": "object"
       },
       "DocumentFormat": {
@@ -1647,6 +1776,103 @@
           "components"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "InfrastructureResponse": {
+        "properties": {
+          "active_config": {
+            "additionalProperties": true,
+            "title": "Active Config",
+            "type": "object"
+          },
+          "active_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None: DocuMind platform defaults",
+            "title": "Active Version Id"
+          },
+          "dedicated_available": {
+            "title": "Dedicated Available",
+            "type": "boolean"
+          },
+          "entitlements": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Entitlements",
+            "type": "object"
+          },
+          "events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "has_data": {
+            "title": "Has Data",
+            "type": "boolean"
+          },
+          "migrations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Migrations",
+            "type": "array"
+          },
+          "storage_providers": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Storage Providers",
+            "type": "array"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionResponse"
+            },
+            "title": "Versions",
+            "type": "array"
+          },
+          "workers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Workers",
+            "type": "array"
+          },
+          "workspace_kind": {
+            "title": "Workspace Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_kind",
+          "active_version_id",
+          "active_config",
+          "versions",
+          "entitlements",
+          "storage_providers",
+          "dedicated_available",
+          "events",
+          "workers",
+          "migrations",
+          "has_data"
+        ],
+        "title": "InfrastructureResponse",
         "type": "object"
       },
       "InvitationResponse": {
@@ -2351,6 +2577,23 @@
           "usage"
         ],
         "title": "PlanSummaryResponse",
+        "type": "object"
+      },
+      "ProcessingInput": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "documind",
+            "enum": [
+              "documind",
+              "customer",
+              "hybrid"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "ProcessingInput",
         "type": "object"
       },
       "ProcessingJobResponse": {
@@ -3389,6 +3632,103 @@
         "title": "StepUpResponse",
         "type": "object"
       },
+      "StorageInput": {
+        "additionalProperties": false,
+        "properties": {
+          "access_key_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Key Id"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "maxLength": 63,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
+          },
+          "force_path_style": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Path Style"
+          },
+          "prefix": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Prefix",
+            "type": "string"
+          },
+          "provider": {
+            "default": "documind",
+            "enum": [
+              "documind",
+              "aws_s3",
+              "s3_compatible",
+              "minio",
+              "azure_blob"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "secret_access_key": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Write-only; stored encrypted",
+            "title": "Secret Access Key"
+          }
+        },
+        "title": "StorageInput",
+        "type": "object"
+      },
       "SummaryRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3686,6 +4026,106 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VersionResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "checksum": {
+            "title": "Checksum",
+            "type": "string"
+          },
+          "config": {
+            "additionalProperties": true,
+            "description": "Non-secret configuration; secrets are references",
+            "title": "Config",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "status": {
+            "description": "draft, validated, failed, active or retired",
+            "title": "Status",
+            "type": "string"
+          },
+          "validated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validated At"
+          },
+          "validation": {
+            "additionalProperties": true,
+            "title": "Validation",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "config",
+          "checksum",
+          "validation",
+          "note",
+          "created_at",
+          "created_by_user_id",
+          "validated_at",
+          "activated_at"
+        ],
+        "title": "VersionResponse",
+        "type": "object"
+      },
       "VoicePolicyRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3781,6 +4221,47 @@
           "message"
         ],
         "title": "WarningResponse",
+        "type": "object"
+      },
+      "WorkerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkerRequest",
+        "type": "object"
+      },
+      "WorkerTokenResponse": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "token": {
+            "description": "Shown once. Store it in the worker's configuration.",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "token"
+        ],
+        "title": "WorkerTokenResponse",
         "type": "object"
       },
       "WorkspaceKind": {
@@ -8016,6 +8497,388 @@
         "summary": "Upload a new version (the document is reprocessed)",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure": {
+      "get": {
+        "operationId": "get_infrastructure_api_v1_workspaces__workspace_id__infrastructure_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfrastructureResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Infrastructure settings (owners)",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/cancel": {
+      "post": {
+        "operationId": "cancel_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "migration_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Migration Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel a planned migration",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/versions": {
+      "post": {
+        "operationId": "create_version_api_v1_workspaces__workspace_id__infrastructure_versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a draft version (2FA step-up; secrets are stored encrypted)",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/versions/{version_id}/activate": {
+      "post": {
+        "operationId": "activate_version_api_v1_workspaces__workspace_id__infrastructure_versions__version_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Activate a validated version (2FA step-up; 409 migration_required if data must move)",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/versions/{version_id}/validate": {
+      "post": {
+        "operationId": "validate_version_api_v1_workspaces__workspace_id__infrastructure_versions__version_id__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check connectivity, permissions and schema for a draft",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/workers": {
+      "post": {
+        "operationId": "register_worker_api_v1_workspaces__workspace_id__infrastructure_workers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Register a customer-hosted worker (MI-7 foundation; 2FA step-up)",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/workers/{worker_id}": {
+      "delete": {
+        "operationId": "revoke_worker_api_v1_workspaces__workspace_id__infrastructure_workers__worker_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "worker_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Worker Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke a worker",
+        "tags": [
+          "infrastructure"
         ]
       }
     },

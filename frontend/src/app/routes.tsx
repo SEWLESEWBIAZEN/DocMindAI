@@ -24,6 +24,8 @@ const documents = () => import('../features/documents/pages')
 const chat = () => import('../features/chat/pages')
 const admin = () => import('../features/admin/pages')
 const dashboard = () => import('../features/dashboard/DashboardPage')
+const aiProviders = () => import('../features/saas/AIProvidersPage')
+const infrastructure = () => import('../features/saas/InfrastructurePage')
 
 function Public({ children }: { children: ReactNode }) {
   return <RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
@@ -68,6 +70,8 @@ export const routes: RouteObject[] = [
           { path: 'settings', element: page(admin, 'SettingsPage') },
           { path: 'profile', element: page(admin, 'ProfilePage') },
           { path: 'usage', element: page(admin, 'UsagePage') },
+          { path: 'ai-providers', element: page(aiProviders, 'AIProvidersPage') },
+          { path: 'infrastructure', element: page(infrastructure, 'InfrastructurePage') },
           { path: '*', element: <NotFoundPage inApp /> },
         ],
       },

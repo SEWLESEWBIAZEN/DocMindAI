@@ -116,6 +116,10 @@ function Sidebar({ onClose }: { onClose: () => void }) {
     { to: `${base}/members`, label: 'Members', icon: 'users', permission: 'members.read' },
     { to: `${base}/organization`, label: 'Organizations', icon: 'building' },
     { to: `${base}/usage`, label: 'Usage', icon: 'chart', permission: 'usage.read' },
+    { to: `${base}/ai-providers`, label: 'AI providers', icon: 'key', permission: 'ai_providers.manage' },
+    ...(workspace.kind === 'organization'
+      ? [{ to: `${base}/infrastructure`, label: 'Infrastructure', icon: 'cpu' as const, permission: 'infrastructure.manage' as const }]
+      : []),
     { to: `${base}/settings`, label: 'Settings', icon: 'settings' },
   ]
   const visible = (items: NavItem[]) => items.filter((item) => !item.permission || can(item.permission))

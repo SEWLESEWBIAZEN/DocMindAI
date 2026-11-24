@@ -55,6 +55,7 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY alembic.ini ./
 COPY alembic ./alembic
+COPY alembic_dataplane ./alembic_dataplane
 USER documind
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

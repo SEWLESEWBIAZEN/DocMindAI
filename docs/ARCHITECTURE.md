@@ -61,6 +61,10 @@ makes tests able to inject a different container (`create_app(container_factory=
 
 ### Planned modules (later phases)
 
+Phase 8 added: `application/ai` (resolver, metering, BYOK), `application/billing`, `application/credentials`,
+`application/infrastructure`, `domain/billing`, `domain/ai`, `domain/infrastructure`, `infrastructure/ai`,
+`infrastructure/network` (SSRF policy), `infrastructure/database/dataplane*.py` and `provisioning.py`.
+
 The same structure will hold the product features. For example:
 
 - `domain/identity`, `application/identity`, `infrastructure/database/models/identity.py` (Phase 2)
@@ -259,6 +263,74 @@ See ADR 0018. The browser holds a single `speaker` queue (browser `speechSynthes
 shortcuts and the reading bar. Answers are spoken with their sources; the viewer's listening mode reads
 page by page and can summarize a page range (`POST /documents/{id}/summary`). PDFs can carry figure
 descriptions produced during processing (`ImageDescriber`, `application/processing/figures.py`).
+
+## 7b. Plans, usage and your own AI keys (Phase 8, ADR 0019, 0020, 0022)
+
+* **AI resolution.** Services never use a global AI provider. `AIResolver.resolve(workspace_id, user_id)`
+  (`application/ai/resolver.py`) returns a `WorkspaceAI` with one adapter per capability (embeddings,
+  chat, vision, speech-to-text, text-to-speech), chosen as follows:
+  1. The workspace's own key, if its provider offers the capability. If DocuMind marked that key
+     invalid, the capability is unavailable: there is no silent fallback.
+  2. Otherwise DocuMind's platform key, if the plan allows platform AI and "use my key only" is off.
+  3. Otherwise unavailable (`provider_key_required`).
+
+  The API (`get_workspace_ai`) and the worker (`ResolvedProcessingAI`) use the same resolver.
+* **Metering.** Every adapter handed out is wrapped by a `Metered*` adapter that writes one
+  `usage_records` row per successful call. Each row records `billed_to`, the workspace, the user (none for
+  background work) and the source (`usage_source(...)`: message, processing job). Cancelled streams record
+  an estimate. Speech records seconds (reported, or estimated from size or characters).
+* **Quotas.** `Quotas` (`api/dependencies.py`) runs admission checks: uploads (documents, storage,
+  platform embedding tokens), answers and summaries (chat tokens), speech (audio seconds), invitations
+  (members). Figure descriptions are capped by the remaining quota inside processing.
+* **BYOK.** Keys are stored by the credential vault (`application/credentials/vault.py`) using envelope
+  encryption. `SqlWorkspaceKeys` decrypts a key only in memory and builds guarded adapters (cached for 5
+  minutes). A provider rejection (auth error or out of quota) marks the key `invalid`, audits it, emails
+  owners and admins, and fails with `provider_key_invalid`; processing jobs then fail permanently. Saving
+  a key requires a 2FA step-up and a validation call. If the embedding model changes, the save requires
+  confirming a re-index (`409 reindex_required`).
+
+## 7c. Infrastructure independence and data planes (Phase 8, ADR 0021)
+
+```
+              control plane (DocuMind PostgreSQL)                  data planes
+  users · workspaces · members · audit · plans · usage   ┌──► shared   (same database, public schema)
+  credentials · AI keys · infrastructure registry ───────┼──► dedicated (DocuMind server, one DB per org)
+                                                          └──► external  (customer PostgreSQL, documind schema)
+  documents · versions · collections · pages · chunks · jobs · conversations · messages · citations
+```
+
+* **Profiles.** `infrastructure_profile_versions` are immutable. Each holds a non-secret database,
+  storage and processing configuration, with credential references and a SHA-256 checksum. A workspace
+  is pinned to one active version (`workspace_infrastructure`); no row means the platform defaults.
+* **Resolver.** `InfrastructureResolver.resolve(workspace_id)` (`application/infrastructure/resolver.py`)
+  verifies the checksum, then builds the data-plane engine (small pool, `search_path=documind,public`)
+  and the storage adapter (customer bucket under a prefix). Both are cached per version, with LRU
+  eviction.
+* **Routing.**
+  * `get_data_session` hands data-plane services either the request's own session (shared) or a session
+    on the workspace's database. Audit entries in isolated planes go to `audit_outbox` in the same
+    transaction, and are relayed to `audit_logs` idempotently (by `event_id`) after the request and on
+    every sweep.
+  * Jobs are dispatched with their workspace id. The worker's `InfrastructureTargets` picks the data
+    plane and storage for each job.
+  * Sweeps iterate every active data plane.
+* **Schema.** `dataplane_metadata()` derives the data-plane schema from the ORM models:
+  * workspace references point to `tenant_workspaces`;
+  * user references are plain UUIDs.
+
+  `alembic_dataplane` migrates it. A parity test compares it with the shared schema.
+* **Lifecycle.** A version goes from draft, to validation, to activation.
+  * Validation checks connectivity, the SSRF policy, PostgreSQL 14+, pgvector, a non-superuser role and
+    the schema revision, plus a storage probe and a public-bucket check.
+  * Activation requires a 2FA step-up. It is refused with `migration_required` (and a planned
+    `infrastructure_migrations` row) when a workspace with data would change its database or storage
+    location.
+  * Dedicated databases are provisioned at draft time (`DedicatedProvisioner`).
+* **Foundations only.**
+  * Azure Blob is listed but not selectable.
+  * Customer workers can be registered with hashed, revocable tokens. Customer processing mode can't
+    pass validation until the connector exists (MI-7).
+  * Migrations are planned but never executed (MI-8).
 
 ## 8. Runtime resources and lifecycle
 
