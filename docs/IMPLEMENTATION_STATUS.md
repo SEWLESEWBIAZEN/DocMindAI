@@ -361,12 +361,22 @@ Tests: 62 frontend unit and component tests (Vitest); 3 Playwright end-to-end te
 ## Phase 8: Usage, administration and SaaS readiness
 
 - [ ] Usage tracking, quotas, plans/entitlements model, audit log views
-- [ ] Audio-minute usage; per-workspace voice policy (ADR 0011)
+- [ ] Audio-minute and figure-description usage (ADR 0011); the per-workspace voice policy shipped in Phase 6b
+- [ ] **Bring your own API key (ADR 0019, added 2026-11-24 at the product owner's request)**
+  - [ ] Workspace-level provider keys (personal workspace owner; organization owners and admins), OpenAI first
+  - [ ] Encrypted at rest (AES-GCM, separate key, bound to the workspace), write-only, never logged; last 4 characters shown
+  - [ ] 2FA step-up to add or replace a key; validation call on save; audit events
+  - [ ] Per-workspace key resolution in API and worker; "use my key only" (no platform fallback)
+  - [ ] Clear errors when a key is revoked or out of quota (jobs fail with `provider_key_invalid`, admin banner and email)
+  - [ ] Usage records marked `billed_to = workspace_key`, excluded from platform quotas
+  - [ ] Re-index flow when the provider or embedding model changes
+  - [ ] Later: Azure OpenAI / OpenAI-compatible endpoints behind a hostname allowlist (SSRF protection)
 
 ## Phase 9: Security, testing and performance
 
 - [ ] Security review, Playwright E2E, load tests on the 4 vCPU / 8 GB target
 - [ ] Accessibility audit and testing with blind users (ADR 0011)
+- [ ] BYOK review: key storage and rotation, leak paths (logs, errors, backups), SSRF on custom endpoints (ADR 0019)
 
 ## Phase 10: Production deployment
 
