@@ -22,7 +22,7 @@ from documind.domain.processing.errors import PermanentProcessingError, Transien
 logger = logging.getLogger(__name__)
 
 
-def _raise_classified(exc: Exception) -> NoReturn:
+def raise_classified(exc: Exception) -> NoReturn:
     if isinstance(exc, openai.RateLimitError):
         raise TransientProcessingError(
             "The AI service is busy. Please try again shortly.", code="llm_rate_limited"
@@ -105,7 +105,7 @@ class OpenAIChatProvider:
                 **self._params(messages, max_output_tokens, temperature)
             )
         except openai.OpenAIError as exc:
-            _raise_classified(exc)
+            raise_classified(exc)
         choice = response.choices[0]
         return LLMResult(
             text=choice.message.content or "",
@@ -136,5 +136,5 @@ class OpenAIChatProvider:
                     if choice.finish_reason:
                         finish = choice.finish_reason
         except openai.OpenAIError as exc:
-            _raise_classified(exc)
+            raise_classified(exc)
         yield LLMStreamEnd(usage=usage, model=model, finish_reason=finish)

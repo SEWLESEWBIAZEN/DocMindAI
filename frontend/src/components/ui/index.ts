@@ -1,3 +1,4 @@
+export { announce, ANNOUNCE_EVENT } from './announce'
 export { Badge, type BadgeTone } from './Badge'
 export { Button } from './Button'
 export { ConfirmProvider, useConfirm } from './ConfirmDialog'

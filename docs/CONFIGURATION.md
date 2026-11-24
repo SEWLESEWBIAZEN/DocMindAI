@@ -145,6 +145,32 @@ Required variables have no default; the backend refuses to start without them.
 | `RETRIEVAL_EF_SEARCH`     | `100`   | HNSW `ef_search` (recall vs speed).                                  |
 | `RAG_CONTEXT_MAX_TOKENS`  | `6000`  | Token budget for the sources sent to the model.                      |
 
+## Voice (ADR 0011, ADR 0018)
+
+| Variable                          | Default                  | Description                                            |
+| --------------------------------- | ------------------------ | ------------------------------------------------------ |
+| `SPEECH_PROVIDER`                 | `none`                   | `openai` enables DocuMind voice (transcription + speech; uses `OPENAI_API_KEY`). `none`: browser speech only. |
+| `STT_MODEL`                       | `gpt-4o-mini-transcribe` | Speech-to-text model.                                  |
+| `TTS_MODEL`                       | `gpt-4o-mini-tts`        | Text-to-speech model.                                  |
+| `TTS_VOICE`                       | `alloy`                  | Default voice (users can choose another).              |
+| `SPEECH_TIMEOUT_SECONDS`          | `60`                     | Provider timeout.                                      |
+| `SPEECH_MAX_AUDIO_BYTES`          | `10485760`               | Largest recording accepted for transcription.          |
+| `SPEECH_MAX_TEXT_CHARS`           | `4096`                   | Longest text per speech request.                       |
+| `RATE_LIMIT_VOICE_PER_USER`       | `120`                    | Transcription and speech requests per user per window. |
+| `RATE_LIMIT_VOICE_WINDOW_SECONDS` | `60`                     | Window for the above.                                  |
+
+Each workspace also has a voice policy (`enabled` / `browser` / `disabled`), set by admins in
+Settings → Voice. Audio is never stored.
+
+## Figure descriptions
+
+| Variable                       | Default | Description                                                      |
+| ------------------------------ | ------- | ---------------------------------------------------------------- |
+| `FIGURE_DESCRIPTIONS_ENABLED`  | `false` | Describe images in PDFs with a vision model during processing (one call per figure). |
+| `VISION_MODEL`                 | *(LLM_MODEL)* | Model for descriptions.                                    |
+| `FIGURE_MAX_PER_DOCUMENT`      | `20`    | Cap per document; extra figures are noted, not described.        |
+| `FIGURE_MIN_SIZE_POINTS`       | `72`    | Smaller images (icons, bullets) are ignored.                     |
+
 ## Conversations
 
 | Variable                           | Default | Description                                                     |

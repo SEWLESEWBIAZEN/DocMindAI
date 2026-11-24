@@ -198,6 +198,33 @@ class RetrievalRepository:
             for chunk, title, r in (await self._s.execute(stmt)).all()
         ]
 
+    async def document_chunks(
+        self,
+        workspace_id: uuid.UUID,
+        document_id: uuid.UUID,
+        *,
+        page_start: int | None,
+        page_end: int | None,
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        """A document's current chunks in reading order, optionally limited to pages.
+
+        Same visibility filter as search: ready, not archived, current version.
+        """
+        scope = SearchScope(workspace_id, frozenset({document_id}), None)
+        stmt = _base().where(*_visible(scope))
+        if page_start is not None:
+            stmt = stmt.where(
+                func.coalesce(DocumentChunk.page_end, DocumentChunk.page_start) >= page_start
+            )
+        if page_end is not None:
+            stmt = stmt.where(DocumentChunk.page_start <= page_end)
+        stmt = stmt.order_by(DocumentChunk.chunk_index).limit(limit)
+        return [
+            _to_domain(chunk, title, score=1.0)
+            for chunk, title in (await self._s.execute(stmt)).all()
+        ]
+
     async def documents(
         self, workspace_id: uuid.UUID, ids: set[uuid.UUID]
     ) -> dict[uuid.UUID, DocumentAvailability]:

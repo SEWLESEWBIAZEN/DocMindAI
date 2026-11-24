@@ -321,6 +321,33 @@
         "title": "AuditLogResponse",
         "type": "object"
       },
+      "Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post": {
+        "properties": {
+          "audio": {
+            "contentMediaType": "application/octet-stream",
+            "description": "WebM/Ogg/MP3/MP4/WAV recording",
+            "title": "Audio",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "required": [
+          "audio"
+        ],
+        "title": "Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post",
+        "type": "object"
+      },
       "Body_upload_document_api_v1_workspaces__workspace_id__documents_post": {
         "properties": {
           "collection_id": {
@@ -2705,6 +2732,41 @@
         "title": "SourcesRequest",
         "type": "object"
       },
+      "SpeechRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "speed": {
+            "default": 1.0,
+            "maximum": 2.0,
+            "minimum": 0.5,
+            "title": "Speed",
+            "type": "number"
+          },
+          "text": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SpeechRequest",
+        "type": "object"
+      },
       "StepUpResponse": {
         "properties": {
           "access_token": {
@@ -2733,6 +2795,38 @@
           "mfa_verified_at"
         ],
         "title": "StepUpResponse",
+        "type": "object"
+      },
+      "SummaryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "page_end": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page End"
+          },
+          "page_start": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First page (omit for the whole document)",
+            "title": "Page Start"
+          }
+        },
+        "title": "SummaryRequest",
         "type": "object"
       },
       "TokenRequest": {
@@ -2777,6 +2871,31 @@
           "user"
         ],
         "title": "TokenResponse",
+        "type": "object"
+      },
+      "TranscriptResponse": {
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "language"
+        ],
+        "title": "TranscriptResponse",
         "type": "object"
       },
       "UpdateCollectionRequest": {
@@ -2973,6 +3092,73 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoicePolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "enum": [
+              "enabled",
+              "browser",
+              "disabled"
+            ],
+            "title": "Policy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy"
+        ],
+        "title": "VoicePolicyRequest",
+        "type": "object"
+      },
+      "VoiceSettingsResponse": {
+        "properties": {
+          "max_audio_bytes": {
+            "title": "Max Audio Bytes",
+            "type": "integer"
+          },
+          "max_text_chars": {
+            "title": "Max Text Chars",
+            "type": "integer"
+          },
+          "policy": {
+            "description": "\"enabled\": DocuMind's speech service and browser speech; \"browser\": only the browser's own speech features (DocuMind never receives audio); \"disabled\": no voice.",
+            "enum": [
+              "enabled",
+              "browser",
+              "disabled"
+            ],
+            "title": "Policy",
+            "type": "string"
+          },
+          "provider_configured": {
+            "title": "Provider Configured",
+            "type": "boolean"
+          },
+          "server_speech": {
+            "description": "Whether /transcribe and /speech can be used here.",
+            "title": "Server Speech",
+            "type": "boolean"
+          },
+          "voices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Voices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "policy",
+          "server_speech",
+          "provider_configured",
+          "voices",
+          "max_audio_bytes",
+          "max_text_chars"
+        ],
+        "title": "VoiceSettingsResponse",
         "type": "object"
       },
       "WarningResponse": {
@@ -6756,6 +6942,74 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/summary": {
+      "post": {
+        "operationId": "summarize_document_api_v1_workspaces__workspace_id__documents__document_id__summary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Summarize a document or page range, with citations (reading mode)",
+        "tags": [
+          "search"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/versions": {
       "get": {
         "operationId": "list_versions_api_v1_workspaces__workspace_id__documents__document_id__versions_get",
@@ -7362,6 +7616,222 @@
         "summary": "Usage summary for the period (requires usage.read)",
         "tags": [
           "usage"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/voice": {
+      "get": {
+        "operationId": "get_voice_api_v1_workspaces__workspace_id__voice_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Voice settings for this workspace",
+        "tags": [
+          "voice"
+        ]
+      },
+      "put": {
+        "operationId": "set_voice_policy_api_v1_workspaces__workspace_id__voice_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoicePolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set the workspace voice policy (admins)",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/voice/speech": {
+      "post": {
+        "operationId": "speech_api_v1_workspaces__workspace_id__voice_speech_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeechRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "audio/mpeg": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Text to speech, streamed as MP3 (nothing is stored)",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/voice/transcribe": {
+      "post": {
+        "operationId": "transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Speech to text (audio is not stored)",
+        "tags": [
+          "voice"
         ]
       }
     }

@@ -23,5 +23,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0015](0015-retrieval-and-grounded-answers.md) | Retrieval and grounded answers (RAG) | Accepted |
 | [0016](0016-conversations-and-streaming.md) | Conversations and answer streaming (amends 0015) | Accepted |
 | [0017](0017-frontend-application-architecture.md) | Frontend application architecture | Accepted |
+| [0018](0018-voice-and-accessible-reading.md) | Voice and accessible reading (implements 0011) | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

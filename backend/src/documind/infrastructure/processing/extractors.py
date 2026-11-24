@@ -48,6 +48,19 @@ class OcrOptions:
     tessdata_dir: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class FigureOptions:
+    """Capture raster figures for description (ADR 0011). Off unless a describer exists."""
+
+    enabled: bool = False
+    min_size_points: float = 72.0
+    max_per_document: int = 20
+    # Images covering more of the page than this are scans (OCR handles them).
+    max_page_fraction: float = 0.85
+    dpi: int = 144
+    max_pixels: int = 1536
+
+
 def find_tessdata() -> str | None:
     matches = sorted(glob.glob("/usr/share/tesseract-ocr/*/tessdata")) + sorted(
         glob.glob("/usr/share/tessdata")
@@ -66,9 +79,12 @@ def _check_size(chars: int, limits: ExtractionLimits) -> None:
 
 
 class PdfExtractor:
-    def __init__(self, limits: ExtractionLimits, ocr: OcrOptions) -> None:
+    def __init__(
+        self, limits: ExtractionLimits, ocr: OcrOptions, figures: FigureOptions | None = None
+    ) -> None:
         self._limits = limits
         self._ocr = ocr
+        self._figures = figures or FigureOptions()
         self._tessdata = ocr.tessdata_dir or find_tessdata()
 
     def extract(self, data: bytes) -> ExtractedDocument:
@@ -112,6 +128,7 @@ class PdfExtractor:
         pages: list[ExtractedPage] = []
         ocr_failed = False
         total_chars = 0
+        figures_kept = figures_skipped = 0
         for index, page in enumerate(pdf):
             number = index + 1
             blocks_raw = raw_pages[index]
@@ -134,7 +151,17 @@ class PdfExtractor:
                 elif text_chars == 0:
                     warnings.append(f"no_text_layer:page={number}")
             blocks: list[Block] = []
-            for raw in blocks_raw:
+            figure_boxes = [] if ocr_used else self._figure_boxes(page)
+            for raw in self._with_figures(blocks_raw, figure_boxes):
+                if raw.get("figure") is not None:
+                    if figures_kept >= self._figures.max_per_document:
+                        figures_skipped += 1
+                        continue
+                    image = self._render(page, raw["figure"])
+                    if image:
+                        blocks.append(Block(BlockKind.FIGURE, "", image=image))
+                        figures_kept += 1
+                    continue
                 text = raw["text"].strip()
                 if not text:
                     continue
@@ -155,6 +182,8 @@ class PdfExtractor:
             warnings.append("ocr_unavailable")
         if ocr_failed:
             warnings.append("ocr_failed_on_some_pages")
+        if figures_skipped:
+            warnings.append(f"figures_not_described:count={figures_skipped}")
         doc = ExtractedDocument(
             title=(pdf.metadata or {}).get("title") or None,
             pages=tuple(pages),
@@ -169,6 +198,50 @@ class PdfExtractor:
                 warnings=(*doc.warnings, f"ocr_applied:pages={','.join(map(str, doc.ocr_pages))}"),
             )
         return doc
+
+    def _figure_boxes(self, page: Any) -> list[Any]:
+        """Bounding boxes of meaningful raster images on a page, in reading order."""
+        if not self._figures.enabled:
+            return []
+        area = page.rect.width * page.rect.height
+        minimum = self._figures.min_size_points
+        boxes = []
+        for block in page.get_text("dict", sort=True).get("blocks", []):
+            if block.get("type") != 1:
+                continue
+            rect = pymupdf.Rect(block["bbox"])  # type: ignore[no-untyped-call]
+            if rect.width < minimum or rect.height < minimum:
+                continue  # icons, bullets, rules
+            if area and rect.width * rect.height / area > self._figures.max_page_fraction:
+                continue  # a scanned page or a background
+            boxes.append(rect)
+        return boxes
+
+    @staticmethod
+    def _with_figures(blocks: list[dict[str, Any]], boxes: list[Any]) -> list[dict[str, Any]]:
+        """Insert figures between text blocks by vertical position."""
+        if not boxes:
+            return blocks
+        merged: list[dict[str, Any]] = []
+        pending = sorted(boxes, key=lambda r: (r.y0, r.x0))
+        for block in blocks:
+            while pending and pending[0].y0 < block.get("y0", 0.0):
+                merged.append({"figure": pending.pop(0), "text": ""})
+            merged.append(block)
+        merged.extend({"figure": box, "text": ""} for box in pending)
+        return merged
+
+    def _render(self, page: Any, rect: Any) -> bytes | None:
+        """PNG of the figure area (includes vector labels drawn over the image)."""
+        longest = max(rect.width, rect.height) or 1.0
+        dpi = min(self._figures.dpi, int(self._figures.max_pixels * 72 / longest)) or 72
+        try:
+            pixmap = page.get_pixmap(clip=rect, dpi=max(dpi, 36))
+            data: bytes = pixmap.tobytes("png")
+        except Exception:
+            logger.warning("could not render a figure", exc_info=True)
+            return None
+        return data
 
     @staticmethod
     def _key(text: str) -> str:
@@ -196,6 +269,7 @@ class PdfExtractor:
             out.append(
                 {
                     "text": text,
+                    "y0": float(block.get("bbox", (0, 0, 0, 0))[1]),
                     "size": statistics.median(sizes) if sizes else 0.0,
                     "bold": chars > 0 and bold_chars / chars > 0.6,
                     "lines": len(lines),
@@ -439,11 +513,14 @@ class CompositeExtractor:
     """Selects the extractor for a validated document format."""
 
     def __init__(
-        self, limits: ExtractionLimits | None = None, ocr: OcrOptions | None = None
+        self,
+        limits: ExtractionLimits | None = None,
+        ocr: OcrOptions | None = None,
+        figures: FigureOptions | None = None,
     ) -> None:
         limits = limits or ExtractionLimits()
         self._by_format: dict[DocumentFormat, _Extractor] = {
-            DocumentFormat.PDF: PdfExtractor(limits, ocr or OcrOptions()),
+            DocumentFormat.PDF: PdfExtractor(limits, ocr or OcrOptions(), figures),
             DocumentFormat.DOCX: DocxExtractor(limits),
             DocumentFormat.TXT: TextExtractor(limits, markdown=False),
             DocumentFormat.MARKDOWN: TextExtractor(limits, markdown=True),

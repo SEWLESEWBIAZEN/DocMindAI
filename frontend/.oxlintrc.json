@@ -14,6 +14,7 @@
         "src/features/auth/AuthProvider.tsx",
         "src/features/auth/routeGuards.tsx",
         "src/features/documents/UploadManager.tsx",
+        "src/features/voice/VoiceContext.tsx",
         "src/lib/workspace/WorkspaceContext.tsx"
       ],
       "rules": {

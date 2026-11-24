@@ -28,6 +28,7 @@ import { useAuth, useUser } from '../auth/AuthProvider'
 import { PasswordMeter } from '../auth/pages'
 import { validatePassword } from '../auth/password'
 import { formatBytes, formatDate, formatDateTime, formatNumber, formatRelative } from '../documents/format'
+import { VoiceSettingsPanel, WorkspaceVoicePolicy } from '../voice/VoiceSettingsPanel'
 
 const ROLE_ORDER: Role[] = ['owner', 'admin', 'member', 'viewer']
 const RANK: Record<Role, number> = { owner: 40, admin: 30, member: 20, viewer: 10 }
@@ -450,6 +451,7 @@ export function SettingsPage() {
             </dl>
           )}
         </Panel>
+        <WorkspaceVoicePolicy />
         {can('audit.read') && <AuditLogPanel />}
         {workspace.kind === 'organization' && (
           <Panel title="Leave workspace" description="Owners must hand over ownership before leaving.">
@@ -546,6 +548,7 @@ export function ProfilePage() {
       <div className="stack" style={{ gap: 20 }}>
         <ProfileDetails />
         <MyInvitations />
+        <VoiceSettingsPanel />
         <PasswordPanel />
         <SecurityPanel />
         <SessionsPanel />

@@ -93,7 +93,17 @@ class LocalExtractiveLLM:
     def _answer(self, messages: list[ChatMessage]) -> str:
         prompt = "\n".join(m.content for m in messages if m.role == "user")
         question_match = _QUESTION.search(prompt)
-        question = _terms(question_match.group(1) if question_match else prompt)
+        raw_question = question_match.group(1) if question_match else prompt
+        if "summar" in raw_question.lower():
+            # Summaries: the first sentence of the first few sources, cited.
+            lead = []
+            for source_id, body in _SOURCE.findall(prompt)[:4]:
+                sentences = split_sentences(" ".join(body.split()))
+                if sentences:
+                    lead.append(f"{sentences[0]} [{source_id}]")
+            if lead:
+                return " ".join(lead)
+        question = _terms(raw_question)
         scored: list[tuple[float, int, str]] = []
         for source_id, body in _SOURCE.findall(prompt):
             for sentence in split_sentences(" ".join(body.split())):

@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
-import { Alert, Button, Dialog, Field, TextInput } from '../../components/ui'
+import { Alert, announce, Button, Dialog, Field, TextInput } from '../../components/ui'
 import { errorMessage } from '../../lib/api/errors'
 import { useWorkspace } from '../../lib/workspace/WorkspaceContext'
 import { useUser } from '../auth/AuthProvider'
@@ -32,6 +32,10 @@ export function StepUpDialog({
   const [useRecovery, setUseRecovery] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (open) announce(`${title} ${description} Enter your authentication code to confirm.`)
+  }, [open, title, description])
 
   const close = () => {
     setCode('')

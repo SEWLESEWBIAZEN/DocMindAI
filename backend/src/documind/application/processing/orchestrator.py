@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from documind.application.identity.common import utcnow
 from documind.application.ports import ObjectStorageProvider
 from documind.application.processing.embedding_service import EmbeddedTexts, EmbeddingService
+from documind.application.processing.figures import FigureDescriber
 from documind.application.processing.jobs import at, retry_delay_seconds
 from documind.core.config import Settings
 from documind.domain.documents.files import DocumentFormat
@@ -79,7 +80,9 @@ class ProcessingOrchestrator:
         embeddings: EmbeddingService,
         *,
         worker: str = "worker",
+        figures: FigureDescriber | None = None,
     ) -> None:
+        self._figures = figures or FigureDescriber(None)
         self._sessions = session_factory
         self._settings = settings
         self._storage = storage
@@ -156,6 +159,7 @@ class ProcessingOrchestrator:
             buffer = io.BytesIO()
             await self._storage.download_to(key, buffer)
             extracted = await asyncio.to_thread(self._extractor.extract, buffer.getvalue(), fmt)
+            extracted, _, _ = await self._figures.describe(extracted)
             document = normalize_document(extracted)
             if document.char_count == 0:
                 raise PermanentProcessingError(

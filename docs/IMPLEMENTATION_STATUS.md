@@ -291,18 +291,31 @@ Tests: 295 unit and 160 integration tests (backend), including two against a rea
   answer is marked stale (5 minutes by default).
 - No chat UI yet (Phase 7).
 
-## Phase 6b: Voice and accessible reading (new, ADR 0011)
+## Phase 6b: Voice and accessible reading ✅ (ADR 0011, ADR 0018)
 
-- [ ] Figure and chart descriptions generated at processing time (vision model), searchable and read aloud
-- [ ] Speech adapters for the Phase 5 ports (speech-to-text, text-to-speech)
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Ask by voice (speech-to-text → normal conversation pipeline, same authorization) | [x] | Mic button and Ctrl+Shift+Space; browser or DocuMind engine; e2e: dictated question → review → answer |
+| Answers read aloud, sentence by sentence, with spoken sources | [x] | Listen per answer; auto-read while streaming plus "Sources. 1: …"; unit tests for marker handling |
+| Document reading mode: read page/section, next/previous, summarize, ask in context | [x] | Viewer listening mode with sentence highlight; `POST /documents/{id}/summary` (page range, cited, isolated) |
+| Opt-in voice, never auto-play; pause/stop shortcuts; adjustable speed | [x] | Off by default; Escape, Ctrl+Shift+Space, Ctrl+Shift+↑/↓; reading bar; speed 0.5–2× |
+| Spoken confirmation for destructive actions | [x] | Confirm and 2FA dialogs announce themselves when voice is on (e2e: archive) |
+| Per-workspace voice policy; audio not stored by default | [x] | Migration 0008; `GET/PUT /voice`, audited; 403 when restricted; tests assert nothing is persisted |
+| Speech provider adapters | [x] | OpenAI STT/TTS behind the Phase 5 ports (mocked HTTP tests); browser fallback |
+| Figure and chart descriptions (deferred from Phase 5) | [x] | PDF raster figures → vision description → searchable, cited (integration test); off by default |
+| Testing sessions with blind and low-vision users | [ ] | Pending (Phase 9) |
 
-- [ ] Ask questions by voice (speech-to-text → existing RAG pipeline, same authorization)
-- [ ] Answers read aloud, streamed sentence by sentence, with spoken citations
-- [ ] Document reading mode: read page or section, next/previous, summarize, ask in context
-- [ ] Opt-in voice, never auto-play over screen readers; pause/stop shortcuts; adjustable speed
-- [ ] Spoken confirmation for destructive actions
-- [ ] Per-workspace voice policy; audio not stored by default
-- [ ] Testing sessions with blind and low-vision users
+Tests: backend 309 unit and 179 integration; frontend 78 unit; Playwright 4 end-to-end (voice journey uses
+simulated speech APIs; the rest is the real stack).
+
+### Phase 6b follow-ups / known issues
+
+- **Not verified against the real OpenAI speech or vision APIs** (no key or network here); adapters are
+  tested against mocked HTTP. Browser speech was exercised with simulated speech APIs in headless Chromium.
+- Testing with blind and low-vision users, and with NVDA, JAWS and VoiceOver, is still required (Phase 9).
+- Audio minutes and vision calls aren't metered yet (Phase 8 usage tracking).
+- Vector-drawn charts (not images) aren't described; DOCX images aren't described yet.
+- Push-to-talk only (no continuous conversation mode).
 
 ## Phase 7: Frontend implementation ✅
 

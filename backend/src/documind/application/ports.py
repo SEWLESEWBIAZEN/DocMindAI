@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import BinaryIO, Protocol
 from uuid import UUID
@@ -264,3 +264,28 @@ class CancellationRegistry(Protocol):
     async def is_requested(self, message_id: UUID) -> bool: ...
 
     async def clear(self, message_id: UUID) -> None: ...
+
+
+# --------------------------------------------------------------------------- #
+# Figure descriptions (ADR 0011)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True, slots=True)
+class ImageDescription:
+    text: str
+    usage: LLMUsage = field(default_factory=LLMUsage)
+
+
+class ImageDescriber(Protocol):
+    """Describes a figure for a reader who can't see it.
+
+    Raises Transient/PermanentProcessingError on failure.
+    """
+
+    @property
+    def model(self) -> str: ...
+
+    async def describe(
+        self, image: bytes, *, media_type: str, context: str
+    ) -> ImageDescription: ...

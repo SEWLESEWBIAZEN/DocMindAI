@@ -19,12 +19,15 @@ from documind.application.ports import (
     CancellationRegistry,
     EmailSender,
     EmbeddingProvider,
+    ImageDescriber,
     JobDispatcher,
     LLMProvider,
     MalwareScanner,
     ObjectStorageProvider,
     PasswordHasher,
     RateLimiter,
+    SpeechToTextProvider,
+    TextToSpeechProvider,
 )
 from documind.core.config import Settings, mfa_key_bytes
 from documind.infrastructure.cache.cancellation import RedisCancellationRegistry
@@ -37,9 +40,11 @@ from documind.infrastructure.embeddings.local_provider import LocalHashingEmbedd
 from documind.infrastructure.embeddings.openai_provider import OpenAIEmbeddingProvider
 from documind.infrastructure.llm.local_provider import LocalExtractiveLLM
 from documind.infrastructure.llm.openai_provider import OpenAIChatProvider
+from documind.infrastructure.llm.vision import LocalImageDescriber, OpenAIImageDescriber
 from documind.infrastructure.processing.extractors import (
     CompositeExtractor,
     ExtractionLimits,
+    FigureOptions,
     OcrOptions,
 )
 from documind.infrastructure.ratelimit.redis_limiter import RedisRateLimiter
@@ -47,6 +52,7 @@ from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
 from documind.infrastructure.security.malware import ClamAVScanner, NoopMalwareScanner
 from documind.infrastructure.security.passwords import Argon2PasswordHasher
 from documind.infrastructure.security.secret_box import SecretBox
+from documind.infrastructure.speech.openai_provider import OpenAISpeechProvider
 from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
@@ -76,6 +82,9 @@ class Container:
     job_dispatcher: JobDispatcher
     llm_provider: LLMProvider
     cancellation: CancellationRegistry
+    image_describer: ImageDescriber | None = None
+    speech_to_text: SpeechToTextProvider | None = None
+    text_to_speech: TextToSpeechProvider | None = None
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -87,6 +96,7 @@ class Container:
 
 
 def build_container(settings: Settings) -> Container:
+    image_describer = _build_image_describer(settings)
     engine = create_engine(settings)
     redis = create_redis_client(settings)
     s3_client = create_s3_client(settings)
@@ -134,6 +144,11 @@ def build_container(settings: Settings) -> Container:
                 languages=settings.ocr_languages,
                 dpi=settings.ocr_dpi,
             ),
+            FigureOptions(
+                enabled=image_describer is not None,
+                min_size_points=settings.figure_min_size_points,
+                max_per_document=settings.figure_max_per_document,
+            ),
         ),
         embedding_provider=_build_embedding_provider(settings),
         job_dispatcher=CeleryJobDispatcher(
@@ -141,6 +156,8 @@ def build_container(settings: Settings) -> Container:
         ),
         llm_provider=_build_llm_provider(settings),
         cancellation=RedisCancellationRegistry(redis),
+        image_describer=image_describer,
+        **_build_speech(settings),
     )
 
 
@@ -171,6 +188,35 @@ def _build_llm_provider(settings: Settings) -> LLMProvider:
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
     )
+
+
+def _build_image_describer(settings: Settings) -> ImageDescriber | None:
+    if not settings.figure_descriptions_enabled or settings.figure_max_per_document == 0:
+        return None
+    if settings.llm_provider == "local":
+        return LocalImageDescriber()
+    if settings.openai_api_key is None:  # also enforced by settings validation
+        raise ValueError("OPENAI_API_KEY is required for figure descriptions")
+    return OpenAIImageDescriber(
+        api_key=settings.openai_api_key.get_secret_value(),
+        model=settings.vision_model or settings.llm_model,
+        base_url=settings.openai_base_url,
+        timeout_seconds=settings.llm_timeout_seconds,
+    )
+
+
+def _build_speech(settings: Settings) -> dict[str, Any]:
+    if settings.speech_provider != "openai" or settings.openai_api_key is None:
+        return {"speech_to_text": None, "text_to_speech": None}
+    provider = OpenAISpeechProvider(
+        api_key=settings.openai_api_key.get_secret_value(),
+        stt_model=settings.stt_model,
+        tts_model=settings.tts_model,
+        default_voice=settings.tts_voice,
+        base_url=settings.openai_base_url,
+        timeout_seconds=settings.speech_timeout_seconds,
+    )
+    return {"speech_to_text": provider, "text_to_speech": provider}
 
 
 def _build_scanner(settings: Settings) -> MalwareScanner:

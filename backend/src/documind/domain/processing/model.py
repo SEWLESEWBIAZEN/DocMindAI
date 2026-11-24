@@ -10,6 +10,9 @@ class BlockKind(StrEnum):
     HEADING = "heading"
     PARAGRAPH = "paragraph"
     TABLE = "table"
+    # An image in reading order. `image` holds a PNG crop until a description
+    # replaces it (ADR 0011); figures without a description are dropped.
+    FIGURE = "figure"
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +21,7 @@ class Block:
     text: str
     # Heading depth (1 = top level); None for non-headings.
     level: int | None = None
+    image: bytes | None = None
 
 
 @dataclass(frozen=True, slots=True)

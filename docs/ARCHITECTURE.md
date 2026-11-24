@@ -251,6 +251,15 @@ POST …/conversations/{id}/messages            (Accept: text/event-stream → S
 | `api/sse.py` | SSE event encoding |
 | `infrastructure/cache/cancellation.py` | Redis cancel flags |
 
+### Voice and accessible reading (Phase 6b)
+
+See ADR 0018. The browser holds a single `speaker` queue (browser `speechSynthesis` or
+`POST /voice/speech`) and dictation (`SpeechRecognition` or `MediaRecorder` → `POST /voice/transcribe`);
+`VoiceProvider` combines user preferences with the workspace voice policy (`GET/PUT /voice`) and owns
+shortcuts and the reading bar. Answers are spoken with their sources; the viewer's listening mode reads
+page by page and can summarize a page range (`POST /documents/{id}/summary`). PDFs can carry figure
+descriptions produced during processing (`ImageDescriber`, `application/processing/figures.py`).
+
 ## 8. Runtime resources and lifecycle
 
 `create_app()` builds the app. The lifespan:

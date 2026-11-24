@@ -108,11 +108,20 @@ class Workspace(Base):
             " AND personal_owner_id IS NULL)",
             name="kind_owner_consistent",
         ),
+        CheckConstraint(
+            "voice_policy IN ('enabled', 'browser', 'disabled')", name="voice_policy_valid"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[str] = mapped_column(String(20))
     name: Mapped[str] = mapped_column(String(100))
+    # ADR 0011: "enabled" allows DocuMind's speech service (audio is sent to the
+    # speech provider, never stored); "browser" allows only the browser's own
+    # speech features; "disabled" turns voice off for the workspace.
+    voice_policy: Mapped[str] = mapped_column(
+        String(16), default="enabled", server_default="enabled"
+    )
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), unique=True
     )

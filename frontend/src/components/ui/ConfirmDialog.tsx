@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 
+import { announce } from './announce'
 import { Button } from './Button'
 import { Dialog } from './Dialog'
 
@@ -23,6 +24,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const confirm = useCallback<Confirm>((next) => {
     resolver.current?.(false)
     setOptions(next)
+    const description = typeof next.description === 'string' ? ` ${next.description}` : ''
+    announce(`${next.title}${description} Press ${next.confirmLabel ?? 'Confirm'} to continue, or Escape to cancel.`)
     return new Promise<boolean>((resolve) => {
       resolver.current = resolve
     })

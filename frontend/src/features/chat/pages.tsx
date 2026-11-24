@@ -20,7 +20,7 @@ import {
   useToast,
 } from '../../components/ui'
 import { ApiError, errorMessage } from '../../lib/api/errors'
-import type { ChatMessage, Citation, Collection, ConversationDetail, DocumentItem } from '../../lib/api/types'
+import type { ChatMessage, Collection, ConversationDetail, DocumentItem } from '../../lib/api/types'
 import { useWorkspace } from '../../lib/workspace/WorkspaceContext'
 import { useUser } from '../auth/AuthProvider'
 import { documentKeys, getDocument, listDocuments } from '../documents/api'
@@ -40,8 +40,11 @@ import {
   setConversationSources,
   type StreamEvent,
 } from './api'
+import { friendlyDictationError, startDictation, type Dictation } from '../voice/dictation'
+import { answerToSpeech, completedSentences, sourcesSummary, splitSentences, withoutMarkers } from '../voice/text'
+import { useVoice } from '../voice/VoiceContext'
 import { AnswerMarkdown } from './AnswerMarkdown'
-import { sourceHref } from './citations'
+import { CitationCard } from './CitationCard'
 
 const MAX_CHARS = 2000
 
@@ -98,6 +101,9 @@ export function ChatPage() {
   const [activeCitation, setActiveCitation] = useState<{ message: string; n: number } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const controller = useRef<AbortController | null>(null)
+  const voice = useVoice()
+  // Reading a streamed answer aloud as it arrives (opt-in).
+  const reading = useRef<{ active: boolean; offset: number; text: string }>({ active: false, offset: 0, text: '' })
   const scroller = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const streaming = live !== null
@@ -175,6 +181,11 @@ export function ChatPage() {
     const abort = new AbortController()
     controller.current = abort
     let created = false
+    reading.current = {
+      active: Boolean(voice.prefs.autoRead && voice.ttsEngine && voice.openStream('answer')),
+      offset: 0,
+      text: '',
+    }
     const onEvent = (event: StreamEvent) => {
       switch (event.type) {
         case 'message.created':
@@ -185,13 +196,29 @@ export function ChatPage() {
             persist(conversationId, (items) => [...items, userMessage])
           }
           break
-        case 'answer.delta':
+        case 'answer.delta': {
           setLive((current) => (current ? { ...current, text: current.text + event.text } : current))
+          const r = reading.current
+          r.text += event.text
+          if (r.active) {
+            const { sentences, offset } = completedSentences(r.text, r.offset)
+            r.offset = offset
+            voice.append(sentences)
+          }
           break
+        }
         case 'answer.completed': {
           const final = event.message
           persist(conversationId, (items) => [...items.filter((m) => m.id !== final.id), final])
           setLive(null)
+          const r = reading.current
+          if (r.active) {
+            voice.append(splitSentences(withoutMarkers(r.text.slice(r.offset))))
+            const sources = voice.prefs.speakCitations ? sourcesSummary(final.citations) : null
+            if (sources) voice.append([sources])
+            voice.closeStream()
+            r.active = false
+          }
           const count = final.citations.length
           setAnnouncement(
             final.answer_status === 'insufficient_context'
@@ -207,6 +234,8 @@ export function ChatPage() {
           }
           setLive(null)
           setAnnouncement('Answer stopped.')
+          if (reading.current.active) voice.stop()
+          reading.current.active = false
           break
         case 'answer.error':
           if (event.message) {
@@ -215,12 +244,16 @@ export function ChatPage() {
           }
           setLive(null)
           toast.error(event.detail)
+          if (reading.current.active) voice.stop()
+          reading.current.active = false
           break
       }
     }
     try {
       await start({ signal: abort.signal, onEvent })
     } catch (err) {
+      if (reading.current.active) voice.stop()
+      reading.current.active = false
       if (abort.signal.aborted) return
       setLive(null)
       toast.error(
@@ -267,6 +300,8 @@ export function ChatPage() {
 
   const stop = async () => {
     if (!live) return
+    if (reading.current.active) voice.stop()
+    reading.current.active = false
     setLive({ ...live, stopping: true })
     const assistantId = live.assistant?.id
     if (activeId && assistantId) {
@@ -438,6 +473,18 @@ export function ChatPage() {
             onKeyDown={onKeyDown}
             aria-describedby="composer-hint"
           />
+          {voice.sttEngine && !streaming && (
+            <MicButton
+              onText={(text) => {
+                if (voice.prefs.sendAfterDictation) {
+                  void ask(text)
+                } else {
+                  setDraft((current) => (current.trim() ? `${current.trim()} ${text}` : text))
+                  input.current?.focus()
+                }
+              }}
+            />
+          )}
           {streaming ? (
             <Button variant="secondary" icon="stop" onClick={() => void stop()} loading={live?.stopping}>
               Stop
@@ -570,6 +617,7 @@ function AssistantMessage({
   onCitation: (n: number) => void
 }) {
   const toast = useToast()
+  const voice = useVoice()
   const numbers = useMemo(() => new Set(message.citations.map((c) => c.number)), [message.citations])
   const cards = useRef<HTMLDivElement>(null)
 
@@ -639,6 +687,21 @@ function AssistantMessage({
               Copy
             </Button>
           )}
+          {message.content && voice.ttsEngine && (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="volume"
+              onClick={() =>
+                voice.speak(
+                  answerToSpeech(message.content, message.citations, { speakCitations: voice.prefs.speakCitations }),
+                  { label: 'answer' },
+                )
+              }
+            >
+              Listen
+            </Button>
+          )}
           {canRegenerate && (
             <Button size="sm" variant="ghost" icon="refresh" onClick={onRegenerate}>
               Regenerate
@@ -647,34 +710,6 @@ function AssistantMessage({
         </div>
       </div>
     </article>
-  )
-}
-
-export function CitationCard({ citation, active }: { citation: Citation; active: boolean }) {
-  const { base } = useWorkspace()
-  const href = citation.document_available ? sourceHref(base, citation) : null
-  return (
-    <div className={`citation-card${active ? ' citation-card--active' : ''}`} data-cite={citation.number} id={`cite-card-${citation.number}`}>
-      <div className="citation-card__head">
-        <span className="citation-card__num" aria-hidden="true">
-          {citation.number}
-        </span>
-        <span className="citation-card__doc" title={citation.label}>
-          <span className="sr-only">Source {citation.number}: </span>
-          {citation.label}
-        </span>
-      </div>
-      <p className="citation-card__excerpt">“{citation.excerpt}”</p>
-      {href ? (
-        <Link to={href} className="citation-card__link" aria-label={`Open ${citation.spoken_label}`}>
-          Open source <Icon name="arrowRight" size={13} />
-        </Link>
-      ) : (
-        <span className="muted" style={{ fontSize: '0.8rem' }}>
-          The document is no longer available.
-        </span>
-      )}
-    </div>
   )
 }
 
@@ -994,6 +1029,103 @@ export function ConversationsPage() {
       {renaming && (
         <RenameConversationDialog conversation={renaming} onClose={() => setRenaming(null)} onSaved={() => void refresh()} />
       )}
+    </>
+  )
+}
+
+
+/** Push-to-talk: press to start listening, press again (or pause speaking) to finish. */
+function MicButton({ onText }: { onText: (text: string) => void }) {
+  const voice = useVoice()
+  const { workspace } = useWorkspace()
+  const toast = useToast()
+  const [listening, setListening] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [interim, setInterim] = useState('')
+  const [status, setStatus] = useState('')
+  const session = useRef<Dictation | null>(null)
+
+  const finish = useCallback(
+    async (promise: Promise<string>) => {
+      setBusy(true)
+      try {
+        const text = (await promise).trim()
+        if (text) {
+          setStatus(`Heard: ${text}`)
+          onText(text)
+        } else {
+          setStatus("I didn't catch that.")
+        }
+      } catch (err) {
+        toast.error(friendlyDictationError(err))
+        setStatus('')
+      } finally {
+        session.current = null
+        setListening(false)
+        setBusy(false)
+        setInterim('')
+      }
+    },
+    [onText, toast],
+  )
+
+  const toggle = useCallback(async () => {
+    if (busy) return
+    if (session.current) {
+      void finish(session.current.stop())
+      return
+    }
+    const engine = voice.sttEngine
+    if (!engine) return
+    voice.stop() // never record our own voice
+    try {
+      const dictation = await startDictation({
+        engine,
+        workspaceId: workspace.id,
+        language: voice.prefs.language || undefined,
+        onInterim: setInterim,
+      })
+      session.current = dictation
+      setListening(true)
+      setStatus('Listening. Press the microphone button or Control Shift Space when you are done.')
+      void dictation.done.then(() => {
+        if (session.current === dictation) void finish(dictation.done)
+      }, () => {
+        if (session.current === dictation) void finish(dictation.done)
+      })
+    } catch (err) {
+      toast.error(friendlyDictationError(err))
+    }
+  }, [busy, finish, toast, voice, workspace.id])
+
+  useEffect(() => {
+    voice.setDictationShortcut(() => void toggle())
+    return () => voice.setDictationShortcut(null)
+  }, [toggle, voice])
+
+  useEffect(() => () => session.current?.cancel(), [])
+
+  return (
+    <>
+      {listening && (
+        <span className="listening" aria-hidden="true">
+          <span className="listening__dot" />
+          {interim || 'Listening…'}
+        </span>
+      )}
+      <Button
+        className="mic-button"
+        variant="ghost"
+        icon="mic"
+        label={listening ? 'Stop voice input' : 'Ask by voice'}
+        aria-pressed={listening}
+        aria-keyshortcuts="Control+Shift+Space"
+        loading={busy}
+        onClick={() => void toggle()}
+      />
+      <span className="sr-only" role="status" aria-live="polite">
+        {status}
+      </span>
     </>
   )
 }

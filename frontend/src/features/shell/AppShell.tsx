@@ -16,6 +16,7 @@ import { ACCEPT } from '../documents/api'
 import { UploadProvider, useUploads } from '../documents/UploadManager'
 import { UploadTray } from '../documents/UploadTray'
 import { Logo } from '../landing/components/Logo'
+import { VoiceProvider } from '../voice/VoiceContext'
 
 /** `/app`: send the user to their default workspace. */
 export function AppHome() {
@@ -39,7 +40,9 @@ export function WorkspaceLayout() {
   return (
     <WorkspaceProvider workspace={workspace} workspaces={data}>
       <UploadProvider key={workspace.id} workspaceId={workspace.id}>
-        <Shell />
+        <VoiceProvider workspaceId={workspace.id}>
+          <Shell />
+        </VoiceProvider>
       </UploadProvider>
     </WorkspaceProvider>
   )

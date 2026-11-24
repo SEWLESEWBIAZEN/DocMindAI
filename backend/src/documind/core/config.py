@@ -145,6 +145,28 @@ class Settings(BaseSettings):
     rate_limit_ai_per_user: int = Field(default=30, ge=1)
     rate_limit_ai_window_seconds: int = Field(default=60, ge=1)
 
+    # --- Voice (ADR 0011) ----------------------------------------------------
+    # "openai": server speech-to-text and text-to-speech (uses OPENAI_API_KEY).
+    # "none": only the browser's built-in speech features are available.
+    speech_provider: Literal["openai", "none"] = "none"
+    stt_model: str = Field(default="gpt-4o-mini-transcribe", min_length=1, max_length=100)
+    tts_model: str = Field(default="gpt-4o-mini-tts", min_length=1, max_length=100)
+    tts_voice: str = Field(default="alloy", min_length=1, max_length=50)
+    speech_timeout_seconds: float = Field(default=60.0, gt=0)
+    speech_max_audio_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    speech_max_text_chars: int = Field(default=4096, ge=100, le=4096)
+    rate_limit_voice_per_user: int = Field(default=120, ge=1)
+    rate_limit_voice_window_seconds: int = Field(default=60, ge=1)
+
+    # --- Figure descriptions (ADR 0011) --------------------------------------
+    # Describe images in PDFs with a vision model during processing, so figures
+    # and charts become searchable, citable and readable aloud. Costs one model
+    # call per figure. Uses the LLM provider (the local one gives placeholders).
+    figure_descriptions_enabled: bool = False
+    vision_model: str | None = Field(default=None, max_length=100)
+    figure_max_per_document: int = Field(default=20, ge=0, le=500)
+    figure_min_size_points: float = Field(default=72.0, ge=10)
+
     # --- Conversations -------------------------------------------------------
     # Earlier turns sent to the model (most recent first, within the budget).
     conversation_history_turns: int = Field(default=6, ge=0, le=50)
@@ -259,6 +281,8 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
         if self.llm_provider == "openai" and self.openai_api_key is None:
             raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
+        if self.speech_provider == "openai" and self.openai_api_key is None:
+            raise ValueError("OPENAI_API_KEY is required when SPEECH_PROVIDER=openai")
         if self.chunk_overlap_tokens >= self.chunk_max_tokens // 2:
             raise ValueError("CHUNK_OVERLAP_TOKENS must be less than half of CHUNK_MAX_TOKENS")
         return self

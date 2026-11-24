@@ -79,6 +79,10 @@ class RetrievalService:
         self._embedder = embedder
         self._options = options
 
+    @property
+    def repository(self) -> RetrievalRepository:
+        return self._repo
+
     async def _scope(
         self,
         ctx: WorkspaceContext,

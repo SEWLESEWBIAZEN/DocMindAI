@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict, Field
 
 from documind.api.dependencies import (
     RAGOrchestratorDep,
@@ -126,5 +129,28 @@ async def ask(body: AskRequest, ctx: WorkspaceCtx, rag: RAGOrchestratorDep) -> A
         document_ids=body.document_ids or None,
         collection_ids=body.collection_ids or None,
         top_k=body.top_k,
+    )
+    return answer_response(result)
+
+
+class SummaryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    page_start: int | None = Field(
+        default=None, ge=1, description="First page (omit for the whole document)"
+    )
+    page_end: int | None = Field(default=None, ge=1)
+
+
+@router.post(
+    "/documents/{document_id}/summary",
+    response_model=AnswerResponse,
+    summary="Summarize a document or page range, with citations (reading mode)",
+)
+async def summarize_document(
+    document_id: uuid.UUID, body: SummaryRequest, ctx: WorkspaceCtx, rag: RAGOrchestratorDep
+) -> AnswerResponse:
+    result = await rag.summarize(
+        ctx, document_id, page_start=body.page_start, page_end=body.page_end
     )
     return answer_response(result)

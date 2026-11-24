@@ -4,7 +4,7 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–7 complete.** The full product works in the browser:
+> **Status: Phases 1–7 and 6b complete.** The full product works in the browser:
 > sign-up and 2FA, personal and organization workspaces with roles,
 > uploads with OCR and indexing, search, and conversations with streamed,
 > page-cited answers that link back to the highlighted source passage. Usage
@@ -100,6 +100,10 @@ make frontend-dev # Vite on :5173, proxies /api to :8000
    jumps to the highlighted passage in the document.
 4. Create an organization from the workspace switcher, invite colleagues, and manage roles under **Members**.
 5. Turn on two-factor authentication under **Profile**. Admins need it to delete documents permanently.
+6. For voice, open **Profile → Voice and reading** and turn on voice features: ask by voice, hear answers
+   with their sources, and use **Listen** in a document to have it read aloud (Escape stops,
+   Ctrl+Shift+Space pauses). Browser speech works out of the box; set `SPEECH_PROVIDER=openai` for
+   DocuMind voices. Admins choose what each workspace allows under **Settings → Voice**.
 
 ## Testing and quality
 

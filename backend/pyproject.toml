@@ -91,6 +91,7 @@ ignore_missing_imports = true
 
 # Test fixtures are built with untyped PyMuPDF / python-docx APIs.
 [[tool.mypy.overrides]]
-module = ["tests.unit.test_extractors", "tests.integration.test_processing_pipeline"]
+module = ["tests.unit.test_extractors",
+    "tests.unit.test_figures", "tests.integration.test_processing_pipeline"]
 disallow_untyped_calls = false
 warn_return_any = false

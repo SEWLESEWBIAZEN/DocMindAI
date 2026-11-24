@@ -67,6 +67,16 @@ const WARNINGS: Record<string, string> = {
 export function describeWarning(code: string): string {
   const page = code.match(/^no_text_layer:page=(\d+)/)
   if (page) return `Page ${page[1]} has no text layer and couldn't be read.`
+  const count = code.match(/^(\w+):count=(\d+)$/)
+  if (count) {
+    const n = Number(count[2])
+    const figures = `${n} ${n === 1 ? 'figure' : 'figures'}`
+    if (count[1] === 'figures_described') return `${figures} described in words, so they can be searched and read aloud.`
+    if (count[1] === 'figure_descriptions_failed') return `${figures} couldn't be described.`
+    if (count[1] === 'figures_not_described') return `${figures} weren't described (limit per document reached).`
+  }
+  const ocr = code.match(/^ocr_applied:pages=([\d,]+)$/)
+  if (ocr) return `Text recognition (OCR) was used on page${ocr[1]?.includes(',') ? 's' : ''} ${ocr[1]?.replace(/,/g, ', ')}.`
   return WARNINGS[code] ?? code.replace(/_/g, ' ')
 }
 

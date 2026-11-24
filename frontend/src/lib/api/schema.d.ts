@@ -868,6 +868,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Summarize a document or page range, with citations (reading mode) */
+        post: operations["summarize_document_api_v1_workspaces__workspace_id__documents__document_id__summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/versions": {
         parameters: {
             query?: never;
@@ -1010,6 +1027,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Voice settings for this workspace */
+        get: operations["get_voice_api_v1_workspaces__workspace_id__voice_get"];
+        /** Set the workspace voice policy (admins) */
+        put: operations["set_voice_policy_api_v1_workspaces__workspace_id__voice_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/voice/speech": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Text to speech, streamed as MP3 (nothing is stored) */
+        post: operations["speech_api_v1_workspaces__workspace_id__voice_speech_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/voice/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Speech to text (audio is not stored) */
+        post: operations["transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1126,6 +1195,16 @@ export interface components {
             target_id: string | null;
             /** Target Type */
             target_type: string | null;
+        };
+        /** Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post */
+        Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post: {
+            /**
+             * Audio
+             * @description WebM/Ogg/MP3/MP4/WAV recording
+             */
+            audio: string;
+            /** Language */
+            language?: string | null;
         };
         /** Body_upload_document_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_document_api_v1_workspaces__workspace_id__documents_post: {
@@ -2041,6 +2120,18 @@ export interface components {
             /** Document Ids */
             document_ids?: string[];
         };
+        /** SpeechRequest */
+        SpeechRequest: {
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+            /** Text */
+            text: string;
+            /** Voice */
+            voice?: string | null;
+        };
         /** StepUpResponse */
         StepUpResponse: {
             /** Access Token */
@@ -2058,6 +2149,16 @@ export interface components {
              * @constant
              */
             token_type: "bearer";
+        };
+        /** SummaryRequest */
+        SummaryRequest: {
+            /** Page End */
+            page_end?: number | null;
+            /**
+             * Page Start
+             * @description First page (omit for the whole document)
+             */
+            page_start?: number | null;
         };
         /** TokenRequest */
         TokenRequest: {
@@ -2077,6 +2178,13 @@ export interface components {
              */
             token_type: "bearer";
             user: components["schemas"]["UserResponse"];
+        };
+        /** TranscriptResponse */
+        TranscriptResponse: {
+            /** Language */
+            language: string | null;
+            /** Text */
+            text: string;
         };
         /** UpdateCollectionRequest */
         UpdateCollectionRequest: {
@@ -2149,6 +2257,36 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoicePolicyRequest */
+        VoicePolicyRequest: {
+            /**
+             * Policy
+             * @enum {string}
+             */
+            policy: "enabled" | "browser" | "disabled";
+        };
+        /** VoiceSettingsResponse */
+        VoiceSettingsResponse: {
+            /** Max Audio Bytes */
+            max_audio_bytes: number;
+            /** Max Text Chars */
+            max_text_chars: number;
+            /**
+             * Policy
+             * @description "enabled": DocuMind's speech service and browser speech; "browser": only the browser's own speech features (DocuMind never receives audio); "disabled": no voice.
+             * @enum {string}
+             */
+            policy: "enabled" | "browser" | "disabled";
+            /** Provider Configured */
+            provider_configured: boolean;
+            /**
+             * Server Speech
+             * @description Whether /transcribe and /speech can be used here.
+             */
+            server_speech: boolean;
+            /** Voices */
+            voices: string[];
         };
         /** WarningResponse */
         WarningResponse: {
@@ -4230,6 +4368,42 @@ export interface operations {
             };
         };
     };
+    summarize_document_api_v1_workspaces__workspace_id__documents__document_id__summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_versions_api_v1_workspaces__workspace_id__documents__document_id__versions_get: {
         parameters: {
             query?: never;
@@ -4573,6 +4747,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_voice_api_v1_workspaces__workspace_id__voice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_voice_policy_api_v1_workspaces__workspace_id__voice_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoicePolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    speech_api_v1_workspaces__workspace_id__voice_speech_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpeechRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/mpeg": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptResponse"];
                 };
             };
             /** @description Validation Error */

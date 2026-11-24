@@ -15,6 +15,7 @@ from typing import Any
 
 from documind.application.conversations.sweeper import StaleReplySweeper
 from documind.application.processing.embedding_service import EmbeddingService
+from documind.application.processing.figures import FigureDescriber
 from documind.application.processing.orchestrator import ProcessingOrchestrator
 from documind.application.processing.sweeper import ProcessingSweeper
 from documind.container import Container, build_container
@@ -57,6 +58,7 @@ def orchestrator() -> ProcessingOrchestrator:
         c.extractor,
         embeddings,
         worker=f"{socket.gethostname()}:{os.getpid()}",
+        figures=FigureDescriber(c.image_describer),
     )
 
 

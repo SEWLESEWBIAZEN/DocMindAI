@@ -213,6 +213,7 @@ kbd {
 .field {
   display: grid;
   gap: 6px;
+  align-content: start;
 }
 
 .field__label {
@@ -2147,4 +2148,142 @@ mark.cite-highlight {
   color: var(--color-accent);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- voice */
+
+.reading-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 58;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+@media (min-width: 901px) {
+  .reading-bar {
+    left: calc(50% + var(--sidebar-width) / 2);
+  }
+}
+
+.reading-bar__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  flex-shrink: 0;
+}
+
+.reading-bar__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+
+.reading-bar__text .muted {
+  font-size: 0.78rem;
+}
+
+.reading-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.radio-group {
+  display: grid;
+  gap: 8px;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.radio-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.radio-card:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.radio-card input {
+  margin-top: 3px;
+  accent-color: var(--color-accent);
+}
+
+input[type='range'] {
+  accent-color: var(--color-accent);
+  width: 100%;
+  max-width: 360px;
+}
+
+.shortcut-list dt {
+  white-space: nowrap;
+}
+
+.mic-button[aria-pressed='true'] {
+  background: var(--color-error);
+  color: #fff;
+  border-color: transparent;
+}
+
+.listening {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  padding: 0 4px 6px;
+}
+
+.listening__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error);
+  animation: caret 1s steps(2) infinite;
+}
+
+mark.reading-highlight {
+  background: var(--color-selected);
+  color: inherit;
+  outline: 2px solid var(--color-accent);
+  border-radius: 3px;
+}
+
+.reading-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.reading-panel__label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-right: auto;
 }

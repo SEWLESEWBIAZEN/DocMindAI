@@ -27,7 +27,12 @@ from documind.application.rag.retrieval import (
     RetrievalService,
     SearchWarning,
 )
-from documind.domain.errors import ServiceUnavailableError
+from documind.domain.errors import (
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationFailedError,
+)
 from documind.domain.identity.permissions import Permission
 from documind.domain.identity.policies import WorkspaceContext
 from documind.domain.processing.errors import ProcessingError
@@ -280,6 +285,63 @@ class RAGOrchestrator:
         if not emitted:  # e.g. the model replied with only the sentinel
             yield AnswerDelta(final.answer)
         yield AnswerCompleted(final)
+
+    async def summarize(
+        self,
+        ctx: WorkspaceContext,
+        document_id: uuid.UUID,
+        *,
+        page_start: int | None = None,
+        page_end: int | None = None,
+    ) -> RagAnswer:
+        """Summarize a document (or a page range) for reading mode, with citations.
+
+        The context is the requested passages in reading order rather than
+        search results, so the summary covers exactly what the reader is on.
+        """
+        ctx.require(Permission.CONVERSATIONS_USE)
+        ctx.require(Permission.DOCUMENTS_READ)
+        started = time.monotonic()
+        if page_start is not None and page_end is not None and page_end < page_start:
+            raise ValidationFailedError("The last page must not be before the first page.")
+        repo = self._retrieval.repository
+        found = await repo.documents(ctx.workspace_id, {document_id})
+        doc = found.get(document_id)
+        if doc is None:
+            raise NotFoundError("Document not found.")
+        if doc.archived or doc.status != "ready":
+            raise ConflictError(
+                "Only ready, non-archived documents can be summarized.", code="document_not_ready"
+            )
+        chunks = await repo.document_chunks(
+            ctx.workspace_id, document_id, page_start=page_start, page_end=page_end, limit=200
+        )
+        context = build_context(chunks, max_tokens=self._options.context_max_tokens)
+        if page_start is None:
+            scope = "this document"
+        elif page_end is None or page_end == page_start:
+            scope = f"page {page_start}"
+        else:
+            scope = f"pages {page_start} to {page_end}"
+        question = f"Summarize the key points of {scope}."
+        warnings: list[SearchWarning] = []
+        if context.dropped:
+            warnings.append(
+                SearchWarning(
+                    "summary_partial",
+                    "This part is long; the summary covers its beginning. Choose fewer pages.",
+                    document_id,
+                )
+            )
+        prep = PreparedAnswer(
+            question=question,
+            retrieval_query=question,
+            retrieval=RetrievalResult(chunks, warnings, "vector", "", 0),
+            context=context,
+            history=[],
+            started=started,
+        )
+        return await self.generate(prep)
 
     async def answer(
         self,

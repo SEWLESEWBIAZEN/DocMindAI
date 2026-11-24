@@ -52,6 +52,8 @@ import {
 } from './api'
 import { FORMAT_LABEL, STATUS_LABEL, STATUS_TONE, describeWarning, formatBytes, formatDate, formatDateTime, formatRelative } from './format'
 import { findExcerpt } from './highlight'
+import { useVoice } from '../voice/VoiceContext'
+import { ReadingControls, type ReadingPosition } from '../voice/ReadingMode'
 import { useCollections } from './hooks'
 import { StepUpDialog } from './StepUpDialog'
 import { useUploads } from './UploadManager'
@@ -636,6 +638,9 @@ export function DocumentViewerPage() {
   })
   const { items: actions, dialogs } = useDocumentActions(() => navigate(`${base}/documents`, { replace: true }))
   const [versionInput, setVersionInput] = useState<HTMLInputElement | null>(null)
+  const voice = useVoice()
+  const [listening, setListening] = useState(false)
+  const [reading, setReading] = useState<ReadingPosition | null>(null)
 
   useEffect(() => {
     // When processing finishes, refresh lists that show this document.
@@ -689,6 +694,11 @@ export function DocumentViewerPage() {
         }
         actions={
           <>
+            {ready && voice.ttsEngine && (
+              <Button icon="headset" aria-pressed={listening} onClick={() => setListening((v) => !v)}>
+                Listen
+              </Button>
+            )}
             {ready && !d.archived_at && can('conversations.use') && (
               <Button variant="primary" icon="message" onClick={() => navigate(`${base}/chat?documents=${d.id}`)}>
                 Ask about this
@@ -744,12 +754,28 @@ export function DocumentViewerPage() {
             ) : pages.error ? (
               <ErrorState error={pages.error} onRetry={() => void pages.refetch()} />
             ) : (
-              <PageList
-                pages={pages.data ?? []}
-                targetPage={targetPage}
-                excerpt={excerpt}
-                onJump={(page) => setParams({ page: String(page) }, { replace: true })}
-              />
+              <>
+                {listening && voice.ttsEngine && (
+                  <ReadingControls
+                    title={d.title}
+                    documentId={d.id}
+                    pages={pages.data ?? []}
+                    position={reading}
+                    onPosition={setReading}
+                    onClose={() => {
+                      setListening(false)
+                      setReading(null)
+                    }}
+                  />
+                )}
+                <PageList
+                  pages={pages.data ?? []}
+                  targetPage={targetPage}
+                  excerpt={excerpt}
+                  reading={listening ? reading : null}
+                  onJump={(page) => setParams({ page: String(page) }, { replace: true })}
+                />
+              </>
             ))}
         </div>
         <aside className="viewer__side" aria-label="Document details">
@@ -795,13 +821,21 @@ function PageList({
   pages,
   targetPage,
   excerpt,
+  reading = null,
   onJump,
 }: {
   pages: ExtractedPage[]
   targetPage: number | null
   excerpt: string
+  reading?: ReadingPosition | null
   onJump: (page: number) => void
 }) {
+  // Keep the sentence being read in view.
+  useEffect(() => {
+    if (!reading) return
+    document.querySelector('mark.reading-highlight')?.scrollIntoView({ block: 'center' })
+  }, [reading])
+
   const [jump, setJump] = useState('')
   const refs = useRef(new Map<number, HTMLElement>())
   const numbered = pages.some((p) => p.page_number !== null)
@@ -840,10 +874,13 @@ function PageList({
           <span className="muted">of {pages.length}</span>
         </form>
       )}
-      {pages.map((page) => {
+      {pages.map((page, pageIndex) => {
         const number = page.page_number ?? page.position + 1
         const isTarget = targetPage === number || (!numbered && targetPage === null && Boolean(excerpt))
-        const range = isTarget && excerpt ? findExcerpt(page.text, excerpt) : null
+        const readingRange =
+          reading && reading.pageIndex === pageIndex ? findExcerpt(page.text, reading.sentence) : null
+        const range = readingRange ?? (isTarget && excerpt ? findExcerpt(page.text, excerpt) : null)
+        const markClass = readingRange ? 'reading-highlight' : 'cite-highlight'
         return (
           <article
             key={page.position}
@@ -865,7 +902,7 @@ function PageList({
               {range ? (
                 <>
                   {page.text.slice(0, range[0])}
-                  <mark className="cite-highlight">{page.text.slice(range[0], range[1])}</mark>
+                  <mark className={markClass}>{page.text.slice(range[0], range[1])}</mark>
                   {page.text.slice(range[1])}
                 </>
               ) : (
