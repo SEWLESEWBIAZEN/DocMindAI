@@ -1,6 +1,6 @@
 # ADR 0019: Bring your own API key (BYOK)
 
-- Status: Proposed (roadmap). Scheduled for Phase 8; security review in Phase 9.
+- Status: Accepted (roadmap). Scheduled for Phase 8; more providers in later releases; security review in Phase 9.
 - Date: 2026-11-24
 
 ## Context
@@ -108,10 +108,20 @@ text-to-speech.
 - Answer quality and cost now depend partly on the customer's provider
   account (rate limits, model access).
 
-## Open questions for the product owner
+## Decisions (product owner, 2026-11-24)
 
-1. Should **organizations** be able to forbid the platform key entirely
-   (BYOK-only), or is the "Use my key only" setting enough?
-2. Which providers beyond OpenAI matter first (Azure OpenAI, Anthropic, local
-   models)?
-3. Should BYOK be available on the Free plan?
+Follow the defaults for now:
+
+1. **No organization-wide "block the platform key" switch.** The per-workspace "Use my key only" setting
+   is the control (an organization is a workspace, so it covers organizations).
+2. **OpenAI first; as many providers as possible in future releases.** The first release ships OpenAI. The
+   key model and resolution are provider-neutral from the start, so adding providers later is additive:
+   - a key record stores `provider` (e.g. `openai`, `azure_openai`, `anthropic`, `google`, `mistral`,
+     `openai_compatible`) and provider-specific, non-secret settings (endpoint, deployment, API version);
+   - each capability (embeddings, chat, vision, speech-to-text, text-to-speech) resolves to an adapter
+     behind the existing ports, so a workspace may use one provider for answers and another for embeddings;
+   - when a provider doesn't offer a capability (e.g. no speech), DocuMind falls back to the platform key
+     for that capability if allowed, or to browser speech, and says so in the UI;
+   - self-hosted and local models (OpenAI-compatible endpoints) follow the SSRF rules above.
+3. **BYOK is available on every plan, including Free.** It costs the platform nothing in provider fees.
+   The Phase 8 plan model keeps it as an entitlement so this can change without code changes.

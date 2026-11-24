@@ -370,7 +370,10 @@ Tests: 62 frontend unit and component tests (Vitest); 3 Playwright end-to-end te
   - [ ] Clear errors when a key is revoked or out of quota (jobs fail with `provider_key_invalid`, admin banner and email)
   - [ ] Usage records marked `billed_to = workspace_key`, excluded from platform quotas
   - [ ] Re-index flow when the provider or embedding model changes
-  - [ ] Later: Azure OpenAI / OpenAI-compatible endpoints behind a hostname allowlist (SSRF protection)
+  - [ ] Provider-neutral key model (provider + settings) and per-capability resolution, so more providers are additive
+  - [ ] Available on every plan, including Free (kept as a plan entitlement)
+- [ ] **Future releases: more BYOK providers** (Azure OpenAI, Anthropic, Google, Mistral, OpenAI-compatible and
+      local models), each behind the existing ports; custom endpoints only via a hostname allowlist (SSRF protection)
 
 ## Phase 9: Security, testing and performance
 
