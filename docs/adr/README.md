@@ -24,6 +24,9 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0016](0016-conversations-and-streaming.md) | Conversations and answer streaming (amends 0015) | Accepted |
 | [0017](0017-frontend-application-architecture.md) | Frontend application architecture | Accepted |
 | [0018](0018-voice-and-accessible-reading.md) | Voice and accessible reading (implements 0011) | Accepted |
-| [0019](0019-bring-your-own-api-key.md) | Bring your own API key (BYOK) | Accepted (roadmap, Phase 8) |
+| [0019](0019-bring-your-own-api-key.md) | Bring your own API key (BYOK) | Accepted (amended by 0022) |
+| [0020](0020-plans-usage-and-quotas.md) | Plans, entitlements, usage metering and quotas | Accepted |
+| [0021](0021-infrastructure-profiles-and-data-planes.md) | Infrastructure profiles, resolution and data planes | Accepted |
+| [0022](0022-credential-vault.md) | Credential vault (envelope encryption and rotation) | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

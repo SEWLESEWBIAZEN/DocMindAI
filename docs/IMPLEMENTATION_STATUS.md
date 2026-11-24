@@ -358,30 +358,83 @@ Tests: 62 frontend unit and component tests (Vitest); 3 Playwright end-to-end te
   `RATE_LIMIT_AUTH_PER_IP` for the dev stack or clear the Redis `rl:*` keys.
 - The landing page's scenario companies are illustrative (see the landing notes above).
 
-## Phase 8: Usage, administration and SaaS readiness
+## Phase 8: SaaS readiness and infrastructure independence
 
-- [ ] Usage tracking, quotas, plans/entitlements model, audit log views
-- [ ] Audio-minute and figure-description usage (ADR 0011); the per-workspace voice policy shipped in Phase 6b
-- [ ] **Bring your own API key (ADR 0019, added 2026-11-24 at the product owner's request)**
-  - [ ] Workspace-level provider keys (personal workspace owner; organization owners and admins), OpenAI first
-  - [ ] Encrypted at rest (AES-GCM, separate key, bound to the workspace), write-only, never logged; last 4 characters shown
-  - [ ] 2FA step-up to add or replace a key; validation call on save; audit events
-  - [ ] Per-workspace key resolution in API and worker; "use my key only" (no platform fallback)
-  - [ ] Clear errors when a key is revoked or out of quota (jobs fail with `provider_key_invalid`, admin banner and email)
-  - [ ] Usage records marked `billed_to = workspace_key`, excluded from platform quotas
-  - [ ] Re-index flow when the provider or embedding model changes
-  - [ ] Provider-neutral key model (provider + settings) and per-capability resolution, so more providers are additive
-  - [ ] Available on every plan, including Free (kept as a plan entitlement)
-- [ ] **Future releases: more BYOK providers** (Azure OpenAI, Anthropic, Google, Mistral, OpenAI-compatible and
-      local models), each behind the existing ports; custom endpoints only via a hostname allowlist (SSRF protection)
+Combines the original Phase 8 with the approved multi-infrastructure workstreams MI-1 to MI-5, and lays the
+foundations for MI-6 to MI-8. Impact assessment: [`PHASE_8_IMPACT_ASSESSMENT.md`](PHASE_8_IMPACT_ASSESSMENT.md).
+ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes), 0022 (credential vault), 0019 (BYOK).
+
+### 8A. Usage, quotas, plans and entitlements (original Phase 8)
+
+- [ ] Plan catalog and entitlements; per-workspace plan with overrides; operator assignment (audited)
+- [ ] Usage ledger (idempotent) for embeddings, chat, summaries, condensation
+- [ ] Audio-minute usage (speech-to-text, text-to-speech)
+- [ ] Figure-description usage
+- [ ] Quotas at admission (documents, storage, members, chat tokens, audio), `402 quota_exceeded`
+- [ ] Usage and plan views (API and UI), audit log views
+
+### 8B. Bring your own API key (ADR 0019, 0022)
+
+- [ ] Credential vault: envelope encryption, key ring, rewrap rotation, write-only
+- [ ] Workspace-level provider credentials (OpenAI first; provider-neutral model)
+- [ ] 2FA-protected credential changes; audit events
+- [ ] Provider validation on save (sanitized errors)
+- [ ] Per-workspace, per-capability provider resolution in API and worker
+- [ ] No silent platform-key fallback; "use my key only"
+- [ ] Provider usage attribution (`billed_to`), excluded from platform quotas
+- [ ] Clear errors for invalid/revoked keys (`provider_key_invalid`, jobs fail without endless retries)
+- [ ] Re-indexing when the embedding configuration changes
+- [ ] Available on every plan (entitlement)
+
+### 8C. Infrastructure independence (MI-1 to MI-5)
+
+- [ ] MI-1: infrastructure registry, immutable versioned profiles with checksums, workspace pinning, resolver, provider factories
+- [ ] MI-2: storage providers per organization (DocuMind-managed, AWS S3, S3-compatible, MinIO) with validation and SSRF policy
+- [ ] MI-3: dedicated PostgreSQL (provisioning, data-plane migrations, routing for API and workers)
+- [ ] MI-4: external PostgreSQL (validation, TLS, least privilege, schema management consent)
+- [ ] Data-plane isolation (tenant anchor, audit outbox, parity test, two-database isolation tests)
+- [ ] MI-5: organization infrastructure settings UI
+
+### 8D. Foundations for MI-6 to MI-8
+
+- [ ] MI-6: Azure Blob registered as planned (not selectable until implemented)
+- [ ] MI-7: processing modes, worker registration model (hashed tokens, revocation), queue routing
+- [ ] MI-8: infrastructure health events, migration state model (no data movement)
 
 ## Phase 9: Security, testing and performance
 
-- [ ] Security review, Playwright E2E, load tests on the 4 vCPU / 8 GB target
-- [ ] Accessibility audit and testing with blind users (ADR 0011)
-- [ ] BYOK review: key storage and rotation, leak paths (logs, errors, backups), SSRF on custom endpoints (ADR 0019)
+Original scope:
+
+- [ ] Full security review
+- [ ] Playwright end-to-end testing (extended to Phase 8 features)
+- [ ] Load tests on the 4 vCPU / 8 GB target
+- [ ] Accessibility audit; manual NVDA, JAWS and VoiceOver verification
+- [ ] Testing with blind and low-vision users (ADR 0011)
+- [ ] BYOK review: credential storage and rotation, secret leakage prevention (logs, errors, backups), SSRF
+- [ ] Backup security and restoration tests
+
+Multi-infrastructure verification:
+
+- [ ] Shared and dedicated database isolation; external database security; storage provider isolation
+- [ ] Worker authentication and revocation (MI-7 connector)
+- [ ] Infrastructure profile integrity; configuration version pinning; secret rotation
+- [ ] Infrastructure migration safety (MI-8); customer network security; infrastructure failure behaviour
 
 ## Phase 10: Production deployment
 
-- [ ] Production Compose, Nginx + TLS, backups, runbooks, security checklist
-- [ ] Resolve ADR 0006 (production object storage)
+Original scope:
+
+- [ ] Production Docker Compose, Nginx reverse proxy, TLS and certificate renewal
+- [ ] Database backups; object storage backups and recovery
+- [ ] Deployment and rollback runbooks; production security checklist
+- [ ] Production object storage decision (closes ADR 0006)
+- [ ] Production observability and operational readiness
+
+Multi-infrastructure deployment:
+
+- [ ] DocuMind-managed, hybrid and customer-managed cloud deployments; on-premises documentation
+- [ ] Customer worker deployment package (MI-7)
+- [ ] MI-6 Azure Blob adapter; MI-8 migration execution and disaster recovery procedures
+- [ ] Production provider configuration; operational monitoring and runbooks
+- [ ] **Future releases: more BYOK providers** (Azure OpenAI, Anthropic, Google, Mistral, OpenAI-compatible and
+      local models), each behind the existing ports; custom endpoints only via the SSRF policy
