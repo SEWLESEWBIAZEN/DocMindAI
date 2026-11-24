@@ -46,7 +46,8 @@ test('plan, AI providers and infrastructure settings (Phase 8)', async ({ page, 
   await expect(page.getByRole('heading', { name: 'Current infrastructure' })).toBeVisible()
   await expect(page.getByText('DocuMind defaults')).toBeVisible()
   await expect(page.getByRole('radio', { name: /Your own PostgreSQL/ })).toBeDisabled() // not in the Free plan
-  await expect(page.getByRole('option', { name: /Azure Blob Storage \(planned\)/ })).toBeDisabled()
+  // Azure Blob ships (MI-6) but, like every own-storage option, isn't in the Free plan.
+  await expect(page.getByRole('option', { name: /Azure Blob Storage \(not in your plan\)/ })).toBeDisabled()
   await expectAccessible(page, 'infrastructure')
 })
 

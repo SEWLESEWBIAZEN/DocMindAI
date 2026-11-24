@@ -513,6 +513,18 @@ ADRs: 0023 (production storage; closes 0006), 0024 (customer processing), 0025 (
 | Operational monitoring and runbooks | [x] | Every alert links to a runbook section that exists |
 | **Future releases: more BYOK providers** (Azure OpenAI, Anthropic, Google, Mistral, OpenAI-compatible and local models) | [ ] | Not in this phase. Each will sit behind the existing ports, with custom endpoints only via the SSRF policy |
 
+Tests at the end of Phase 10 (2026-11-24), all run locally:
+
+| Suite | Result |
+|---|---|
+| Backend unit | 394 passed |
+| Backend integration (real PostgreSQL, Redis, MinIO and Azurite) | 215 passed |
+| Frontend Vitest | 82 passed |
+| Playwright on the dev stack (journey, voice, Phase 8, accessibility) | 8/8 passed |
+| Production smoke over HTTPS (P10.1) | 5/5 passed |
+
+`ruff`, `mypy --strict`, `oxlint` and `tsc` are clean.
+
 ### Phase 10 follow-ups / known issues
 
 - **GitHub Actions doesn't run.** Every workflow run fails within seconds without logs; this looks
