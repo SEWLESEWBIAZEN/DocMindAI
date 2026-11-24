@@ -326,11 +326,22 @@ descriptions produced during processing (`ImageDescriber`, `application/processi
     `infrastructure_migrations` row) when a workspace with data would change its database or storage
     location.
   * Dedicated databases are provisioned at draft time (`DedicatedProvisioner`).
-* **Foundations only.**
-  * Azure Blob is listed but not selectable.
-  * Customer workers can be registered with hashed, revocable tokens. Customer processing mode can't
-    pass validation until the connector exists (MI-7).
-  * Migrations are planned but never executed (MI-8).
+* **Storage providers:** S3, S3-compatible, MinIO and Azure Blob (MI-6). All are adapters behind
+  `ObjectStorageProvider`.
+* **Customer-hosted processing (MI-7, ADR 0024).**
+  * `documind-worker` runs in the customer's network and claims jobs in the customer's database.
+  * It only heartbeats and reports usage to `/worker/v1/*`.
+  * DocuMind's sweeper never hands customer-mode jobs to its own workers.
+* **Approved migrations (MI-8, ADR 0025).**
+  * An owner approves a planned migration with a 2FA step-up.
+  * `MigrationExecutor` then:
+    1. locks the workspace (the resolver raises 503 `migration_in_progress`);
+    2. checks that the destination is empty;
+    3. copies rows in dependency order, and objects key by key, through the ports;
+    4. verifies counts and sizes;
+    5. switches the pin.
+  * The source is kept until an explicit, audited cleanup. A failure removes only what the run
+    copied.
 
 ## 8. Runtime resources and lifecycle
 
@@ -406,11 +417,26 @@ See ADR 0007 (toolchain) and ADR 0017 (application architecture).
 | ------------- | ------------------------------------------ | ------------------------------------------------------------ |
 | development   | `.env` (from `.env.example`) + Compose     | Docs enabled, console logs, all ports on 127.0.0.1            |
 | test          | Explicit `Settings(...)` in unit tests; `.env` for integration | Unit tests never read `.env`                 |
-| production    | Real environment variables (Phase 10)      | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
+| production    | `deploy/production/.env` + production Compose | Placeholder credentials and wildcard CORS rejected at startup; docs off by default |
 
 ## 14. Deployment target
 
-The initial target is a single Linux VPS (4 vCPU / 8 GB RAM) running Docker
-Compose behind Nginx with TLS (Phase 10). The backend image has a separate
-`runtime` target: no build tools or uv, a non-root user, and a liveness
-`HEALTHCHECK`.
+The reference target is a single Linux VM (4 vCPU / 8 GB RAM) running `deploy/production/`:
+
+```
+internet ─► web (Nginx: TLS, CSP and headers, rate limits, SSE unbuffered, SPA) ─► api (uvicorn)
+                                                                           │
+             certbot (webroot renewals)         worker, beat (Celery) ─────┤
+                                                                           ▼
+             internal network: redis, postgres (optional)    egress: S3, SMTP, AI, customer DBs
+             backup (nightly, encrypted, offsite)
+```
+
+- Application containers run as non-root, with a read-only root filesystem and `cap_drop: ALL`.
+- Only `web` publishes ports.
+- `migrate` runs Alembic, the bucket bootstrap and `dataplanes migrate` before each release.
+- Prometheus scrapes `/api/v1/metrics` with a bearer token on the internal network
+  (`deploy/monitoring/`).
+
+Other deployment models (hybrid, customer-managed cloud, on-premises) are in
+[`DEPLOYMENT_MODELS.md`](DEPLOYMENT_MODELS.md). Operations are in [`runbooks/`](runbooks/).

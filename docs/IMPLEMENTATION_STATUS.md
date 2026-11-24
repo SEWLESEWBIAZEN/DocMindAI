@@ -421,6 +421,9 @@ Acceptance (verified 2026-11-24):
 - Live: the dev Compose stack migrated to 0011. A dedicated database was provisioned and validated from
   inside the backend container.
 
+> **Update (Phase 10):** the MI-6, MI-7 and MI-8 rows above describe the state at the end of Phase 8.
+> All three were completed in Phase 10; see that section. The rows are kept for history.
+
 ### Phase 8 follow-ups / known issues
 
 - **Not verified against live OpenAI** (no key or network here). BYOK validation and adapters are tested
@@ -472,23 +475,57 @@ Backups: [`runbooks/backup-and-restore.md`](runbooks/backup-and-restore.md). Acc
 | Customer network security | [x] | SSRF policy (private, loopback, link-local, metadata, CGNAT, IPv4-mapped); outbound validation rate limit |
 | Infrastructure failure behaviour | [x] | Customer database outage: 503 for that organization only; others and identity unaffected; jobs left for the sweeper |
 
+> **Update (Phase 10):** the worker job protocol (MI-7) and migration execution (MI-8) were built in
+> Phase 10. The two `[~]` rows above are now covered there.
+
 Tests at the end of Phase 9 (2026-11-24): backend 390 unit and 206 integration tests (real PostgreSQL, Redis and MinIO); frontend 82 Vitest; Playwright 8/8 (journey, voice, Phase 8, accessibility). Lint, format and `mypy --strict` clean.
 
-## Phase 10: Production deployment
+## Phase 10: Production deployment ✅
 
-Original scope:
+Deployment: [`runbooks/deployment.md`](runbooks/deployment.md).
+Checklist: [`PRODUCTION_CHECKLIST.md`](PRODUCTION_CHECKLIST.md).
+Models: [`DEPLOYMENT_MODELS.md`](DEPLOYMENT_MODELS.md).
+ADRs: 0023 (production storage; closes 0006), 0024 (customer processing), 0025 (migrations and Azure).
 
-- [ ] Production Docker Compose, Nginx reverse proxy, TLS and certificate renewal
-- [ ] Database backups; object storage backups and recovery
-- [ ] Deployment and rollback runbooks; production security checklist
-- [ ] Production object storage decision (closes ADR 0006)
-- [ ] Production observability and operational readiness
+### Original scope
 
-Multi-infrastructure deployment:
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| Production Docker Compose and Nginx reverse proxy | [x] | `deploy/production/docker-compose.yml`. Services: `web`, `api`, `worker`, `beat`, `redis`, optional `postgres`, `migrate`, `certbot` and `backup`. Internal, egress and public networks; non-root, read-only, `cap_drop: ALL`. The smoke run (`deploy/production/smoke/run.sh`) started the stack in production mode, and the Playwright journey and Phase 8 specs passed **5/5 over HTTPS**. It also found two real image bugs, now fixed and guarded by a build-time import check: the Alembic config path, and `kombu` needing `packaging` |
+| TLS and certificate renewal | [~] | Nginx: TLS 1.2/1.3, HSTS, CSP and the other headers, unbuffered SSE, rate limits, `/api/v1/metrics` blocked; a temporary self-signed certificate until certbot (webroot) succeeds; reload every 6 h. Verified with a local CA in the smoke run. **No real Let's Encrypt issuance here** (it needs a public DNS name) |
+| Database backups | [x] | The `backup` profile: `schedule.sh` runs nightly encrypted archives (control plane, shared plane and dedicated planes), an offsite upload with write-only credentials and a success metric. Restore drill: `test_backup_restore.py`. Run-once mode for pre-upgrade backups |
+| Object storage backups and recovery | [x] | `documind-manage objects export/import` with a manifest and path checks, included in the archive (`test_backup_restore.py`) |
+| Deployment and rollback runbooks | [x] | `runbooks/deployment.md` (first deployment, upgrade including data planes, rollback, routine operations), `incident-response.md` (one section per alert), `disaster-recovery.md` (scenarios, RPO and RTO, key rotation), `backup-and-restore.md` |
+| Production security checklist | [x] | `PRODUCTION_CHECKLIST.md`. Commands were checked against the stack (header names, profiles, entrypoints) |
+| Production object storage decision (closes ADR 0006) | [x] | ADR 0023: any S3-compatible managed service, with a private bucket and MinIO for on-premises. Azure Blob is per organization (ADR 0025) |
+| Production observability | [x] | `GET /api/v1/metrics` (bearer `METRICS_TOKEN`, 404 when unset; `test_operations.py`); Prometheus configuration and 8 alert rules (`deploy/monitoring/`); JSON logs with redaction and request ids |
 
-- [ ] DocuMind-managed, hybrid and customer-managed cloud deployments; on-premises documentation
-- [ ] Customer worker deployment package (MI-7)
-- [ ] MI-6 Azure Blob adapter; MI-8 migration execution and disaster recovery procedures
-- [ ] Production provider configuration; operational monitoring and runbooks
-- [ ] **Future releases: more BYOK providers** (Azure OpenAI, Anthropic, Google, Mistral, OpenAI-compatible and
-      local models), each behind the existing ports; custom endpoints only via the SSRF policy
+### Multi-infrastructure deployment
+
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| DocuMind-managed, hybrid and customer-managed cloud deployments; on-premises documentation | [x] | `DEPLOYMENT_MODELS.md`, with the plan entitlements each mode needs. On-premises uses the same production stack. **Air-gapped operation with a local model server is untested** |
+| Customer worker deployment package (MI-7) | [x] | `documind-worker` (image target `customer-worker`), `deploy/customer-worker/` (Compose, env, README); heartbeat and usage API; embedding-model contract; revocation exits with code 3 (`test_customer_worker.py`, `test_customer_worker_tokens_are_hashed_and_revocable`). Customer and hybrid modes validate once a worker has checked in |
+| MI-6 Azure Blob adapter | [x] | `azure_provider.py` (account key, read-only SAS downloads with attachment disposition, public-container refusal). Tested against **Azurite** (`test_azure_storage.py`, 3 tests); Azurite is in Compose (profile `azure`) and CI. **Not tested against real Azure**; Entra ID authentication not implemented |
+| MI-8 migration execution | [x] | ADR 0025: approval with 2FA; lock (503 `migration_in_progress`); empty-destination preflight; copy, verify and switch; retained source and audited cleanup; abort for dead runs (`test_infrastructure_migration.py`, 3 tests; plus S3 to Azure in `test_azure_storage.py`) |
+| Disaster recovery procedures | [x] | `runbooks/disaster-recovery.md` covers host, database, bucket, dedicated plane, customer infrastructure and region loss, and key rotation for every secret |
+| Production provider configuration | [x] | `deploy/production/.env.example`, `generate-secrets.sh`, and the `CONFIGURATION.md` sections for production, worker and monitoring; production validation rejects unsafe settings |
+| Operational monitoring and runbooks | [x] | Every alert links to a runbook section that exists |
+| **Future releases: more BYOK providers** (Azure OpenAI, Anthropic, Google, Mistral, OpenAI-compatible and local models) | [ ] | Not in this phase. Each will sit behind the existing ports, with custom endpoints only via the SSRF policy |
+
+### Phase 10 follow-ups / known issues
+
+- **GitHub Actions doesn't run.** Every workflow run fails within seconds without logs; this looks
+  like an account or billing problem, not the workflow. CI has therefore not been verified on
+  GitHub; all results above come from local runs.
+- **Images were not rebuilt and published from this environment.** Docker Hub rate-limited base
+  image pulls, so the smoke run mounted the source over the previous runtime image
+  (`SMOKE_USE_SOURCE=1`). The dev image was rebuilt from cache. Build and scan the release images
+  in CI before deploying.
+- **Not exercised here:** real Let's Encrypt issuance, real AWS S3, real Azure, live OpenAI.
+- **Migrations** run in one process and do not resume. A dead run needs
+  `documind-manage migrations abort`. The workspace is unavailable while a migration runs.
+- **No re-encryption tool for `MFA_ENCRYPTION_KEY`**: rotating it means users re-enrol in 2FA.
+  There is no operator tool to move a dedicated data plane to another host.
+- **Still open from Phase 9:** manual screen-reader tests, sessions with blind and low-vision
+  users, and an independent penetration test.

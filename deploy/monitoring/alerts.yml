@@ -61,3 +61,4 @@ groups:
         labels: { severity: info }
         annotations:
           summary: "Workspace AI keys are being rejected (customers were emailed)"
+          runbook: docs/runbooks/incident-response.md#ai-provider

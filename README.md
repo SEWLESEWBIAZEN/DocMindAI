@@ -4,7 +4,8 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–9 complete** (manual screen-reader and blind-user testing pending). The full product works in the browser:
+> **Status: Phases 1–10 complete** (manual screen-reader and blind-user testing, and a
+> penetration test, still pending). The full product works in the browser:
 > sign-up and 2FA, personal and organization workspaces with roles,
 > uploads with OCR and indexing, search, and conversations with streamed,
 > page-cited answers that link back to the highlighted source passage.
@@ -12,7 +13,9 @@ grounded conversations across them.
 > per-organization infrastructure: a dedicated or customer-run PostgreSQL and
 > the customer's own S3-compatible storage. Phase 9 added a security review with
 > fixes, encrypted backups with a tested restore, accessibility and load tests.
-> Production deployment (Phase 10) is next. See
+> Phase 10 added the production stack (Nginx, TLS, hardened containers, backups,
+> monitoring), runbooks, customer-hosted workers, Azure Blob storage and approved
+> data migrations between infrastructures. See
 > [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
@@ -189,6 +192,13 @@ Conversations are private to the member who created them.
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Implementation status](docs/IMPLEMENTATION_STATUS.md)
+- [Deployment models](docs/DEPLOYMENT_MODELS.md): managed, hybrid, customer cloud, on-premises
+- [Production checklist](docs/PRODUCTION_CHECKLIST.md)
+- Runbooks: [deployment, upgrade and rollback](docs/runbooks/deployment.md),
+  [incident response](docs/runbooks/incident-response.md),
+  [disaster recovery and key rotation](docs/runbooks/disaster-recovery.md),
+  [backup and restore](docs/runbooks/backup-and-restore.md)
+- [Customer-hosted worker](deploy/customer-worker/README.md)
 
 ## Security notes
 

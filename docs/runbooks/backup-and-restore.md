@@ -1,7 +1,27 @@
 # Runbook: backup and restore
 
-Verified by `backend/tests/integration/test_backup_restore.py` (Phase 9). Scheduling, offsite copies
-and monitoring are part of Phase 10.
+Verified by `backend/tests/integration/test_backup_restore.py` (Phase 9).
+
+## In production
+
+The `backup` service in `deploy/production` (profile `backup`) runs `schedule.sh`. Every day at
+`BACKUP_AT` (UTC) it:
+
+1. runs `backup.sh` into the `backups` volume, pruning archives older than `RETENTION_DAYS`;
+2. uploads the archive to `BACKUP_OFFSITE_BUCKET`, using separate write-only credentials
+   (`BACKUP_S3_*`);
+3. records the success time, which Prometheus reads as `documind_backup_last_success_timestamp`.
+   The `DocuMindBackupStale` alert fires after 26 hours without a success.
+
+For a backup right now, for example before an upgrade, run:
+
+```bash
+docker compose --profile backup run --rm -e BACKUP_ONCE=true backup
+```
+
+The passphrase is the Docker secret `secrets/backup_passphrase`, created by `generate-secrets.sh`.
+
+For disaster scenarios and key rotation, see [`disaster-recovery.md`](disaster-recovery.md).
 
 ## What is backed up
 

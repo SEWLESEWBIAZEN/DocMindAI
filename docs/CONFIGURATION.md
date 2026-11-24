@@ -216,6 +216,26 @@ dedicated databases, and for external ones only when the customer ticks "DocuMin
 External databases need PostgreSQL 14+, the `vector` extension installed, and a non-superuser role. In
 production `sslmode` must be `verify-full` (system CA bundle).
 
+**Storage providers.** `aws_s3`, `s3_compatible` and `minio` use the S3 adapter. `azure_blob` is
+the Azure Blob adapter (MI-6, ADR 0025). An Azure profile maps the fields as follows:
+
+| Field | Azure meaning |
+| --- | --- |
+| bucket | Container |
+| access key ID | Storage account name |
+| secret | Account key |
+| endpoint | `https://ACCOUNT.blob.core.windows.net` by default |
+
+Path-style endpoints such as Azurite and Azure Stack may carry exactly `/ACCOUNT` as their path.
+
+**Infrastructure migrations** (ADR 0025) have no settings of their own:
+
+- the executor waits `TENANT_SETTINGS_CACHE_SECONDS + 1` for other processes to stop routing to
+  the old location;
+- it waits up to 15 minutes for running jobs to finish;
+- it runs as the Celery task `documind.run_infrastructure_migration`, or through
+  `documind-manage migrations run`.
+
 ## Conversations
 
 | Variable                           | Default | Description                                                     |
@@ -244,6 +264,11 @@ Redis is unavailable, requests are allowed and an error is logged.
 | `RATE_LIMIT_REFRESH_WINDOW_SECONDS`   | `60`    | Refresh window.                                         |
 | `RATE_LIMIT_AI_PER_USER`              | `30`    | Search, ask, send and regenerate requests per user per window. |
 | `RATE_LIMIT_AI_WINDOW_SECONDS`        | `60`    | Window for the above.                                   |
+| `RATE_LIMIT_OUTBOUND_CHECKS_PER_WORKSPACE` | `20` | Infrastructure and AI-key validations (outbound connections) per workspace per window. |
+| `RATE_LIMIT_OUTBOUND_CHECKS_WINDOW_SECONDS` | `3600` | Window for the above.                                |
+
+Customer-worker endpoints (`/worker/v1/*`) are limited to 120 requests per minute per client
+address. This limit is fixed.
 
 ## Email (SMTP)
 
@@ -316,6 +341,48 @@ to `local`, so the stack runs without an API key.
 | `E2E_SCREENSHOTS` | *(unset)*                | Directory for journey screenshots.            |
 
 Run with `make e2e` against a running stack. Each run creates accounts, so the auth rate limits apply.
+
+## Monitoring
+
+| Variable        | Default   | Description |
+| --------------- | --------- | ----------- |
+| `METRICS_TOKEN` | *(unset)* | Bearer token for `GET /api/v1/metrics` (Prometheus format). Unset: the endpoint answers 404. The production proxy never forwards it, so scrape it on the internal network. |
+
+## Production stack (`deploy/production/.env`)
+
+Read by `deploy/production/docker-compose.yml` in addition to the application settings above.
+[`runbooks/deployment.md`](runbooks/deployment.md) describes the procedure.
+
+| Variable | Description |
+| --- | --- |
+| `SERVER_NAME` | Public hostname. Sets `PUBLIC_APP_URL`, CORS and the TLS certificate |
+| `LETSENCRYPT_EMAIL`, `LETSENCRYPT_STAGING` | Let's Encrypt account; `true` uses the staging CA for a dry run |
+| `DOCUMIND_IMAGE`, `DOCUMIND_WEB_IMAGE`, `DOCUMIND_BACKUP_IMAGE` | Image tags to run. Pin release tags |
+| `DOCUMIND_ENV_FILE` | Alternative env file (default `.env`) |
+| `API_WORKERS` | Uvicorn worker processes (default 3: about one per vCPU) |
+| `WORKER_CONCURRENCY` | Celery processes per worker container (default 2) |
+| `REDIS_PASSWORD` | Required; generated |
+| `POSTGRES_PASSWORD` | Only with the `bundled-db` profile |
+| `PGURL` | libpq URL of the control-plane database, for backups |
+| `DATAPLANE_PGURLS` | Space-separated libpq URLs of dedicated databases, for backups |
+| `BACKUP_AT`, `RETENTION_DAYS` | Daily backup time (UTC) and local retention |
+| `BACKUP_OFFSITE_BUCKET`, `BACKUP_S3_ENDPOINT_URL`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Offsite copy, with separate write-only credentials |
+
+## Customer-hosted worker (`deploy/customer-worker/.env`)
+
+| Variable | Description |
+| --- | --- |
+| `DOCUMIND_URL`, `DOCUMIND_WORKER_TOKEN` | Control plane address and the token issued at registration |
+| `WORKER_NAME`, `WORKER_POLL_SECONDS` | Label and poll interval |
+| `DATAPLANE_URL` | The customer's database (the same one registered in Infrastructure) |
+| `S3_*`, or `STORAGE_PROVIDER=azure_blob` with `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`, `AZURE_CONTAINER`, `AZURE_BLOB_ENDPOINT` | The customer's storage |
+| `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` | Must match the workspace's model. The worker refuses to run otherwise |
+
+## Tests
+
+| Variable | Description |
+| --- | --- |
+| `AZURITE_BLOB_URL` | Azurite blob endpoint for `test_azure_storage.py` (default `http://127.0.0.1:10000/devstoreaccount1`). Start it with `docker compose --profile azure up -d azurite`; the tests skip when it isn't running |
 
 ## Runtime image (uvicorn)
 

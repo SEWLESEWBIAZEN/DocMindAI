@@ -3,6 +3,7 @@
 #   BACKUP_AT              default 02:30
 #   BACKUP_OFFSITE_BUCKET  optional: separate bucket (ideally another account/region)
 #   BACKUP_RUN_NOW=true    also run once at start (first deployment, drills)
+#   BACKUP_ONCE=true       run once (backup, offsite copy, metric) and exit with its status
 set -euo pipefail
 : "${BACKUP_DIR:=/backups}"
 export BACKUP_DIR
@@ -20,14 +21,19 @@ run() {
     echo "$(date -u +%FT%TZ) backup finished: $latest"
   else
     echo "$(date -u +%FT%TZ) backup FAILED" >&2
+    return 1
   fi
 }
 
-[ "${BACKUP_RUN_NOW:-false}" = "true" ] && run
+if [ "${BACKUP_ONCE:-false}" = "true" ]; then
+  run
+  exit $?
+fi
+[ "${BACKUP_RUN_NOW:-false}" = "true" ] && { run || true; }
 while :; do
   now=$(date -u +%s)
   next=$(date -u -d "today $at" +%s)
   [ "$next" -le "$now" ] && next=$(date -u -d "tomorrow $at" +%s)
   sleep $((next - now))
-  run
+  run || true  # keep the schedule; the stale-backup alert reports failures
 done
