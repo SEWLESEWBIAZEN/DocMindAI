@@ -1426,6 +1426,133 @@
         "title": "EmailRequest",
         "type": "object"
       },
+      "EntitlementsResponse": {
+        "properties": {
+          "audio_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Seconds"
+          },
+          "byok": {
+            "title": "Byok",
+            "type": "boolean"
+          },
+          "chat_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Tokens"
+          },
+          "custom_storage": {
+            "title": "Custom Storage",
+            "type": "boolean"
+          },
+          "customer_workers": {
+            "title": "Customer Workers",
+            "type": "boolean"
+          },
+          "dedicated_database": {
+            "title": "Dedicated Database",
+            "type": "boolean"
+          },
+          "embedding_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Tokens"
+          },
+          "external_database": {
+            "title": "External Database",
+            "type": "boolean"
+          },
+          "figure_descriptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure Descriptions"
+          },
+          "max_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Documents"
+          },
+          "max_members": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Members"
+          },
+          "platform_ai": {
+            "title": "Platform Ai",
+            "type": "boolean"
+          },
+          "server_voice": {
+            "title": "Server Voice",
+            "type": "boolean"
+          },
+          "storage_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Bytes"
+          }
+        },
+        "required": [
+          "max_members",
+          "max_documents",
+          "storage_bytes",
+          "chat_tokens",
+          "embedding_tokens",
+          "audio_seconds",
+          "figure_descriptions",
+          "byok",
+          "platform_ai",
+          "server_voice",
+          "custom_storage",
+          "dedicated_database",
+          "external_database",
+          "customer_workers"
+        ],
+        "title": "EntitlementsResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1800,6 +1927,55 @@
         "title": "MessageUsageResponse",
         "type": "object"
       },
+      "MeteredUsageResponse": {
+        "properties": {
+          "audio_seconds": {
+            "title": "Audio Seconds",
+            "type": "number"
+          },
+          "billed_to": {
+            "description": "\"platform\" or \"workspace_key\" (your own AI key)",
+            "title": "Billed To",
+            "type": "string"
+          },
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "capability": {
+            "title": "Capability",
+            "type": "string"
+          },
+          "characters": {
+            "title": "Characters",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "units": {
+            "title": "Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capability",
+          "billed_to",
+          "calls",
+          "input_tokens",
+          "output_tokens",
+          "audio_seconds",
+          "characters",
+          "units"
+        ],
+        "title": "MeteredUsageResponse",
+        "type": "object"
+      },
       "MfaCodeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2037,6 +2213,66 @@
         "title": "PageResponse",
         "type": "object"
       },
+      "PlanSummaryResponse": {
+        "properties": {
+          "entitlements": {
+            "$ref": "#/components/schemas/EntitlementsResponse"
+          },
+          "has_overrides": {
+            "title": "Has Overrides",
+            "type": "boolean"
+          },
+          "period_end": {
+            "format": "date-time",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "plan_description": {
+            "title": "Plan Description",
+            "type": "string"
+          },
+          "plan_key": {
+            "title": "Plan Key",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "quotas": {
+            "items": {
+              "$ref": "#/components/schemas/QuotaResponse"
+            },
+            "title": "Quotas",
+            "type": "array"
+          },
+          "usage": {
+            "items": {
+              "$ref": "#/components/schemas/MeteredUsageResponse"
+            },
+            "title": "Usage",
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_key",
+          "plan_name",
+          "plan_description",
+          "has_overrides",
+          "period_start",
+          "period_end",
+          "entitlements",
+          "quotas",
+          "usage"
+        ],
+        "title": "PlanSummaryResponse",
+        "type": "object"
+      },
       "ProcessingJobResponse": {
         "properties": {
           "attempts": {
@@ -2272,6 +2508,47 @@
           "display_name"
         ],
         "title": "ProfileUpdateRequest",
+        "type": "object"
+      },
+      "QuotaResponse": {
+        "properties": {
+          "exceeded": {
+            "title": "Exceeded",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None means unlimited",
+            "title": "Limit"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "used": {
+            "title": "Used",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "label",
+          "limit",
+          "used",
+          "exceeded"
+        ],
+        "title": "QuotaResponse",
         "type": "object"
       },
       "RecoveryCodesResponse": {
@@ -7500,6 +7777,55 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/plan": {
+      "get": {
+        "description": "Monthly quotas count only platform-billed usage; calls made with the workspace's own AI key are listed with `billed_to: workspace_key` and never count toward them.",
+        "operationId": "plan_summary_api_v1_workspaces__workspace_id__plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plan, quotas and metered usage this month (requires usage.read)",
+        "tags": [
+          "usage"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/search": {
       "post": {
         "operationId": "search_api_v1_workspaces__workspace_id__search_post",
@@ -7560,7 +7886,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/usage": {
       "get": {
-        "description": "Documents and storage are current totals; processing and AI figures cover the last `days` days (UTC). Computed from operational data; one-shot `/ask` calls are not recorded yet (persisted usage records arrive in Phase 8).",
+        "description": "Documents and storage are current totals; processing and AI figures cover the last `days` days (UTC), computed from operational data. Metered, billable usage (including `/ask`, speech and figure descriptions) is in `GET /plan`.",
         "operationId": "usage_summary_api_v1_workspaces__workspace_id__usage_get",
         "parameters": [
           {

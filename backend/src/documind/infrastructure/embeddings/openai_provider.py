@@ -54,6 +54,11 @@ class OpenAIEmbeddingProvider:
                 encoding_format="float",
             )
         except openai.RateLimitError as exc:
+            if getattr(exc, "code", None) == "insufficient_quota":
+                raise TransientProcessingError(
+                    "The embedding provider account is out of quota.",
+                    code="provider_quota_exhausted",
+                ) from exc
             raise TransientProcessingError(
                 "The embedding service is rate limiting requests.", code="embedding_rate_limited"
             ) from exc

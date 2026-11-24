@@ -9,6 +9,8 @@ from fastapi import BackgroundTasks, Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from documind.application.ai.resolver import WorkspaceAI
+from documind.application.billing.service import BillingService
 from documind.application.conversations.finalizer import ReplyFinalizer
 from documind.application.conversations.service import ConversationService
 from documind.application.conversations.streaming import ReplyRunner, StreamOptions
@@ -29,6 +31,7 @@ from documind.application.rag.retrieval import RetrievalOptions, RetrievalServic
 from documind.container import Container
 from documind.core.config import Settings
 from documind.core.logging import get_request_id
+from documind.domain.billing.plans import Capability
 from documind.domain.errors import AuthenticationError, PermissionDeniedError
 from documind.domain.identity.policies import WorkspaceContext
 from documind.infrastructure.database.models import User
@@ -220,6 +223,80 @@ def require_csrf_header(
 
 
 # --------------------------------------------------------------------------- #
+# AI providers, plans and quotas (ADR 0019, 0020)
+# --------------------------------------------------------------------------- #
+
+
+async def get_workspace_ai(ctx: WorkspaceCtx, container: ContainerDep) -> WorkspaceAI:
+    """The workspace's AI adapters (its own key or the platform's), metered."""
+    return await container.ai_resolver().resolve(ctx.workspace_id, user_id=ctx.user_id)
+
+
+WorkspaceAIDep = Annotated[WorkspaceAI, Depends(get_workspace_ai)]
+
+
+def get_billing_service(session: SessionDep, meta: MetaDep) -> BillingService:
+    return BillingService(session, meta)
+
+
+BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
+
+
+class Quotas:
+    """Admission checks against the workspace's plan. Only platform-billed AI counts."""
+
+    def __init__(self, ctx: WorkspaceContext, ai: WorkspaceAI, billing: BillingService) -> None:
+        self._ctx = ctx
+        self._ai = ai
+        self._billing = billing
+
+    async def answers(self) -> None:
+        if self._ai.uses_platform(Capability.CHAT):
+            await self._billing.check_ai(
+                self._ctx.workspace_id, "chat_tokens", self._ai.entitlements
+            )
+
+    async def speech(self) -> None:
+        if self._ai.uses_platform(Capability.SPEECH_TO_TEXT) or self._ai.uses_platform(
+            Capability.TEXT_TO_SPEECH
+        ):
+            await self._billing.check_ai(
+                self._ctx.workspace_id, "audio_seconds", self._ai.entitlements
+            )
+
+    async def upload(self, size: int | None) -> None:
+        await self._billing.check_upload(
+            self._ctx.workspace_id, self._ai.entitlements, size=size or 0
+        )
+        if self._ai.uses_platform(Capability.EMBEDDING):
+            await self._billing.check_ai(
+                self._ctx.workspace_id, "embedding_tokens", self._ai.entitlements
+            )
+
+    async def members(self) -> None:
+        await self._billing.check_members(self._ctx.workspace_id, self._ai.entitlements)
+
+
+def get_quotas(ctx: WorkspaceCtx, ai: WorkspaceAIDep, billing: BillingServiceDep) -> Quotas:
+    return Quotas(ctx, ai, billing)
+
+
+QuotasDep = Annotated[Quotas, Depends(get_quotas)]
+
+
+async def admit_answer(quotas: QuotasDep) -> None:
+    await quotas.answers()
+
+
+async def admit_speech(quotas: QuotasDep) -> None:
+    await quotas.speech()
+
+
+async def admit_member(quotas: QuotasDep) -> None:
+    await quotas.members()
+
+
+# --------------------------------------------------------------------------- #
 # Documents
 # --------------------------------------------------------------------------- #
 
@@ -257,11 +334,13 @@ ProcessingQueriesDep = Annotated[ProcessingQueries, Depends(get_processing_queri
 # --------------------------------------------------------------------------- #
 
 
-def get_retrieval_service(session: SessionDep, container: ContainerDep) -> RetrievalService:
+def get_retrieval_service(
+    session: SessionDep, container: ContainerDep, ai: WorkspaceAIDep
+) -> RetrievalService:
     s = container.settings
     return RetrievalService(
         session,
-        container.embedding_provider,
+        ai.embeddings,
         RetrievalOptions(
             top_k=s.retrieval_top_k,
             candidates=s.retrieval_candidates,
@@ -276,12 +355,12 @@ RetrievalServiceDep = Annotated[RetrievalService, Depends(get_retrieval_service)
 
 
 def get_rag_orchestrator(
-    retrieval: RetrievalServiceDep, container: ContainerDep
+    retrieval: RetrievalServiceDep, container: ContainerDep, ai: WorkspaceAIDep
 ) -> RAGOrchestrator:
     s = container.settings
     return RAGOrchestrator(
         retrieval,
-        container.llm_provider,
+        ai.llm,
         GenerationOptions(
             max_output_tokens=s.llm_max_output_tokens,
             temperature=s.llm_temperature,
@@ -290,7 +369,7 @@ def get_rag_orchestrator(
             history_max_tokens=s.conversation_history_max_tokens,
         ),
         condenser=QueryCondenser(
-            container.llm_provider,
+            ai.llm,
             enabled=s.conversation_condense_followups,
             temperature=s.llm_temperature,
         ),

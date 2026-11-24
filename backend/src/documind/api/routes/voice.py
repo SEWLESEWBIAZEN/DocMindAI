@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from documind.api.dependencies import ContainerDep, MetaDep, SessionDep, WorkspaceCtx
+from documind.api.dependencies import (
+    ContainerDep,
+    MetaDep,
+    SessionDep,
+    WorkspaceAIDep,
+    WorkspaceCtx,
+    admit_speech,
+)
 from documind.application.voice.service import MAX_SPEED, MIN_SPEED, VoiceService, VoiceSettings
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/voice", tags=["voice"])
@@ -45,13 +52,15 @@ class SpeechRequest(BaseModel):
     speed: float = Field(default=1.0, ge=MIN_SPEED, le=MAX_SPEED)
 
 
-def get_voice_service(session: SessionDep, container: ContainerDep, meta: MetaDep) -> VoiceService:
+def get_voice_service(
+    session: SessionDep, container: ContainerDep, meta: MetaDep, ai: WorkspaceAIDep
+) -> VoiceService:
     s = container.settings
     return VoiceService(
         session,
         meta,
-        stt=container.speech_to_text,
-        tts=container.text_to_speech,
+        stt=ai.stt,
+        tts=ai.tts,
         max_audio_bytes=s.speech_max_audio_bytes,
         max_text_chars=s.speech_max_text_chars,
     )
@@ -98,7 +107,7 @@ async def set_voice_policy(
 @router.post(
     "/transcribe",
     response_model=TranscriptResponse,
-    dependencies=[Depends(limit_voice_requests)],
+    dependencies=[Depends(limit_voice_requests), Depends(admit_speech)],
     summary="Speech to text (audio is not stored)",
 )
 async def transcribe(
@@ -118,7 +127,7 @@ async def transcribe(
 @router.post(
     "/speech",
     response_class=StreamingResponse,
-    dependencies=[Depends(limit_voice_requests)],
+    dependencies=[Depends(limit_voice_requests), Depends(admit_speech)],
     summary="Text to speech, streamed as MP3 (nothing is stored)",
     responses={200: {"content": {"audio/mpeg": {}}}},
 )

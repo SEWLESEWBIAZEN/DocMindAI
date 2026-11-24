@@ -14,13 +14,10 @@ from collections.abc import Coroutine
 from typing import Any
 
 from documind.application.conversations.sweeper import StaleReplySweeper
-from documind.application.processing.embedding_service import EmbeddingService
-from documind.application.processing.figures import FigureDescriber
 from documind.application.processing.orchestrator import ProcessingOrchestrator
 from documind.application.processing.sweeper import ProcessingSweeper
-from documind.container import Container, build_container
+from documind.container import Container, build_container, processing_ai
 from documind.core.config import get_settings
-from documind.infrastructure.database.repositories.processing import SessionEmbeddingCache
 
 _loop: asyncio.AbstractEventLoop | None = None
 _container: Container | None = None
@@ -46,19 +43,13 @@ def container() -> Container:
 
 def orchestrator() -> ProcessingOrchestrator:
     c = container()
-    embeddings = EmbeddingService(
-        c.embedding_provider,
-        SessionEmbeddingCache(c.session_factory),
-        batch_size=c.settings.embedding_batch_size,
-    )
     return ProcessingOrchestrator(
         c.session_factory,
         c.settings,
         c.storage,
         c.extractor,
-        embeddings,
         worker=f"{socket.gethostname()}:{os.getpid()}",
-        figures=FigureDescriber(c.image_describer),
+        ai=processing_ai(c),
     )
 
 

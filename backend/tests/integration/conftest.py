@@ -45,6 +45,8 @@ DATA_TABLES = [
     "document_versions",
     "documents",
     "audit_logs",
+    "usage_records",
+    "workspace_plans",
     "invitations",
     "account_tokens",
     "refresh_tokens",
@@ -137,6 +139,7 @@ def identity_settings(live_settings: Settings, migrated_test_db: str, test_bucke
             "llm_provider": "local",
             "rate_limit_ai_per_user": 1000,
             "processing_retry_base_seconds": 1,
+            "tenant_settings_cache_seconds": 0,
         }
     )
 

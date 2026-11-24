@@ -72,3 +72,18 @@ class RateLimitedError(DomainError):
     def __init__(self, retry_after_seconds: int) -> None:
         super().__init__("Too many requests. Please try again later.")
         self.retry_after_seconds = retry_after_seconds
+
+
+class QuotaExceededError(DomainError):
+    """A plan limit was reached (ADR 0020). Mapped to 402 with the quota details."""
+
+    code = "quota_exceeded"
+
+    def __init__(
+        self, message: str, *, metric: str, limit: int, used: float, resets_at: str | None
+    ) -> None:
+        super().__init__(message)
+        self.metric = metric
+        self.limit = limit
+        self.used = used
+        self.resets_at = resets_at

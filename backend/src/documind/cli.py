@@ -15,23 +15,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import dataclasses
+import getpass
 import json
 import sys
 import uuid
 from typing import Any
 
+from documind.application.billing.service import BillingService
 from documind.application.identity.common import utcnow
-from documind.application.processing.embedding_service import EmbeddingService
 from documind.application.processing.jobs import new_job
 from documind.application.processing.orchestrator import ProcessingOrchestrator
 from documind.application.processing.sweeper import ProcessingSweeper
-from documind.container import Container, build_container
+from documind.container import Container, build_container, processing_ai
 from documind.core.config import get_settings
 from documind.core.logging import configure_logging
+from documind.domain.billing.plans import PLANS
 from documind.infrastructure.database.repositories.processing import (
     IndexRepository,
     ProcessingJobRepository,
-    SessionEmbeddingCache,
 )
 from documind.infrastructure.storage.bootstrap import ensure_private_bucket
 from documind.infrastructure.storage.client import create_s3_client
@@ -110,18 +111,13 @@ async def _sweep(container: Container) -> int:
 
 
 async def _process(container: Container, job_id: uuid.UUID) -> int:
-    embeddings = EmbeddingService(
-        container.embedding_provider,
-        SessionEmbeddingCache(container.session_factory),
-        batch_size=container.settings.embedding_batch_size,
-    )
     orchestrator = ProcessingOrchestrator(
         container.session_factory,
         container.settings,
         container.storage,
         container.extractor,
-        embeddings,
         worker="cli",
+        ai=processing_ai(container),
     )
     outcome = await orchestrator.run(job_id)
     _print(
@@ -153,6 +149,38 @@ async def _reindex(container: Container, workspace_id: uuid.UUID | None, include
     return 0
 
 
+async def _plans() -> int:
+    _print(
+        [{"key": p.key.value, "name": p.name, **p.entitlements.to_dict()} for p in PLANS.values()]
+    )
+    return 0
+
+
+async def _plan_assign(
+    container: Container,
+    workspace_id: uuid.UUID,
+    plan: str,
+    overrides: list[str],
+    note: str | None,
+) -> int:
+    parsed: dict[str, object] = {}
+    for item in overrides:
+        name, _, raw = item.partition("=")
+        parsed[name] = json.loads(raw) if raw else None
+    async with container.session_factory() as session:
+        row = await BillingService(session).assign(
+            workspace_id,
+            plan,
+            overrides=parsed,
+            operator=f"cli:{getpass.getuser()}",
+            note=note,
+        )
+    if container.entitlements is not None:
+        container.entitlements.invalidate(workspace_id)
+    _print({"workspace_id": workspace_id, "plan": row.plan_key, "overrides": row.overrides})
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="documind-manage",
@@ -174,6 +202,20 @@ def main(argv: list[str] | None = None) -> int:
     reindex = sub.add_parser("reindex", help="re-embed documents indexed with another model")
     reindex.add_argument("--workspace", type=uuid.UUID, default=None)
     reindex.add_argument("--all", action="store_true", help="re-index every ready document")
+    plan = sub.add_parser("plan", help="list plans or assign one to a workspace (audited)")
+    plan_sub = plan.add_subparsers(dest="plan_command", required=True)
+    plan_sub.add_parser("list", help="show the plan catalog")
+    assign = plan_sub.add_parser("assign", help="assign a plan to a workspace")
+    assign.add_argument("workspace_id", type=uuid.UUID)
+    assign.add_argument("plan", choices=[p.value for p in PLANS])
+    assign.add_argument(
+        "--override",
+        action="append",
+        default=[],
+        metavar="NAME=JSON",
+        help="entitlement override, e.g. --override max_members=100 (repeatable)",
+    )
+    assign.add_argument("--note", default=None)
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -187,6 +229,14 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(lambda c: _jobs(c, args.status, args.limit)))
     if args.command == "sweep":
         return asyncio.run(_with_container(_sweep))
+    if args.command == "plan":
+        if args.plan_command == "list":
+            return asyncio.run(_plans())
+        return asyncio.run(
+            _with_container(
+                lambda c: _plan_assign(c, args.workspace_id, args.plan, args.override, args.note)
+            )
+        )
     if args.command == "process":
         return asyncio.run(_with_container(lambda c: _process(c, args.job_id)))
     return asyncio.run(_with_container(lambda c: _reindex(c, args.workspace, args.all)))

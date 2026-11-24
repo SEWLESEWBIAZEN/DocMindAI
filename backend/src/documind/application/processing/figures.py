@@ -33,12 +33,14 @@ def _caption(blocks: tuple[Block, ...], index: int) -> str | None:
 
 
 class FigureDescriber:
-    def __init__(self, describer: ImageDescriber | None) -> None:
+    def __init__(self, describer: ImageDescriber | None, *, limit: int | None = None) -> None:
+        """``limit``: at most this many descriptions (the plan's remaining monthly quota)."""
         self._describer = describer
+        self._limit = limit
 
     async def describe(self, doc: ExtractedDocument) -> tuple[ExtractedDocument, int, int]:
         """Returns the document with figures described, plus (described, failed)."""
-        described = failed = 0
+        described = failed = over_quota = 0
         pages = []
         for page in doc.pages:
             blocks: list[Block] = []
@@ -50,6 +52,9 @@ class FigureDescriber:
                     blocks.append(block)
                     continue
                 if self._describer is None or block.image is None:
+                    continue
+                if self._limit is not None and described + failed >= self._limit:
+                    over_quota += 1
                     continue
                 context_parts = [f"Document: {doc.title}" if doc.title else None]
                 if page.page_number is not None:
@@ -80,4 +85,6 @@ class FigureDescriber:
             warnings.append(f"figures_described:count={described}")
         if failed:
             warnings.append(f"figure_descriptions_failed:count={failed}")
+        if over_quota:
+            warnings.append(f"figures_not_described:quota={over_quota}")
         return replace(doc, pages=tuple(pages), warnings=tuple(warnings)), described, failed

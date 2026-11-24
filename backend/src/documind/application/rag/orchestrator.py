@@ -35,7 +35,7 @@ from documind.domain.errors import (
 )
 from documind.domain.identity.permissions import Permission
 from documind.domain.identity.policies import WorkspaceContext
-from documind.domain.processing.errors import ProcessingError
+from documind.domain.processing.errors import ProcessingError, ProviderAccessError
 from documind.domain.processing.tokens import estimate_tokens
 from documind.domain.rag.citations import resolve_citations, split_insufficient
 from documind.domain.rag.context import build_context
@@ -122,6 +122,8 @@ def _without_sentinel(text: str) -> str:
 
 
 def _llm_unavailable(exc: ProcessingError) -> ServiceUnavailableError:
+    if isinstance(exc, ProviderAccessError):
+        return ServiceUnavailableError(exc.message, code=exc.code)
     return ServiceUnavailableError(
         "The answer service is temporarily unavailable. Please try again.",
         code=getattr(exc, "code", "llm_unavailable"),

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 import anyio
 
+from documind.application.ai.metering import usage_source
 from documind.application.conversations.finalizer import ReplyFinalizer
 from documind.application.conversations.views import MessageInfo
 from documind.application.ports import CancellationRegistry
@@ -116,9 +117,12 @@ class ReplyRunner:
 
         async def produce() -> None:
             try:
-                events: AsyncIterator[AnswerEvent] = self._orchestrator.stream_prepared(prepared)
-                async for event in events:
-                    await queue.put(event)
+                with usage_source("message", message_id):
+                    events: AsyncIterator[AnswerEvent] = self._orchestrator.stream_prepared(
+                        prepared
+                    )
+                    async for event in events:
+                        await queue.put(event)
                 await queue.put(_DONE)
             except asyncio.CancelledError:
                 raise

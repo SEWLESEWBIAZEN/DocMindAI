@@ -11,6 +11,7 @@ from documind.api.dependencies import (
     CollectionServiceDep,
     DocumentServiceDep,
     ProcessingQueriesDep,
+    QuotasDep,
     WorkspaceCtx,
 )
 from documind.api.schemas.documents import (
@@ -34,6 +35,7 @@ from documind.application.documents.collection_service import CollectionInfo
 from documind.application.documents.document_service import DocumentInfo
 from documind.domain.documents.files import SUPPORTED_EXTENSIONS, DocumentFormat
 from documind.domain.documents.status import DocumentStatus
+from documind.domain.identity.permissions import Permission
 from documind.infrastructure.database.repositories.documents import DocumentFilter
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["documents"])
@@ -65,10 +67,13 @@ _UPLOAD_DESCRIPTION = (
 async def upload_document(
     ctx: WorkspaceCtx,
     documents: DocumentServiceDep,
+    quotas: QuotasDep,
     file: Annotated[UploadFile, File(description="The document to upload")],
     title: Annotated[str | None, Form(max_length=500)] = None,
     collection_id: Annotated[uuid.UUID | None, Form()] = None,
 ) -> DocumentResponse:
+    ctx.require(Permission.DOCUMENTS_WRITE)
+    await quotas.upload(file.size)
     info = await documents.upload(
         ctx, file.file, file.filename, title=title, collection_id=collection_id
     )
@@ -203,8 +208,11 @@ async def upload_version(
     document_id: uuid.UUID,
     ctx: WorkspaceCtx,
     documents: DocumentServiceDep,
+    quotas: QuotasDep,
     file: Annotated[UploadFile, File()],
 ) -> DocumentResponse:
+    ctx.require(Permission.DOCUMENTS_WRITE)
+    await quotas.upload(file.size)
     return _doc(await documents.upload_version(ctx, document_id, file.file, file.filename))
 
 

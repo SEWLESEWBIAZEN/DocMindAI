@@ -24,6 +24,8 @@ _BASE: dict[str, Any] = {
     "embedding_provider": "local",
     "llm_provider": "local",
     "mfa_encryption_key": "dGVzdC1tZmEta2V5LTAxMjM0NTY3ODlhYmNkZWZnaGk=",
+    "credential_encryption_keys": "t1:"
+    + "dGVzdC1jcmVkZW50aWFsLWtleS0wMTIzNDU2Nzg5YWI=",
     "password_hash_time_cost": 1,
     "password_hash_memory_kib": 8,
     "password_hash_parallelism": 1,
@@ -39,6 +41,7 @@ PRODUCTION: dict[str, Any] = {
     "embedding_provider": "openai",
     "llm_provider": "openai",
     "openai_api_key": "sk-production-test-key",
+    "credential_encryption_keys": "p1:" + "cHJvZC1jcmVkZW50aWFsLWtleS0wMTIzNDU2Nzg5YWI=",
 }
 
 

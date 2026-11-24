@@ -14,6 +14,7 @@ from documind.domain.errors import (
     NotFoundError,
     PayloadTooLargeError,
     PermissionDeniedError,
+    QuotaExceededError,
     RateLimitedError,
     ServiceUnavailableError,
     UnsupportedMediaTypeError,
@@ -22,6 +23,7 @@ from documind.domain.errors import (
 
 _STATUS: list[tuple[type[DomainError], int]] = [
     (RateLimitedError, 429),
+    (QuotaExceededError, 402),
     (AuthenticationError, 401),
     (EmailNotVerifiedError, 403),
     (PermissionDeniedError, 403),
@@ -49,9 +51,15 @@ async def _handle_domain_error(_: Request, exc: Exception) -> JSONResponse:
         headers["Retry-After"] = str(exc.retry_after_seconds)
     if isinstance(exc, AuthenticationError):
         headers["WWW-Authenticate"] = "Bearer"
-    return JSONResponse(
-        {"detail": exc.message, "code": exc.code}, status_code=status_for(exc), headers=headers
-    )
+    body: dict[str, object] = {"detail": exc.message, "code": exc.code}
+    if isinstance(exc, QuotaExceededError):
+        body["quota"] = {
+            "metric": exc.metric,
+            "limit": exc.limit,
+            "used": exc.used,
+            "resets_at": exc.resets_at,
+        }
+    return JSONResponse(body, status_code=status_for(exc), headers=headers)
 
 
 def register_error_handlers(app: FastAPI) -> None:

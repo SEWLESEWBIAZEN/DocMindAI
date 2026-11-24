@@ -8,7 +8,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from documind.api.dependencies import ConversationServiceDep, WorkspaceCtx, limit_ai_requests
+from documind.api.dependencies import (
+    ConversationServiceDep,
+    WorkspaceCtx,
+    admit_answer,
+    limit_ai_requests,
+)
 from documind.api.schemas.conversations import (
     ConversationDetailResponse,
     ConversationPageResponse,
@@ -147,7 +152,7 @@ async def list_messages(
     response_model=ReplyResponse,
     summary="Ask a question in this conversation",
     description=_STREAM_DOC,
-    dependencies=[Depends(limit_ai_requests)],
+    dependencies=[Depends(limit_ai_requests), Depends(admit_answer)],
     response_class=StreamingResponse,
     responses={201: {"content": {"application/json": {}, "text/event-stream": {}}}},
 )
@@ -191,7 +196,7 @@ async def get_message_citations(
     response_model=ReplyResponse,
     summary="Answer the latest question again (replaces the latest answer)",
     description=_STREAM_DOC,
-    dependencies=[Depends(limit_ai_requests)],
+    dependencies=[Depends(limit_ai_requests), Depends(admit_answer)],
     response_class=StreamingResponse,
     responses={201: {"content": {"application/json": {}, "text/event-stream": {}}}},
 )

@@ -8,9 +8,9 @@ from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from documind.api.dependencies import SessionDep, WorkspaceCtx
+from documind.api.dependencies import BillingServiceDep, SessionDep, WorkspaceCtx
 from documind.application.usage.summary import UsageQueries
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["usage"])
@@ -79,8 +79,8 @@ def get_usage_queries(session: SessionDep) -> UsageQueries:
     summary="Usage summary for the period (requires usage.read)",
     description=(
         "Documents and storage are current totals; processing and AI figures cover the last "
-        "`days` days (UTC). Computed from operational data; one-shot `/ask` calls are not "
-        "recorded yet (persisted usage records arrive in Phase 8)."
+        "`days` days (UTC), computed from operational data. Metered, billable usage "
+        "(including `/ask`, speech and figure descriptions) is in `GET /plan`."
     ),
 )
 async def usage_summary(
@@ -89,3 +89,100 @@ async def usage_summary(
     days: Annotated[int, Query(ge=1, le=90)] = 30,
 ) -> UsageSummaryResponse:
     return UsageSummaryResponse.model_validate(asdict(await queries.summary(ctx, days=days)))
+
+
+# --------------------------------------------------------------------------- #
+# Plan, quotas and metered usage (ADR 0020)
+# --------------------------------------------------------------------------- #
+
+
+class EntitlementsResponse(BaseModel):
+    max_members: int | None
+    max_documents: int | None
+    storage_bytes: int | None
+    chat_tokens: int | None
+    embedding_tokens: int | None
+    audio_seconds: int | None
+    figure_descriptions: int | None
+    byok: bool
+    platform_ai: bool
+    server_voice: bool
+    custom_storage: bool
+    dedicated_database: bool
+    external_database: bool
+    customer_workers: bool
+
+
+class QuotaResponse(BaseModel):
+    metric: str
+    label: str
+    limit: int | None = Field(description="None means unlimited")
+    used: float
+    exceeded: bool
+
+
+class MeteredUsageResponse(BaseModel):
+    capability: str
+    billed_to: str = Field(description='"platform" or "workspace_key" (your own AI key)')
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    audio_seconds: float
+    characters: int
+    units: int
+
+
+class PlanSummaryResponse(BaseModel):
+    plan_key: str
+    plan_name: str
+    plan_description: str
+    has_overrides: bool
+    period_start: datetime
+    period_end: datetime
+    entitlements: EntitlementsResponse
+    quotas: list[QuotaResponse]
+    usage: list[MeteredUsageResponse]
+
+
+@router.get(
+    "/plan",
+    response_model=PlanSummaryResponse,
+    summary="Plan, quotas and metered usage this month (requires usage.read)",
+    description=(
+        "Monthly quotas count only platform-billed usage; calls made with the workspace's own "
+        "AI key are listed with `billed_to: workspace_key` and never count toward them."
+    ),
+)
+async def plan_summary(ctx: WorkspaceCtx, billing: BillingServiceDep) -> PlanSummaryResponse:
+    summary = await billing.summary(ctx)
+    usage = []
+    for key, values in sorted(summary.usage.items()):
+        capability, billed_to = key.split(":")
+        usage.append(
+            MeteredUsageResponse(
+                capability=capability,
+                billed_to=billed_to,
+                calls=int(values["calls"]),
+                input_tokens=int(values["input_tokens"]),
+                output_tokens=int(values["output_tokens"]),
+                audio_seconds=round(values["audio_seconds"], 1),
+                characters=int(values["characters"]),
+                units=int(values["units"]),
+            )
+        )
+    return PlanSummaryResponse(
+        plan_key=summary.plan.key.value,
+        plan_name=summary.plan.name,
+        plan_description=summary.plan.description,
+        has_overrides=summary.has_overrides,
+        period_start=summary.period_start,
+        period_end=summary.period_end,
+        entitlements=EntitlementsResponse(**summary.entitlements.to_dict()),
+        quotas=[
+            QuotaResponse(
+                metric=q.metric, label=q.label, limit=q.limit, used=q.used, exceeded=q.exceeded
+            )
+            for q in summary.quotas
+        ],
+        usage=usage,
+    )

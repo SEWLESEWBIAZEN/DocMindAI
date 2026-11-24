@@ -27,6 +27,7 @@ from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from documind.application.ai.metering import usage_source
 from documind.application.identity.common import utcnow
 from documind.application.ports import ObjectStorageProvider
 from documind.application.processing.embedding_service import EmbeddedTexts, EmbeddingService
@@ -70,6 +71,27 @@ class JobOutcome:
     retry_in_seconds: int | None = None
 
 
+class ProcessingAI(Protocol):
+    """Per-workspace embedding and figure services (ADR 0019: workspace keys)."""
+
+    async def for_workspace(
+        self, workspace_id: uuid.UUID
+    ) -> tuple[EmbeddingService, FigureDescriber]: ...
+
+
+class StaticProcessingAI:
+    """The same services for every workspace (tests and single-tenant tools)."""
+
+    def __init__(self, embeddings: EmbeddingService, figures: FigureDescriber) -> None:
+        self._embeddings = embeddings
+        self._figures = figures
+
+    async def for_workspace(
+        self, workspace_id: uuid.UUID
+    ) -> tuple[EmbeddingService, FigureDescriber]:
+        return self._embeddings, self._figures
+
+
 class ProcessingOrchestrator:
     def __init__(
         self,
@@ -77,17 +99,21 @@ class ProcessingOrchestrator:
         settings: Settings,
         storage: ObjectStorageProvider,
         extractor: Extractor,
-        embeddings: EmbeddingService,
+        embeddings: EmbeddingService | None = None,
         *,
         worker: str = "worker",
         figures: FigureDescriber | None = None,
+        ai: ProcessingAI | None = None,
     ) -> None:
-        self._figures = figures or FigureDescriber(None)
+        if ai is None:
+            if embeddings is None:
+                raise ValueError("Pass either embeddings or a ProcessingAI")
+            ai = StaticProcessingAI(embeddings, figures or FigureDescriber(None))
+        self._ai = ai
         self._sessions = session_factory
         self._settings = settings
         self._storage = storage
         self._extractor = extractor
-        self._embeddings = embeddings
         self._worker = worker
 
     # ------------------------------------------------------------------ helpers
@@ -156,10 +182,12 @@ class ProcessingOrchestrator:
         workspace_id, document_id, version_id, key, fmt, title = snapshot
         log = {"job_id": str(job_id), "document_id": str(document_id)}
         try:
+            embeddings, figures = await self._ai.for_workspace(workspace_id)
             buffer = io.BytesIO()
             await self._storage.download_to(key, buffer)
             extracted = await asyncio.to_thread(self._extractor.extract, buffer.getvalue(), fmt)
-            extracted, _, _ = await self._figures.describe(extracted)
+            with usage_source("processing_job", job_id):
+                extracted, _, _ = await figures.describe(extracted)
             document = normalize_document(extracted)
             if document.char_count == 0:
                 raise PermanentProcessingError(
@@ -177,13 +205,22 @@ class ProcessingOrchestrator:
             )
 
             await self._set_stage(job_id, "embedding")
-            embedded = await self._embeddings.embed(
-                workspace_id, [embedding_input(title, c.heading_path, c.text) for c in chunks]
-            )
+            with usage_source("processing_job", job_id):
+                embedded = await embeddings.embed(
+                    workspace_id, [embedding_input(title, c.heading_path, c.text) for c in chunks]
+                )
 
             await self._set_stage(job_id, "indexing")
             return await self._complete(
-                job_id, workspace_id, document_id, version_id, document, chunks, embedded, started
+                job_id,
+                workspace_id,
+                document_id,
+                version_id,
+                document,
+                chunks,
+                embedded,
+                started,
+                embeddings,
             )
         except PermanentProcessingError as exc:
             logger.warning("Processing failed permanently", extra={**log, "code": exc.code})
@@ -211,6 +248,7 @@ class ProcessingOrchestrator:
         chunks: list[Chunk],
         embedded: EmbeddedTexts,
         started: float,
+        embeddings: EmbeddingService,
     ) -> JobOutcome:
         async with self._sessions() as session:
             jobs = ProcessingJobRepository(session)
@@ -256,8 +294,8 @@ class ProcessingOrchestrator:
                     heading_path=list(c.heading_path),
                     content_sha256=h,
                     embedding=v,
-                    embedding_model=self._embeddings.model,
-                    embedding_dimensions=self._embeddings.dimensions,
+                    embedding_model=embeddings.model,
+                    embedding_dimensions=embeddings.dimensions,
                 )
                 for c, h, v in zip(chunks, embedded.content_hashes, embedded.vectors, strict=True)
             ]
@@ -281,7 +319,7 @@ class ProcessingOrchestrator:
                 "embeddings_reused": embedded.reused,
                 "embeddings_created": embedded.embedded,
                 "embedding_input_tokens": embedded.input_tokens,
-                "embedding_model": self._embeddings.model,
+                "embedding_model": embeddings.model,
                 "duration_ms": round((time.perf_counter() - started) * 1000),
             }
             self._finish(job, "succeeded", now)

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, Response, status
 from documind.api.dependencies import (
     CurrentUser,
     InvitationServiceDep,
+    QuotasDep,
     WorkspaceCtx,
     WorkspaceServiceDep,
 )
@@ -27,6 +28,7 @@ from documind.api.schemas.identity import (
 )
 from documind.application.identity.invitation_service import InvitationInfo
 from documind.application.identity.workspace_service import WorkspaceSummary
+from documind.domain.identity.permissions import Permission
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["workspaces"])
 organizations_router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -145,8 +147,14 @@ async def list_invitations(
 
 @router.post("/invitations", status_code=status.HTTP_201_CREATED, response_model=InvitationResponse)
 async def create_invitation(
-    body: InviteRequest, ctx: WorkspaceCtx, user: CurrentUser, invitations: InvitationServiceDep
+    body: InviteRequest,
+    ctx: WorkspaceCtx,
+    user: CurrentUser,
+    invitations: InvitationServiceDep,
+    quotas: QuotasDep,
 ) -> InvitationResponse:
+    ctx.require(Permission.MEMBERS_INVITE)
+    await quotas.members()
     return invitation_response(await invitations.invite(ctx, user, str(body.email), body.role))
 
 

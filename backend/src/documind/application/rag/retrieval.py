@@ -13,7 +13,7 @@ from documind.application.ports import EmbeddingProvider
 from documind.domain.errors import NotFoundError, ServiceUnavailableError, ValidationFailedError
 from documind.domain.identity.permissions import Permission
 from documind.domain.identity.policies import WorkspaceContext
-from documind.domain.processing.errors import ProcessingError
+from documind.domain.processing.errors import ProcessingError, ProviderAccessError
 from documind.domain.rag.fusion import reciprocal_rank_fusion
 from documind.domain.rag.models import RetrievedChunk
 from documind.infrastructure.database.repositories.retrieval import (
@@ -159,6 +159,8 @@ class RetrievalService:
             return RetrievalResult([], warnings, mode, self._embedder.model, 0)
         try:
             batch = await self._embedder.embed([query])
+        except ProviderAccessError as exc:
+            raise ServiceUnavailableError(exc.message, code=exc.code) from exc
         except ProcessingError as exc:
             raise ServiceUnavailableError(
                 "Search is temporarily unavailable. Please try again.",

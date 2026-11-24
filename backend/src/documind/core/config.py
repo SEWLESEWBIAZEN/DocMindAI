@@ -9,6 +9,7 @@ insecure defaults.
 from __future__ import annotations
 
 import base64
+import re
 import binascii
 from enum import StrEnum
 from functools import lru_cache
@@ -211,6 +212,13 @@ class Settings(BaseSettings):
     #   python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
     mfa_encryption_key: SecretStr
     mfa_issuer: str = "DocuMind"
+    # Credential vault (ADR 0022): "id:base64key,id:base64key". The first key wraps
+    # new data keys; every key can unwrap. Rotate by prepending a new key, running
+    # `documind-manage credentials rewrap`, then removing the old one.
+    credential_encryption_keys: SecretStr | None = None
+    # How long API and worker processes cache a workspace's plan and AI-provider
+    # settings. Changes made in another process apply within this time.
+    tenant_settings_cache_seconds: float = Field(default=10.0, ge=0, le=300)
     # How long a successful 2FA check authorizes sensitive actions (e.g. delete).
     mfa_step_up_ttl_seconds: int = Field(default=300, ge=30, le=3600)
     mfa_setup_ttl_minutes: int = Field(default=15, ge=1, le=60)
@@ -259,7 +267,20 @@ class Settings(BaseSettings):
             raise ValueError("MFA_ENCRYPTION_KEY must be 32 bytes, base64url-encoded")
         return value
 
-    @field_validator("openai_api_key", "celery_broker_url", "smtp_password", mode="before")
+    @field_validator("credential_encryption_keys")
+    @classmethod
+    def _validate_credential_keys(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            credential_key_ring(value)  # raises ValueError when malformed
+        return value
+
+    @field_validator(
+        "openai_api_key",
+        "celery_broker_url",
+        "smtp_password",
+        "credential_encryption_keys",
+        mode="before",
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         # Compose passes unset variables as empty strings.
@@ -316,6 +337,11 @@ class Settings(BaseSettings):
         decoded_mfa_key = mfa_key_bytes(self.mfa_encryption_key).lower()
         if any(marker.encode() in decoded_mfa_key for marker in _INSECURE_SECRET_MARKERS):
             insecure.append("MFA_ENCRYPTION_KEY")
+        if self.credential_encryption_keys is None:
+            raise ValueError("CREDENTIAL_ENCRYPTION_KEYS is required in production (ADR 0022)")
+        for key_id, key in credential_key_ring(self.credential_encryption_keys):
+            if any(marker.encode() in key.lower() for marker in _INSECURE_SECRET_MARKERS):
+                insecure.append(f"CREDENTIAL_ENCRYPTION_KEYS ({key_id})")
         if insecure:
             raise ValueError(
                 "Development placeholder credentials are not allowed in production: "
@@ -362,6 +388,27 @@ def mfa_key_bytes(value: SecretStr) -> bytes:
         return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
     except (ValueError, binascii.Error):
         return b""
+
+
+_KEY_ID = re.compile(r"^[a-z0-9_-]{1,16}$")
+
+
+def credential_key_ring(value: SecretStr) -> list[tuple[str, bytes]]:
+    """Parse ``id:base64url,id:base64url``; first entry is the primary key."""
+    ring: list[tuple[str, bytes]] = []
+    for item in value.get_secret_value().split(","):
+        key_id, sep, encoded = item.strip().partition(":")
+        if not sep or not _KEY_ID.match(key_id):
+            raise ValueError("CREDENTIAL_ENCRYPTION_KEYS entries must look like 'k1:<base64url>'")
+        key = mfa_key_bytes(SecretStr(encoded))
+        if len(key) != 32:
+            raise ValueError(f"CREDENTIAL_ENCRYPTION_KEYS key '{key_id}' must be 32 bytes")
+        if key_id in {existing for existing, _ in ring}:
+            raise ValueError(f"CREDENTIAL_ENCRYPTION_KEYS has duplicate id '{key_id}'")
+        ring.append((key_id, key))
+    if not ring:
+        raise ValueError("CREDENTIAL_ENCRYPTION_KEYS is empty")
+    return ring
 
 
 @lru_cache(maxsize=1)

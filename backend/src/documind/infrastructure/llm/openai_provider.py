@@ -22,7 +22,14 @@ from documind.domain.processing.errors import PermanentProcessingError, Transien
 logger = logging.getLogger(__name__)
 
 
+QUOTA_EXHAUSTED = "provider_quota_exhausted"
+
+
 def raise_classified(exc: Exception) -> NoReturn:
+    if isinstance(exc, openai.RateLimitError) and getattr(exc, "code", None) == "insufficient_quota":
+        raise TransientProcessingError(
+            "The AI provider account is out of quota.", code=QUOTA_EXHAUSTED
+        ) from exc
     if isinstance(exc, openai.RateLimitError):
         raise TransientProcessingError(
             "The AI service is busy. Please try again shortly.", code="llm_rate_limited"

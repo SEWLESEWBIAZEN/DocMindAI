@@ -13,6 +13,9 @@ from typing import Any
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from documind.application.ai.processing import ResolvedProcessingAI
+from documind.application.ai.resolver import AIResolver, CapabilityAdapter, PlatformAI
+from documind.application.billing.service import CachedEntitlements
 from documind.application.health_service import HealthService
 from documind.application.ports import (
     AccessTokenService,
@@ -30,11 +33,14 @@ from documind.application.ports import (
     TextToSpeechProvider,
 )
 from documind.core.config import Settings, mfa_key_bytes
+from documind.domain.billing.plans import Capability
 from documind.infrastructure.cache.cancellation import RedisCancellationRegistry
 from documind.infrastructure.cache.health import RedisHealthCheck
 from documind.infrastructure.cache.redis import create_redis_client
 from documind.infrastructure.database.engine import create_engine, create_session_factory
 from documind.infrastructure.database.health import PostgresHealthCheck
+from documind.infrastructure.database.repositories.billing import SqlUsageSink
+from documind.infrastructure.database.repositories.processing import SessionEmbeddingCache
 from documind.infrastructure.email.smtp import SmtpEmailSender
 from documind.infrastructure.embeddings.local_provider import LocalHashingEmbeddingProvider
 from documind.infrastructure.embeddings.openai_provider import OpenAIEmbeddingProvider
@@ -85,6 +91,13 @@ class Container:
     image_describer: ImageDescriber | None = None
     speech_to_text: SpeechToTextProvider | None = None
     text_to_speech: TextToSpeechProvider | None = None
+    ai: AIResolver | None = None
+    entitlements: CachedEntitlements | None = None
+
+    def ai_resolver(self) -> AIResolver:
+        if self.ai is None:  # pragma: no cover - always set by build_container
+            raise RuntimeError("AI resolver not configured")
+        return self.ai
 
     async def aclose(self) -> None:
         """Release pooled connections. Called on application shutdown."""
@@ -108,10 +121,11 @@ def build_container(settings: Settings) -> Container:
         ],
         timeout_seconds=settings.health_check_timeout_seconds,
     )
-    return Container(
+    session_factory = create_session_factory(engine)
+    container = Container(
         settings=settings,
         engine=engine,
-        session_factory=create_session_factory(engine),
+        session_factory=session_factory,
         redis=redis,
         s3_client=s3_client,
         health_service=health_service,
@@ -159,6 +173,50 @@ def build_container(settings: Settings) -> Container:
         image_describer=image_describer,
         **_build_speech(settings),
     )
+    container.entitlements = CachedEntitlements(
+        session_factory, ttl_seconds=settings.tenant_settings_cache_seconds
+    )
+    container.ai = AIResolver(
+        lambda: platform_ai(container),
+        SqlUsageSink(session_factory),
+        container.entitlements,
+        cache_seconds=settings.tenant_settings_cache_seconds,
+    )
+    return container
+
+
+def processing_ai(c: Container) -> ResolvedProcessingAI:
+    """Per-workspace embeddings and figure descriptions for background processing."""
+    return ResolvedProcessingAI(
+        c.ai_resolver(),
+        c.session_factory,
+        SessionEmbeddingCache(c.session_factory),
+        batch_size=c.settings.embedding_batch_size,
+    )
+
+
+def platform_ai(c: Container) -> PlatformAI:
+    """The deployment's own providers, per capability, for the AI resolver."""
+    s = c.settings
+    adapters: dict[Capability, CapabilityAdapter] = {
+        Capability.EMBEDDING: CapabilityAdapter(
+            s.embedding_provider, c.embedding_provider, c.embedding_provider.model
+        ),
+        Capability.CHAT: CapabilityAdapter(s.llm_provider, c.llm_provider, c.llm_provider.model),
+    }
+    if c.image_describer is not None:
+        adapters[Capability.VISION] = CapabilityAdapter(
+            s.llm_provider, c.image_describer, c.image_describer.model
+        )
+    if c.speech_to_text is not None:
+        adapters[Capability.SPEECH_TO_TEXT] = CapabilityAdapter(
+            s.speech_provider, c.speech_to_text, s.stt_model
+        )
+    if c.text_to_speech is not None:
+        adapters[Capability.TEXT_TO_SPEECH] = CapabilityAdapter(
+            s.speech_provider, c.text_to_speech, s.tts_model
+        )
+    return PlatformAI(adapters, s.embedding_dimensions)
 
 
 def _build_embedding_provider(settings: Settings) -> EmbeddingProvider:

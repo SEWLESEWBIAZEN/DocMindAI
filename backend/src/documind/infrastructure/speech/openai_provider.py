@@ -29,6 +29,15 @@ SUPPORTED_AUDIO_TYPES = frozenset(_EXTENSIONS)
 AUDIO_FORMATS = {"mp3": "audio/mpeg", "opus": "audio/ogg", "aac": "audio/aac", "wav": "audio/wav"}
 
 
+def _duration(result: object) -> float | None:
+    """Billed audio duration when the API reports it (``usage.seconds`` or ``duration``)."""
+    usage = getattr(result, "usage", None)
+    for value in (getattr(usage, "seconds", None), getattr(result, "duration", None)):
+        if isinstance(value, int | float) and value >= 0:
+            return float(value)
+    return None
+
+
 class OpenAISpeechProvider:
     def __init__(
         self,
@@ -67,7 +76,11 @@ class OpenAISpeechProvider:
             )
         except openai.OpenAIError as exc:
             raise_classified(exc)
-        return Transcript(text=(getattr(result, "text", "") or "").strip(), language=language)
+        return Transcript(
+            text=(getattr(result, "text", "") or "").strip(),
+            language=language,
+            duration_seconds=_duration(result),
+        )
 
     async def synthesize(
         self, text: str, *, voice: str | None = None, speed: float = 1.0, audio_format: str = "mp3"

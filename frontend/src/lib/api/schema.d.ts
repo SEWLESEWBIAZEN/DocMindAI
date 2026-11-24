@@ -990,6 +990,26 @@ export interface paths {
         patch: operations["change_member_role_api_v1_workspaces__workspace_id__members__member_id__patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan, quotas and metered usage this month (requires usage.read)
+         * @description Monthly quotas count only platform-billed usage; calls made with the workspace's own AI key are listed with `billed_to: workspace_key` and never count toward them.
+         */
+        get: operations["plan_summary_api_v1_workspaces__workspace_id__plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/search": {
         parameters: {
             query?: never;
@@ -1016,7 +1036,7 @@ export interface paths {
         };
         /**
          * Usage summary for the period (requires usage.read)
-         * @description Documents and storage are current totals; processing and AI figures cover the last `days` days (UTC). Computed from operational data; one-shot `/ask` calls are not recorded yet (persisted usage records arrive in Phase 8).
+         * @description Documents and storage are current totals; processing and AI figures cover the last `days` days (UTC), computed from operational data. Metered, billable usage (including `/ask`, speech and figure descriptions) is in `GET /plan`.
          */
         get: operations["usage_summary_api_v1_workspaces__workspace_id__usage_get"];
         put?: never;
@@ -1616,6 +1636,37 @@ export interface components {
              */
             email: string;
         };
+        /** EntitlementsResponse */
+        EntitlementsResponse: {
+            /** Audio Seconds */
+            audio_seconds: number | null;
+            /** Byok */
+            byok: boolean;
+            /** Chat Tokens */
+            chat_tokens: number | null;
+            /** Custom Storage */
+            custom_storage: boolean;
+            /** Customer Workers */
+            customer_workers: boolean;
+            /** Dedicated Database */
+            dedicated_database: boolean;
+            /** Embedding Tokens */
+            embedding_tokens: number | null;
+            /** External Database */
+            external_database: boolean;
+            /** Figure Descriptions */
+            figure_descriptions: number | null;
+            /** Max Documents */
+            max_documents: number | null;
+            /** Max Members */
+            max_members: number | null;
+            /** Platform Ai */
+            platform_ai: boolean;
+            /** Server Voice */
+            server_voice: boolean;
+            /** Storage Bytes */
+            storage_bytes: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1792,6 +1843,28 @@ export interface components {
             /** Output Tokens */
             output_tokens: number;
         };
+        /** MeteredUsageResponse */
+        MeteredUsageResponse: {
+            /** Audio Seconds */
+            audio_seconds: number;
+            /**
+             * Billed To
+             * @description "platform" or "workspace_key" (your own AI key)
+             */
+            billed_to: string;
+            /** Calls */
+            calls: number;
+            /** Capability */
+            capability: string;
+            /** Characters */
+            characters: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Units */
+            units: number;
+        };
         /** MfaCodeRequest */
         MfaCodeRequest: {
             /**
@@ -1873,6 +1946,32 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** PlanSummaryResponse */
+        PlanSummaryResponse: {
+            entitlements: components["schemas"]["EntitlementsResponse"];
+            /** Has Overrides */
+            has_overrides: boolean;
+            /**
+             * Period End
+             * Format: date-time
+             */
+            period_end: string;
+            /**
+             * Period Start
+             * Format: date-time
+             */
+            period_start: string;
+            /** Plan Description */
+            plan_description: string;
+            /** Plan Key */
+            plan_key: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Quotas */
+            quotas: components["schemas"]["QuotaResponse"][];
+            /** Usage */
+            usage: components["schemas"]["MeteredUsageResponse"][];
+        };
         /** ProcessingJobResponse */
         ProcessingJobResponse: {
             /** Attempts */
@@ -1950,6 +2049,22 @@ export interface components {
         ProfileUpdateRequest: {
             /** Display Name */
             display_name: string;
+        };
+        /** QuotaResponse */
+        QuotaResponse: {
+            /** Exceeded */
+            exceeded: boolean;
+            /** Label */
+            label: string;
+            /**
+             * Limit
+             * @description None means unlimited
+             */
+            limit: number | null;
+            /** Metric */
+            metric: string;
+            /** Used */
+            used: number;
         };
         /** RecoveryCodesResponse */
         RecoveryCodesResponse: {
@@ -4680,6 +4795,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_summary_api_v1_workspaces__workspace_id__plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSummaryResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

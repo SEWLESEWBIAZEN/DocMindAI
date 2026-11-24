@@ -11,6 +11,7 @@ from documind.api.dependencies import (
     RAGOrchestratorDep,
     RetrievalServiceDep,
     WorkspaceCtx,
+    admit_answer,
     limit_ai_requests,
 )
 from documind.api.schemas.rag import (
@@ -114,6 +115,7 @@ async def search(
 @router.post(
     "/ask",
     response_model=AnswerResponse,
+    dependencies=[Depends(admit_answer)],
     summary="Answer a question from the workspace's documents, with citations",
     description=(
         "Retrieves relevant passages, then generates an answer that cites them as [n]. "
@@ -145,6 +147,7 @@ class SummaryRequest(BaseModel):
 @router.post(
     "/documents/{document_id}/summary",
     response_model=AnswerResponse,
+    dependencies=[Depends(admit_answer)],
     summary="Summarize a document or page range, with citations (reading mode)",
 )
 async def summarize_document(
