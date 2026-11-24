@@ -149,6 +149,7 @@ def identity_settings(live_settings: Settings, migrated_test_db: str, test_bucke
             "rate_limit_ai_per_user": 1000,
             "processing_retry_base_seconds": 1,
             "tenant_settings_cache_seconds": 0,
+            "rate_limit_outbound_checks_per_workspace": 1000,
             "credential_encryption_keys": SecretStr(
                 "it1:dGVzdC1jcmVkZW50aWFsLWtleS0wMTIzNDU2Nzg5YWI="
             ),

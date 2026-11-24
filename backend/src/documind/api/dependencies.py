@@ -7,6 +7,7 @@ from typing import Annotated, cast
 
 from fastapi import BackgroundTasks, Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.ai.resolver import WorkspaceAI
@@ -33,7 +34,11 @@ from documind.container import Container
 from documind.core.config import Settings
 from documind.core.logging import get_request_id
 from documind.domain.billing.plans import Capability
-from documind.domain.errors import AuthenticationError, PermissionDeniedError
+from documind.domain.errors import (
+    AuthenticationError,
+    PermissionDeniedError,
+    ServiceUnavailableError,
+)
 from documind.domain.identity.policies import WorkspaceContext
 from documind.infrastructure.database.dataplane_runtime import relay_outbox
 from documind.infrastructure.database.models import User
@@ -250,6 +255,20 @@ async def get_data_session(
         yield session
         return
     async with infra.data_plane.sessions() as data:
+        try:
+            # Connect now, so an unreachable customer database is a clear 503 for
+            # this organization instead of an error halfway through a request.
+            await data.connection()
+        except (OSError, TimeoutError, DBAPIError) as exc:
+            logging.getLogger(__name__).warning(
+                "data plane unreachable",
+                extra={"workspace_id": str(infra.workspace_id), "error": type(exc).__name__},
+            )
+            raise ServiceUnavailableError(
+                "This organization's database can't be reached right now. Try again shortly; "
+                "if it persists, ask an owner to check the infrastructure settings.",
+                code="data_plane_unavailable",
+            ) from exc
         yield data
     try:
         await relay_outbox(infra.data_plane.sessions, container.session_factory)
@@ -422,6 +441,17 @@ async def limit_ai_requests(ctx: WorkspaceCtx, container: ContainerDep) -> None:
     s = container.settings
     await container.rate_limiter.hit(
         "ai:user", str(ctx.user_id), s.rate_limit_ai_per_user, s.rate_limit_ai_window_seconds
+    )
+
+
+async def limit_outbound_checks(ctx: WorkspaceCtx, container: ContainerDep) -> None:
+    """Key and infrastructure validation connect to customer-chosen hosts: cap them."""
+    s = container.settings
+    await container.rate_limiter.hit(
+        "outbound:workspace",
+        str(ctx.workspace_id),
+        s.rate_limit_outbound_checks_per_workspace,
+        s.rate_limit_outbound_checks_window_seconds,
     )
 
 

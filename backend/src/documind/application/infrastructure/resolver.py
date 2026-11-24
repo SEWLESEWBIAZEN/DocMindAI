@@ -41,6 +41,7 @@ from documind.infrastructure.database.models import (
     InfrastructureProfileVersion,
     WorkspaceInfrastructure,
 )
+from documind.infrastructure.network.ssrf import BlockedHostError, check_host, check_url
 from documind.infrastructure.security.vault import EnvelopeCipher, VaultError
 from documind.infrastructure.storage.factory import BuiltStorage, build_storage
 
@@ -182,6 +183,7 @@ class InfrastructureResolver:
             if row is None:
                 raise InfrastructureUnavailableError("Infrastructure profile not found.")
             config = verify(row)
+            await self._recheck(config)
             data_plane = self.shared
             if config.database.mode != "shared":
                 password = await self._secret(
@@ -199,6 +201,25 @@ class InfrastructureResolver:
                 storage = built_storage.storage
             await session.commit()  # credential last_used_at
         return _Built(config, data_plane, storage, built_storage)
+
+    async def _recheck(self, config: InfrastructureConfig) -> None:
+        """Customer hosts are checked again before connecting (DNS may have changed)."""
+        allowed = frozenset(self._settings.infrastructure_allowed_private_hosts)
+        try:
+            if config.database.mode == "external" and config.database.host:
+                await check_host(
+                    config.database.host, config.database.port or 5432, allowed=allowed
+                )
+            if config.storage.endpoint_url:
+                await check_url(config.storage.endpoint_url, allowed=allowed)
+        except BlockedHostError as exc:
+            logger.error(
+                "customer host now resolves to a blocked address", extra={"reason": str(exc)}
+            )
+            raise InfrastructureUnavailableError(
+                "This organization's infrastructure points to an address that isn't allowed.",
+                code="infrastructure_blocked",
+            ) from exc
 
     async def isolated_planes(self) -> list[tuple[DataPlane, list[uuid.UUID]]]:
         """Every active dedicated or external data plane, with its workspaces (sweepers)."""

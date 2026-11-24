@@ -9,7 +9,13 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from documind.api.dependencies import ContainerDep, MetaDep, SessionDep, WorkspaceCtx
+from documind.api.dependencies import (
+    ContainerDep,
+    MetaDep,
+    SessionDep,
+    WorkspaceCtx,
+    limit_outbound_checks,
+)
 from documind.application.infrastructure.service import InfrastructureService, VersionView
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/infrastructure", tags=["infrastructure"])
@@ -132,6 +138,7 @@ async def get_infrastructure(ctx: WorkspaceCtx, infra: ServiceDep) -> Infrastruc
     "/versions",
     status_code=status.HTTP_201_CREATED,
     response_model=VersionResponse,
+    dependencies=[Depends(limit_outbound_checks)],  # dedicated drafts provision a database
     summary="Create a draft version (2FA step-up; secrets are stored encrypted)",
 )
 async def create_version(
@@ -151,6 +158,7 @@ async def create_version(
 @router.post(
     "/versions/{version_id}/validate",
     response_model=VersionResponse,
+    dependencies=[Depends(limit_outbound_checks)],
     summary="Check connectivity, permissions and schema for a draft",
 )
 async def validate_version(

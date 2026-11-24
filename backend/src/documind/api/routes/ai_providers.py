@@ -15,6 +15,7 @@ from documind.api.dependencies import (
     MetaDep,
     SessionDep,
     WorkspaceCtx,
+    limit_outbound_checks,
 )
 from documind.application.ai.byok import ProviderKeyService, ProviderView
 from documind.application.processing.reindex import ReindexEstimate, dispatch_all
@@ -166,6 +167,7 @@ async def get_ai_providers(ctx: WorkspaceCtx, keys: ProviderKeysDep) -> AIProvid
 @router.put(
     "/ai-providers/{provider}",
     response_model=ProviderResponse,
+    dependencies=[Depends(limit_outbound_checks)],
     summary="Add or replace the workspace's key for a provider (2FA step-up required)",
     description=(
         "The key is validated with the provider before it is saved, then stored encrypted. "
@@ -207,6 +209,7 @@ async def delete_ai_provider(
 @router.post(
     "/ai-providers/{provider}/validate",
     response_model=ProviderResponse,
+    dependencies=[Depends(limit_outbound_checks)],
     summary="Check a saved key again (e.g. after fixing billing with the provider)",
 )
 async def validate_ai_provider(

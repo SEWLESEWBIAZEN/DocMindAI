@@ -158,6 +158,10 @@ class Settings(BaseSettings):
     speech_max_text_chars: int = Field(default=4096, ge=100, le=4096)
     rate_limit_voice_per_user: int = Field(default=120, ge=1)
     rate_limit_voice_window_seconds: int = Field(default=60, ge=1)
+    # Requests that make DocuMind connect out to a customer-chosen host (key and
+    # infrastructure validation): per workspace, to stop them being used as a probe.
+    rate_limit_outbound_checks_per_workspace: int = Field(default=20, ge=1)
+    rate_limit_outbound_checks_window_seconds: int = Field(default=3600, ge=1)
 
     # --- Figure descriptions (ADR 0011) --------------------------------------
     # Describe images in PDFs with a vision model during processing, so figures

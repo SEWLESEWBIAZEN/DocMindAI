@@ -172,3 +172,45 @@ def _header(scope: Scope, name: bytes) -> str | None:
             except UnicodeDecodeError:  # pragma: no cover - latin-1 decodes any bytes
                 return None
     return None
+
+
+class SecurityHeadersMiddleware:
+    """Defensive headers on every API response (Phase 9 security review).
+
+    The API only returns JSON, SSE and audio, so the policy forbids everything
+    a browser could render or frame. Responses are per-user: never cached by
+    shared caches unless a route sets its own Cache-Control. HSTS is sent in
+    production. The interactive docs (development only) keep their scripts.
+    """
+
+    def __init__(self, app: ASGIApp, *, hsts: bool, docs_prefix: str = "/api/docs") -> None:
+        self.app = app
+        self._hsts = hsts
+        self._docs = (docs_prefix, "/api/redoc", "/api/openapi.json")
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path: str = scope.get("path", "")
+        docs = path.startswith(self._docs)
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("Referrer-Policy", "no-referrer")
+                headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+                if not docs:
+                    headers.setdefault("X-Frame-Options", "DENY")
+                    headers.setdefault(
+                        "Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"
+                    )
+                    headers.setdefault("Cache-Control", "no-store")
+                if self._hsts:
+                    headers.setdefault(
+                        "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+                    )
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)

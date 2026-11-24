@@ -565,6 +565,16 @@ class InfrastructureService:
         now = utcnow()
         if active is not None:
             active.status = "retired"
+            # Rotation: secrets only the retired version used are revoked (destroyed).
+            keep = {target.database.password_credential_id, target.storage.secret_credential_id}
+            for old in (
+                current.database.password_credential_id,
+                current.storage.secret_credential_id,
+            ):
+                if old is not None and old not in keep:
+                    cred = await self._vault.get(ctx.workspace_id, old)
+                    if cred is not None and cred.status == "active":
+                        self._vault.revoke(cred)
         pin = await self._s.get(WorkspaceInfrastructure, ctx.workspace_id, with_for_update=True)
         if pin is None:
             self._s.add(WorkspaceInfrastructure(workspace_id=ctx.workspace_id, version_id=row.id))

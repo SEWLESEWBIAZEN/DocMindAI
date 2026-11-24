@@ -58,7 +58,9 @@ from documind.infrastructure.database.repositories.processing import (
 
 logger = logging.getLogger(__name__)
 
-Outcome = Literal["succeeded", "failed", "retry", "dead", "superseded", "cancelled", "skipped"]
+Outcome = Literal[
+    "succeeded", "failed", "retry", "dead", "superseded", "cancelled", "skipped", "unavailable"
+]
 
 
 class Extractor(Protocol):
@@ -165,7 +167,22 @@ class ProcessingOrchestrator:
     async def run(self, job_id: uuid.UUID, *, workspace_id: uuid.UUID | None = None) -> JobOutcome:
         """``workspace_id`` selects the data plane (None: the shared database)."""
         started = time.perf_counter()
-        sessions, storage = await self._targets.for_workspace(workspace_id)
+        try:
+            sessions, storage = await self._targets.for_workspace(workspace_id)
+            async with sessions() as probe:
+                await probe.connection()
+        except Exception as exc:
+            # The workspace's data plane is down or blocked: leave the job queued
+            # there; the sweeper dispatches it again once the database is back.
+            logger.warning(
+                "Data plane unavailable for job",
+                extra={
+                    "job_id": str(job_id),
+                    "workspace_id": str(workspace_id),
+                    "error": type(exc).__name__,
+                },
+            )
+            return JobOutcome("unavailable")
         async with sessions() as session:
             jobs = ProcessingJobRepository(session)
             job = await jobs.claim(

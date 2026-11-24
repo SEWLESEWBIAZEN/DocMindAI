@@ -15,6 +15,7 @@ from documind.api.middleware import (
     REQUEST_ID_HEADER,
     BodySizeLimitMiddleware,
     RequestContextMiddleware,
+    SecurityHeadersMiddleware,
 )
 from documind.api.router import api_router
 from documind.container import Container, build_container
@@ -70,6 +71,7 @@ def create_app(
         )
     # Uploads may be up to MAX_UPLOAD_BYTES plus multipart framing overhead.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_upload_bytes + 1024 * 1024)
+    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.is_production)
     # Added last so it is the outermost middleware and sees every request.
     app.add_middleware(RequestContextMiddleware)
 
