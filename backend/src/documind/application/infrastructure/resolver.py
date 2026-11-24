@@ -190,7 +190,12 @@ class InfrastructureResolver:
                     session, row.workspace_id, config.database.password_credential_id
                 )
                 engine = create_dataplane_engine(self._settings, config.database, password)
-                data_plane = DataPlane(str(version_id), dataplane_sessions(engine), engine)
+                data_plane = DataPlane(
+                    str(version_id),
+                    dataplane_sessions(engine),
+                    engine,
+                    processing_mode=config.processing.mode,
+                )
             storage: ObjectStorageProvider = self._platform_storage
             built_storage: BuiltStorage | None = None
             if config.storage.provider != "documind":

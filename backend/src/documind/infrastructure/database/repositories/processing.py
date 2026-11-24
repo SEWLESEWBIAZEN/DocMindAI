@@ -92,6 +92,22 @@ class ProcessingJobRepository:
         )
         return list((await self._s.execute(stmt)).scalars())
 
+    async def claimable(
+        self, workspace_id: uuid.UUID, now: datetime, limit: int = 10
+    ) -> list[uuid.UUID]:
+        """Due, queued job ids of a workspace, oldest first (customer workers poll this)."""
+        stmt = (
+            select(ProcessingJob.id)
+            .where(
+                ProcessingJob.workspace_id == workspace_id,
+                ProcessingJob.status == "queued",
+                ProcessingJob.next_attempt_at <= now,
+            )
+            .order_by(ProcessingJob.next_attempt_at)
+            .limit(limit)
+        )
+        return list((await self._s.execute(stmt)).scalars())
+
     async def expired_leases(self, now: datetime, limit: int = 200) -> list[ProcessingJob]:
         """Running jobs whose worker stopped renewing (crashed or was killed)."""
         stmt = (

@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 PLANE_INFO_KEY = "documind_plane"
 ISOLATED = "isolated"
+
+
 def _alembic_ini() -> Path:
     """alembic.ini: DOCUMIND_ALEMBIC_INI, else the source checkout, else the working
     directory (/app in the runtime image, where the package is installed non-editable)."""
@@ -55,6 +57,8 @@ class DataPlane:
     key: str  # "shared" or the profile version id
     sessions: async_sessionmaker[AsyncSession]
     engine: AsyncEngine | None = None  # None: the shared (control-plane) engine
+    #: "customer": only the customer's own workers process this plane's jobs (MI-7).
+    processing_mode: str = "documind"
 
     @property
     def isolated(self) -> bool:

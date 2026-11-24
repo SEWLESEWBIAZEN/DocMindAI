@@ -67,6 +67,12 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 CMD ["uvicorn", "documind.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-graceful-shutdown", "20"]
 
 # --------------------------------------------------------------------------- #
+# Customer-hosted processing worker (MI-7): runs in the customer's network.
+FROM runtime AS customer-worker
+HEALTHCHECK NONE
+ENTRYPOINT ["documind-worker"]
+
+# --------------------------------------------------------------------------- #
 # Scheduled encrypted backups (infra/backup): runtime + PostgreSQL 16 client tools.
 FROM runtime AS backup
 USER root

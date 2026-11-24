@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import uuid
 
 from documind.application.conversations.sweeper import StaleReplySweeper
 from documind.application.infrastructure.resolver import InfrastructureResolver
@@ -15,6 +16,17 @@ from documind.infrastructure.database.dataplane_runtime import DataPlane, relay_
 logger = logging.getLogger(__name__)
 
 
+class _NoDispatch:
+    async def dispatch(
+        self,
+        job_id: uuid.UUID,
+        *,
+        workspace_id: uuid.UUID | None = None,
+        countdown_seconds: int | None = None,
+    ) -> bool:
+        return True
+
+
 async def _planes(resolver: InfrastructureResolver) -> list[DataPlane]:
     return [resolver.shared, *(plane for plane, _ in await resolver.isolated_planes())]
 
@@ -24,8 +36,11 @@ async def sweep_processing(
 ) -> SweepResult:
     total = SweepResult(0, 0, 0, 0)
     for plane in await _planes(resolver):
+        # Customer-processed planes: recover leases and create missing jobs, but never
+        # hand their jobs to DocuMind's workers (the customer's workers claim them).
+        target = _NoDispatch() if plane.processing_mode == "customer" else dispatcher
         try:
-            result = await ProcessingSweeper(plane.sessions, settings, dispatcher).sweep()
+            result = await ProcessingSweeper(plane.sessions, settings, target).sweep()
             if plane.isolated:
                 await relay_outbox(plane.sessions, resolver.shared.sessions)
         except Exception:

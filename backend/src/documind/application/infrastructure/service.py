@@ -15,7 +15,7 @@ import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -501,15 +501,8 @@ class InfrastructureService:
             ok = ok and scheck.ok
         else:
             results["storage"] = {"ok": True, "provider": "documind"}
-        if config.processing.mode != "documind":
-            results["processing"] = {
-                "ok": False,
-                "code": "not_available",
-                "message": "Customer-hosted processing arrives with the worker connector (MI-7).",
-            }
-            ok = False
-        else:
-            results["processing"] = {"ok": True, "mode": "documind"}
+        results["processing"] = await self._check_processing(ctx, config)
+        ok = ok and bool(results["processing"]["ok"])
         row.validation = {**results, "checked_at": utcnow().isoformat()}
         row.status = "validated" if ok else "failed"
         row.validated_at = utcnow()
@@ -524,6 +517,43 @@ class InfrastructureService:
         )
         await self._s.commit()
         return _view(row)
+
+    async def _check_processing(
+        self, ctx: WorkspaceContext, config: InfrastructureConfig
+    ) -> dict[str, Any]:
+        """Customer-hosted processing (MI-7): the workers read the customer's own
+        database and bucket, so the database must be external, and a registered
+        worker must have checked in recently."""
+        mode = config.processing.mode
+        if mode == "documind":
+            return {"ok": True, "mode": mode}
+        if config.database.mode != "external":
+            return {
+                "ok": False,
+                "code": "external_database_required",
+                "message": "Customer-hosted workers process documents in your own database: "
+                "choose an external database first.",
+            }
+        recent = utcnow() - timedelta(minutes=15)
+        seen = (
+            await self._s.execute(
+                select(func.count())
+                .select_from(WorkerRegistration)
+                .where(
+                    WorkerRegistration.workspace_id == ctx.workspace_id,
+                    WorkerRegistration.status == "active",
+                    WorkerRegistration.last_seen_at >= recent,
+                )
+            )
+        ).scalar_one()
+        if not seen:
+            return {
+                "ok": False,
+                "code": "no_active_worker",
+                "message": "Start a registered worker (documind-worker) so it checks in, "
+                "then validate again.",
+            }
+        return {"ok": True, "mode": mode, "active_workers": int(seen)}
 
     async def activate(self, ctx: WorkspaceContext, version_id: uuid.UUID) -> VersionView:
         self._require(ctx)

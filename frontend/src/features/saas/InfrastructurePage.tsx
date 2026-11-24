@@ -315,11 +315,14 @@ export function InfrastructurePage() {
 
             <fieldset className="fieldset">
               <legend>Processing</legend>
-              <Field label="Where documents are processed" hint="Customer-hosted workers arrive with the worker connector.">
+              <Field
+                label="Where documents are processed"
+                hint="Your own workers need your own database (above) and a registered worker that has checked in (below)."
+              >
                 <Select value={processing} onChange={(e) => setProcessing(e.target.value as typeof processing)}>
                   <option value="documind">DocuMind-hosted workers</option>
-                  <option value="customer" disabled={!ents.customer_workers}>Your own workers (coming soon)</option>
-                  <option value="hybrid" disabled={!ents.customer_workers}>Hybrid (coming soon)</option>
+                  <option value="customer" disabled={!ents.customer_workers}>Your own workers only</option>
+                  <option value="hybrid" disabled={!ents.customer_workers}>Hybrid (your workers and DocuMind's)</option>
                 </Select>
               </Field>
             </fieldset>
@@ -402,7 +405,7 @@ export function InfrastructurePage() {
             <div>
               <h2 id="workers-heading">Customer-hosted workers</h2>
               <p className="panel__description">
-                Register workers that will process documents inside your network. Tokens are shown once and can be revoked.
+                Workers process documents inside your network, reading your own database and storage (documind-worker image). Tokens are shown once and can be revoked.
               </p>
             </div>
           </header>

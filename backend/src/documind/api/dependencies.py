@@ -25,7 +25,7 @@ from documind.application.identity.invitation_service import InvitationService
 from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
 from documind.application.infrastructure.resolver import ResolvedInfrastructure
-from documind.application.ports import EmailMessage, EmailSender
+from documind.application.ports import EmailMessage, EmailSender, JobDispatcher
 from documind.application.processing.queries import ProcessingQueries
 from documind.application.rag.condense import QueryCondenser
 from documind.application.rag.orchestrator import GenerationOptions, RAGOrchestrator
@@ -279,6 +279,24 @@ async def get_data_session(
 DataSessionDep = Annotated[AsyncSession, Depends(get_data_session)]
 
 
+class _CustomerProcessing:
+    """Customer-hosted processing (MI-7): jobs stay queued in the customer's database
+    for their workers to claim; DocuMind's workers never receive them."""
+
+    async def dispatch(
+        self,
+        job_id: uuid.UUID,
+        *,
+        workspace_id: uuid.UUID | None = None,
+        countdown_seconds: int | None = None,
+    ) -> bool:
+        return True
+
+
+def dispatcher_for(infra: ResolvedInfrastructure, dispatcher: JobDispatcher) -> JobDispatcher:
+    return _CustomerProcessing() if infra.config.processing.mode == "customer" else dispatcher
+
+
 # --------------------------------------------------------------------------- #
 # AI providers, plans and quotas (ADR 0019, 0020)
 # --------------------------------------------------------------------------- #
@@ -367,7 +385,7 @@ def get_document_service(
         infra.storage,
         container.malware_scanner,
         meta,
-        container.job_dispatcher,
+        dispatcher_for(infra, container.job_dispatcher),
     )
 
 

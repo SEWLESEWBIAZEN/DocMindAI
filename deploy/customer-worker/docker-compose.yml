@@ -1,0 +1,21 @@
+# DocuMind customer-hosted worker (MI-7). Runs in YOUR network, next to your database and storage.
+#   cp .env.example .env   # fill in, then:
+#   docker compose up -d
+# Scale with: docker compose up -d --scale worker=3 (jobs are claimed atomically).
+services:
+  worker:
+    image: ${DOCUMIND_WORKER_IMAGE:-documind-backend:customer-worker}
+    build:
+      context: ../../backend
+      target: customer-worker
+    env_file: .env
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g        # OCR works on temporary page images
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }

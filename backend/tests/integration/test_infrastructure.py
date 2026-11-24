@@ -485,7 +485,7 @@ def test_tampered_profile_is_refused(iapi: Api) -> None:
             "storage",
             "endpoint_not_allowed",
         ),
-        ({"processing": {"mode": "customer"}}, "processing", "not_available"),
+        ({"processing": {"mode": "customer"}}, "processing", "external_database_required"),
     ],
 )
 def test_validation_blocks_internal_hosts_and_unavailable_modes(

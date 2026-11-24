@@ -467,6 +467,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/worker/v1/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report usage of a processed job (shown to the organization, billed to it) */
+        post: operations["report_usage_api_v1_worker_v1_usage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}": {
         parameters: {
             query?: never;
@@ -2307,6 +2324,16 @@ export interface components {
             /** Usage */
             usage: components["schemas"]["MeteredUsageResponse"][];
         };
+        /** ProcessingContract */
+        ProcessingContract: {
+            /** Embedding Dimensions */
+            embedding_dimensions: number;
+            /**
+             * Embedding Model
+             * @description The worker must embed with this model
+             */
+            embedding_model: string;
+        };
         /** ProcessingInput */
         ProcessingInput: {
             /**
@@ -2778,6 +2805,20 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** UsageReport */
+        UsageReport: {
+            /** Embedding Model */
+            embedding_model: string;
+            /** Input Tokens */
+            input_tokens: number;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Outcome */
+            outcome: string;
+        };
         /** UsageResponse */
         UsageResponse: {
             /** Embedding Tokens */
@@ -2937,6 +2978,7 @@ export interface components {
             last_seen_at: string;
             /** Name */
             name: string;
+            processing: components["schemas"]["ProcessingContract"];
             /** Scopes */
             scopes: string[];
             /**
@@ -3864,6 +3906,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerSessionResponse"];
+                };
+            };
+        };
+    };
+    report_usage_api_v1_worker_v1_usage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UsageReport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

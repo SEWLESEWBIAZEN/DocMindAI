@@ -32,3 +32,4 @@ coverage/
 deploy/production/.env
 deploy/production/secrets/
 deploy/production/smoke/work/
+deploy/customer-worker/.env

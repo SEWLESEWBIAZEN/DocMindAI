@@ -12,9 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from documind.api.dependencies import (
     ContainerDep,
     DataSessionDep,
+    InfrastructureDep,
     MetaDep,
     SessionDep,
     WorkspaceCtx,
+    dispatcher_for,
     limit_outbound_checks,
 )
 from documind.application.ai.byok import ProviderKeyService, ProviderView
@@ -181,11 +183,16 @@ async def put_ai_provider(
     ctx: WorkspaceCtx,
     keys: ProviderKeysDep,
     container: ContainerDep,
+    infra: InfrastructureDep,
 ) -> ProviderResponse:
     view = await keys.put_key(
         ctx, provider, body.api_key, dict(body.settings), reindex=body.reindex
     )
-    await dispatch_all(container.job_dispatcher, keys.queued_jobs, workspace_id=ctx.workspace_id)
+    await dispatch_all(
+        dispatcher_for(infra, container.job_dispatcher),
+        keys.queued_jobs,
+        workspace_id=ctx.workspace_id,
+    )
     return _provider(view)
 
 
@@ -199,10 +206,15 @@ async def delete_ai_provider(
     ctx: WorkspaceCtx,
     keys: ProviderKeysDep,
     container: ContainerDep,
+    infra: InfrastructureDep,
     reindex: Annotated[bool, Query()] = False,
 ) -> Response:
     await keys.remove_key(ctx, provider, reindex=reindex)
-    await dispatch_all(container.job_dispatcher, keys.queued_jobs, workspace_id=ctx.workspace_id)
+    await dispatch_all(
+        dispatcher_for(infra, container.job_dispatcher),
+        keys.queued_jobs,
+        workspace_id=ctx.workspace_id,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -241,8 +253,12 @@ async def reindex_estimate(ctx: WorkspaceCtx, keys: ProviderKeysDep) -> ReindexR
     summary="Re-index documents embedded with another model",
 )
 async def start_reindex(
-    ctx: WorkspaceCtx, keys: ProviderKeysDep, container: ContainerDep
+    ctx: WorkspaceCtx, keys: ProviderKeysDep, container: ContainerDep, infra: InfrastructureDep
 ) -> ReindexResponse:
     estimate, queued = await keys.start_reindex(ctx)
-    await dispatch_all(container.job_dispatcher, keys.queued_jobs, workspace_id=ctx.workspace_id)
+    await dispatch_all(
+        dispatcher_for(infra, container.job_dispatcher),
+        keys.queued_jobs,
+        workspace_id=ctx.workspace_id,
+    )
     return _estimate(estimate, queued)
