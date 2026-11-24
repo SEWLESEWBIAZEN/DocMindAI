@@ -26,7 +26,10 @@ QUOTA_EXHAUSTED = "provider_quota_exhausted"
 
 
 def raise_classified(exc: Exception) -> NoReturn:
-    if isinstance(exc, openai.RateLimitError) and getattr(exc, "code", None) == "insufficient_quota":
+    if (
+        isinstance(exc, openai.RateLimitError)
+        and getattr(exc, "code", None) == "insufficient_quota"
+    ):
         raise TransientProcessingError(
             "The AI provider account is out of quota.", code=QUOTA_EXHAUSTED
         ) from exc

@@ -27,6 +27,8 @@ class Permission(StrEnum):
     DOCUMENTS_DELETE = "documents.delete"
     CONVERSATIONS_USE = "conversations.use"
     BILLING_MANAGE = "billing.manage"
+    AI_PROVIDERS_MANAGE = "ai_providers.manage"
+    INFRASTRUCTURE_MANAGE = "infrastructure.manage"
 
 
 PERMISSION_DESCRIPTIONS: MappingProxyType[Permission, str] = MappingProxyType(
@@ -47,6 +49,13 @@ PERMISSION_DESCRIPTIONS: MappingProxyType[Permission, str] = MappingProxyType(
         ),
         Permission.CONVERSATIONS_USE: "Ask questions and hold conversations",
         Permission.BILLING_MANAGE: "Manage plan and billing",
+        Permission.AI_PROVIDERS_MANAGE: (
+            "Manage the workspace's own AI provider keys (requires two-factor verification)"
+        ),
+        Permission.INFRASTRUCTURE_MANAGE: (
+            "Manage the organization's databases, storage and processing "
+            "(requires two-factor verification)"
+        ),
     }
 )
 
@@ -89,6 +98,7 @@ _ADMIN = _MEMBER | {
     Permission.USAGE_READ,
     Permission.DOCUMENTS_ARCHIVE_ANY,
     Permission.DOCUMENTS_DELETE,
+    Permission.AI_PROVIDERS_MANAGE,
 }
 _OWNER = frozenset(Permission)
 

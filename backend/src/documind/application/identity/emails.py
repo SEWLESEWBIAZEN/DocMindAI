@@ -164,3 +164,26 @@ def recovery_code_used_email(to: str, name: str, remaining: int) -> EmailMessage
             "your codes.</p>",
         ),
     )
+
+
+def provider_key_rejected_email(
+    to: str, name: str, base_url: str, workspace_id: str, workspace_name: str, provider: str
+) -> EmailMessage:
+    url = f"{base_url.rstrip('/')}/w/{workspace_id}/ai-providers"
+    return EmailMessage(
+        to=to,
+        subject=f"Action needed: the AI key for {workspace_name} stopped working",
+        text=f"Hi {name},\n\n{provider} rejected the API key saved for {workspace_name} "
+        "(it may have been revoked, expired or run out of quota). AI features that use it are "
+        "paused; DocuMind does not switch to another key.\n\n"
+        f"Update the key under AI providers:\n{url}",
+        html=_html(
+            "Your AI provider key stopped working",
+            f"<p>Hi {escape(name)},</p><p>{escape(provider)} rejected the API key saved for "
+            f"<strong>{escape(workspace_name)}</strong>. It may have been revoked, expired or run "
+            "out of quota. AI features that use it are paused; DocuMind doesn't switch to "
+            "another key.</p>",
+            "Update the key",
+            url,
+        ),
+    )

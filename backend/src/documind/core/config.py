@@ -9,8 +9,8 @@ insecure defaults.
 from __future__ import annotations
 
 import base64
-import re
 import binascii
+import re
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Literal
@@ -219,6 +219,20 @@ class Settings(BaseSettings):
     # How long API and worker processes cache a workspace's plan and AI-provider
     # settings. Changes made in another process apply within this time.
     tenant_settings_cache_seconds: float = Field(default=10.0, ge=0, le=300)
+
+    # Infrastructure independence (ADR 0021).
+    # Hosts that may resolve to private addresses (on-premises databases and storage).
+    infrastructure_allowed_private_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
+    # DocuMind-managed server for dedicated databases: a role allowed to CREATE DATABASE
+    # and CREATE ROLE. Unset: dedicated databases can't be provisioned here.
+    dedicated_database_admin_url: SecretStr | None = None
+    # Host and port that workers and the API use to reach provisioned databases.
+    dedicated_database_host: str | None = None
+    dedicated_database_port: int = Field(default=5432, ge=1, le=65535)
+    dataplane_pool_size: int = Field(default=5, ge=1, le=50)
+    dataplane_max_open: int = Field(default=20, ge=1, le=500)
     # How long a successful 2FA check authorizes sensitive actions (e.g. delete).
     mfa_step_up_ttl_seconds: int = Field(default=300, ge=30, le=3600)
     mfa_setup_ttl_minutes: int = Field(default=15, ge=1, le=60)
@@ -252,6 +266,13 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @field_validator("infrastructure_allowed_private_hosts", mode="before")
+    @classmethod
+    def _split_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [h.strip().lower() for h in value.split(",") if h.strip()]
+        return value
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: SecretStr) -> SecretStr:
@@ -279,6 +300,7 @@ class Settings(BaseSettings):
         "celery_broker_url",
         "smtp_password",
         "credential_encryption_keys",
+        "dedicated_database_admin_url",
         mode="before",
     )
     @classmethod

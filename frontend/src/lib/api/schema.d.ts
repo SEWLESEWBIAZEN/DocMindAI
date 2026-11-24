@@ -468,6 +468,78 @@ export interface paths {
         patch: operations["rename_workspace_api_v1_workspaces__workspace_id__patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/ai-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AI provider keys and which key each capability uses (ai_providers.manage) */
+        get: operations["get_ai_providers_api_v1_workspaces__workspace_id__ai_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/ai-providers/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Add or replace the workspace's key for a provider (2FA step-up required)
+         * @description The key is validated with the provider before it is saved, then stored encrypted. It is never returned. Returns 409 `reindex_required` when the embedding model would change and `reindex` is false.
+         */
+        put: operations["put_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__put"];
+        post?: never;
+        /** Remove the workspace's key (2FA step-up required) */
+        delete: operations["delete_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/ai-providers/{provider}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check a saved key again (e.g. after fixing billing with the provider) */
+        post: operations["validate_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/ai-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** "Use my key only": never use DocuMind's key (turning it off needs 2FA) */
+        put: operations["put_ai_settings_api_v1_workspaces__workspace_id__ai_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/ask": {
         parameters: {
             query?: never;
@@ -1010,6 +1082,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/reindex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents needing re-indexing */
+        get: operations["reindex_estimate_api_v1_workspaces__workspace_id__reindex_get"];
+        put?: never;
+        /** Re-index documents embedded with another model */
+        post: operations["start_reindex_api_v1_workspaces__workspace_id__reindex_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/search": {
         parameters: {
             query?: never;
@@ -1103,6 +1193,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AIProvidersResponse */
+        AIProvidersResponse: {
+            /** Byok Allowed */
+            byok_allowed: boolean;
+            /** Catalog */
+            catalog: components["schemas"]["ProviderCatalogEntry"][];
+            /**
+             * Effective
+             * @description Per capability: "workspace_key", "platform", or why it is unavailable ("provider_key_required", "provider_key_invalid", "capability_unavailable").
+             */
+            effective: {
+                [key: string]: string;
+            };
+            /** Embedding Model */
+            embedding_model: string;
+            /** Key Only */
+            key_only: boolean;
+            /** Platform Ai Allowed */
+            platform_ai_allowed: boolean;
+            /** Providers */
+            providers: components["schemas"]["ProviderResponse"][];
+        };
         /** AcceptedInvitationResponse */
         AcceptedInvitationResponse: {
             /**
@@ -1726,6 +1838,16 @@ export interface components {
             /** @default member */
             role: components["schemas"]["RoleKey"];
         };
+        /** KeyOnlyRequest */
+        KeyOnlyRequest: {
+            /** Key Only */
+            key_only: boolean;
+        };
+        /** KeyOnlyResponse */
+        KeyOnlyResponse: {
+            /** Key Only */
+            key_only: boolean;
+        };
         /** LivenessResponse */
         LivenessResponse: {
             /**
@@ -2050,6 +2172,83 @@ export interface components {
             /** Display Name */
             display_name: string;
         };
+        /** ProviderCatalogEntry */
+        ProviderCatalogEntry: {
+            /** Capabilities */
+            capabilities: string[];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Settings */
+            settings: string[];
+            /**
+             * Status
+             * @description "available" or "planned" (not selectable yet)
+             */
+            status: string;
+        };
+        /** ProviderResponse */
+        ProviderResponse: {
+            /** Capabilities */
+            capabilities: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /**
+             * Hint
+             * @description Last 4 characters of the key, e.g. …a1b2
+             */
+            hint: string | null;
+            /** Last Error Code */
+            last_error_code: string | null;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Last Validated At */
+            last_validated_at: string | null;
+            /** Models */
+            models: {
+                [key: string]: string;
+            };
+            /** Name */
+            name: string;
+            /** Provider */
+            provider: string;
+            /** Settings */
+            settings: {
+                [key: string]: string;
+            };
+            /**
+             * Status
+             * @description "active" or "invalid" (rejected by the provider)
+             */
+            status: string;
+        };
+        /** PutKeyRequest */
+        PutKeyRequest: {
+            /**
+             * Api Key
+             * @description Write-only; never returned
+             */
+            api_key: string;
+            /**
+             * Reindex
+             * @description Confirm re-indexing when the embedding model changes (otherwise 409)
+             * @default false
+             */
+            reindex: boolean;
+            /**
+             * Settings
+             * @description Optional model overrides
+             */
+            settings?: {
+                [key: string]: string;
+            };
+        };
         /** QuotaResponse */
         QuotaResponse: {
             /** Exceeded */
@@ -2085,6 +2284,26 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** ReindexResponse */
+        ReindexResponse: {
+            /** Chunks */
+            chunks: number;
+            /** Current Models */
+            current_models: string[];
+            /** Documents */
+            documents: number;
+            /**
+             * Queued
+             * @default 0
+             */
+            queued: number;
+            /** Required */
+            required: boolean;
+            /** Target Model */
+            target_model: string;
+            /** Tokens */
+            tokens: number;
         };
         /** RenameConversationRequest */
         RenameConversationRequest: {
@@ -3348,6 +3567,172 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ai_providers_api_v1_workspaces__workspace_id__ai_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProvidersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__delete: {
+        parameters: {
+            query?: {
+                reindex?: boolean;
+            };
+            header?: never;
+            path: {
+                provider: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_ai_settings_api_v1_workspaces__workspace_id__ai_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyOnlyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyOnlyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4825,6 +5210,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reindex_estimate_api_v1_workspaces__workspace_id__reindex_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReindexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_reindex_api_v1_workspaces__workspace_id__reindex_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReindexResponse"];
                 };
             };
             /** @description Validation Error */

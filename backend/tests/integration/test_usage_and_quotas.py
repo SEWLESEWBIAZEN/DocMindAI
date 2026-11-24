@@ -24,11 +24,15 @@ Either party may terminate the agreement with ninety days written notice.
 """
 
 
-def run_metered_job(api: Api, job_id: uuid.UUID) -> JobOutcome:
+def run_metered_job(
+    api: Api, job_id: uuid.UUID, overrides: dict[str, Any] | None = None
+) -> JobOutcome:
     """Run a job the way the worker does: per-workspace, metered AI."""
 
     async def go() -> JobOutcome:
         c = build_container(api.settings)
+        for name, value in (overrides or {}).items():
+            setattr(c, name, value)
         try:
             return await ProcessingOrchestrator(
                 c.session_factory,

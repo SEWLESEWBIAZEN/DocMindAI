@@ -21,7 +21,10 @@ import sys
 import uuid
 from typing import Any
 
+from sqlalchemy import select
+
 from documind.application.billing.service import BillingService
+from documind.application.credentials.vault import CredentialVault
 from documind.application.identity.common import utcnow
 from documind.application.processing.jobs import new_job
 from documind.application.processing.orchestrator import ProcessingOrchestrator
@@ -30,6 +33,7 @@ from documind.container import Container, build_container, processing_ai
 from documind.core.config import get_settings
 from documind.core.logging import configure_logging
 from documind.domain.billing.plans import PLANS
+from documind.infrastructure.database.models import Document
 from documind.infrastructure.database.repositories.processing import (
     IndexRepository,
     ProcessingJobRepository,
@@ -127,25 +131,51 @@ async def _process(container: Container, job_id: uuid.UUID) -> int:
 
 
 async def _reindex(container: Container, workspace_id: uuid.UUID | None, include_all: bool) -> int:
-    model = container.embedding_provider.model
-    queued: list[uuid.UUID] = []
+    """Re-embed documents whose chunks use another model than their workspace's.
+
+    Each workspace is compared with its own embedding model (its AI key may
+    differ from the platform's, ADR 0019).
+    """
     async with container.session_factory() as session:
-        jobs = ProcessingJobRepository(session)
-        documents = await IndexRepository(session).documents_needing_reindex(
-            model, workspace_id=workspace_id, include_all=include_all
-        )
-        for doc in documents:
-            if await jobs.active_for_document(doc.id) is None:
-                job = new_job(
-                    doc, container.settings, now=utcnow(), requested_by=None, dispatched=True
-                )
-                jobs.add(job)
-                doc.status = "pending"
-                queued.append(job.id)
-        await session.commit()
+        if workspace_id is not None:
+            workspaces = [workspace_id]
+        else:
+            workspaces = list(
+                (
+                    await session.execute(
+                        select(Document.workspace_id).where(Document.status == "ready").distinct()
+                    )
+                ).scalars()
+            )
+    queued: list[uuid.UUID] = []
+    models: dict[str, int] = {}
+    for ws in workspaces:
+        model = (await container.ai_resolver().resolve(ws)).embeddings.model
+        async with container.session_factory() as session:
+            jobs = ProcessingJobRepository(session)
+            documents = await IndexRepository(session).documents_needing_reindex(
+                model, workspace_id=ws, include_all=include_all
+            )
+            for doc in documents:
+                if await jobs.active_for_document(doc.id) is None:
+                    job = new_job(
+                        doc, container.settings, now=utcnow(), requested_by=None, dispatched=True
+                    )
+                    jobs.add(job)
+                    doc.status = "pending"
+                    queued.append(job.id)
+                    models[model] = models.get(model, 0) + 1
+            await session.commit()
     for job_id in queued:
         await container.job_dispatcher.dispatch(job_id)
-    _print({"model": model, "queued": len(queued)})
+    _print({"workspaces": len(workspaces), "queued": len(queued), "by_model": models})
+    return 0
+
+
+async def _rewrap(container: Container) -> int:
+    async with container.session_factory() as session:
+        done, current = await CredentialVault(session, container.cipher).rewrap_all()
+    _print({"rewrapped": done, "already_current": current})
     return 0
 
 
@@ -202,6 +232,11 @@ def main(argv: list[str] | None = None) -> int:
     reindex = sub.add_parser("reindex", help="re-embed documents indexed with another model")
     reindex.add_argument("--workspace", type=uuid.UUID, default=None)
     reindex.add_argument("--all", action="store_true", help="re-index every ready document")
+    creds = sub.add_parser("credentials", help="credential vault maintenance (ADR 0022)")
+    creds_sub = creds.add_subparsers(dest="credentials_command", required=True)
+    creds_sub.add_parser(
+        "rewrap", help="re-wrap every credential with the first key in CREDENTIAL_ENCRYPTION_KEYS"
+    )
     plan = sub.add_parser("plan", help="list plans or assign one to a workspace (audited)")
     plan_sub = plan.add_subparsers(dest="plan_command", required=True)
     plan_sub.add_parser("list", help="show the plan catalog")
@@ -229,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(lambda c: _jobs(c, args.status, args.limit)))
     if args.command == "sweep":
         return asyncio.run(_with_container(_sweep))
+    if args.command == "credentials":
+        return asyncio.run(_with_container(_rewrap))
     if args.command == "plan":
         if args.plan_command == "list":
             return asyncio.run(_plans())

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from documind.domain.errors import (
@@ -62,5 +64,15 @@ async def _handle_domain_error(_: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(body, status_code=status_for(exc), headers=headers)
 
 
+async def _handle_validation_error(_: Request, exc: Exception) -> JSONResponse:
+    """422 without echoing submitted values: inputs can hold passwords or API keys."""
+    assert isinstance(exc, RequestValidationError)  # noqa: S101 - registered only for it
+    errors = [
+        {k: v for k, v in error.items() if k in {"type", "loc", "msg"}} for error in exc.errors()
+    ]
+    return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
+
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(DomainError, _handle_domain_error)
+    app.add_exception_handler(RequestValidationError, _handle_validation_error)

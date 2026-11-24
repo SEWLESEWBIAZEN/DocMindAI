@@ -13,6 +13,9 @@ from typing import Any
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from documind.application.ai.byok import SqlWorkspaceKeys
+from documind.application.ai.notifications import key_rejected_notifier
+from documind.application.ai.ports import ProviderFactory
 from documind.application.ai.processing import ResolvedProcessingAI
 from documind.application.ai.resolver import AIResolver, CapabilityAdapter, PlatformAI
 from documind.application.billing.service import CachedEntitlements
@@ -20,6 +23,7 @@ from documind.application.health_service import HealthService
 from documind.application.ports import (
     AccessTokenService,
     CancellationRegistry,
+    EmailMessage,
     EmailSender,
     EmbeddingProvider,
     ImageDescriber,
@@ -32,8 +36,9 @@ from documind.application.ports import (
     SpeechToTextProvider,
     TextToSpeechProvider,
 )
-from documind.core.config import Settings, mfa_key_bytes
+from documind.core.config import Settings, credential_key_ring, mfa_key_bytes
 from documind.domain.billing.plans import Capability
+from documind.infrastructure.ai.factory import ProviderAdapterFactory
 from documind.infrastructure.cache.cancellation import RedisCancellationRegistry
 from documind.infrastructure.cache.health import RedisHealthCheck
 from documind.infrastructure.cache.redis import create_redis_client
@@ -58,6 +63,7 @@ from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
 from documind.infrastructure.security.malware import ClamAVScanner, NoopMalwareScanner
 from documind.infrastructure.security.passwords import Argon2PasswordHasher
 from documind.infrastructure.security.secret_box import SecretBox
+from documind.infrastructure.security.vault import EnvelopeCipher, LocalKeyRing
 from documind.infrastructure.speech.openai_provider import OpenAISpeechProvider
 from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
@@ -93,6 +99,14 @@ class Container:
     text_to_speech: TextToSpeechProvider | None = None
     ai: AIResolver | None = None
     entitlements: CachedEntitlements | None = None
+    cipher: EnvelopeCipher | None = None
+    provider_factory: ProviderFactory | None = None
+    workspace_keys: SqlWorkspaceKeys | None = None
+
+    def require_provider_factory(self) -> ProviderFactory:
+        if self.provider_factory is None:  # pragma: no cover - always set by build_container
+            raise RuntimeError("provider factory not configured")
+        return self.provider_factory
 
     def ai_resolver(self) -> AIResolver:
         if self.ai is None:  # pragma: no cover - always set by build_container
@@ -176,13 +190,39 @@ def build_container(settings: Settings) -> Container:
     container.entitlements = CachedEntitlements(
         session_factory, ttl_seconds=settings.tenant_settings_cache_seconds
     )
+    if settings.credential_encryption_keys is not None:
+        container.cipher = EnvelopeCipher(
+            LocalKeyRing(credential_key_ring(settings.credential_encryption_keys))
+        )
+    container.provider_factory = ProviderAdapterFactory(settings)
+    container.workspace_keys = SqlWorkspaceKeys(
+        session_factory,
+        container.cipher,
+        lambda: container.require_provider_factory(),
+        notify=key_rejected_notifier(
+            session_factory,
+            # Resolved at call time so a swapped sender (tests) is used.
+            _LateEmail(container),
+            settings.public_app_url,
+        ),
+    )
     container.ai = AIResolver(
         lambda: platform_ai(container),
         SqlUsageSink(session_factory),
         container.entitlements,
+        container.workspace_keys,
         cache_seconds=settings.tenant_settings_cache_seconds,
     )
+    container.workspace_keys.invalidated.append(container.ai.invalidate)
     return container
+
+
+class _LateEmail:
+    def __init__(self, container: Container) -> None:
+        self._c = container
+
+    async def send(self, message: EmailMessage) -> None:
+        await self._c.email_sender.send(message)
 
 
 def processing_ai(c: Container) -> ResolvedProcessingAI:

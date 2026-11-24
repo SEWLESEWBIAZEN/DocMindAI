@@ -8,6 +8,11 @@ from documind.infrastructure.database.models.conversations import (
     Message,
     MessageCitation,
 )
+from documind.infrastructure.database.models.credentials import (
+    Credential,
+    WorkspaceAIProvider,
+    WorkspaceAISettings,
+)
 from documind.infrastructure.database.models.documents import (
     Document,
     DocumentCollection,
@@ -28,6 +33,14 @@ from documind.infrastructure.database.models.identity import (
     WorkspaceMember,
     role_permissions,
 )
+from documind.infrastructure.database.models.infrastructure import (
+    InfrastructureEvent,
+    InfrastructureMigration,
+    InfrastructureProfile,
+    InfrastructureProfileVersion,
+    WorkerRegistration,
+    WorkspaceInfrastructure,
+)
 from documind.infrastructure.database.models.processing import (
     DocumentChunk,
     DocumentPage,
@@ -40,12 +53,17 @@ __all__ = [
     "Conversation",
     "ConversationCollection",
     "ConversationDocument",
+    "Credential",
     "Document",
     "DocumentChunk",
     "DocumentCollection",
     "DocumentCollectionItem",
     "DocumentPage",
     "DocumentVersion",
+    "InfrastructureEvent",
+    "InfrastructureMigration",
+    "InfrastructureProfile",
+    "InfrastructureProfileVersion",
     "Invitation",
     "Message",
     "MessageCitation",
@@ -58,7 +76,11 @@ __all__ = [
     "Role",
     "UsageRecord",
     "User",
+    "WorkerRegistration",
     "Workspace",
+    "WorkspaceAIProvider",
+    "WorkspaceAISettings",
+    "WorkspaceInfrastructure",
     "WorkspaceMember",
     "WorkspacePlan",
     "role_permissions",

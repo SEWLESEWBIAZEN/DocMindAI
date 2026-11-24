@@ -288,3 +288,6 @@ class AuditLog(Base):
     ip_address: Mapped[str | None] = mapped_column(String(45))
     user_agent: Mapped[str | None] = mapped_column(String(255))
     request_id: Mapped[str | None] = mapped_column(String(128))
+    #: Set for entries relayed from a dedicated or external data plane's outbox,
+    #: so a relay that runs twice never duplicates an entry (ADR 0021).
+    event_id: Mapped[uuid.UUID | None] = mapped_column(unique=True)

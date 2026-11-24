@@ -1,6 +1,59 @@
 {
   "components": {
     "schemas": {
+      "AIProvidersResponse": {
+        "properties": {
+          "byok_allowed": {
+            "title": "Byok Allowed",
+            "type": "boolean"
+          },
+          "catalog": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderCatalogEntry"
+            },
+            "title": "Catalog",
+            "type": "array"
+          },
+          "effective": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Per capability: \"workspace_key\", \"platform\", or why it is unavailable (\"provider_key_required\", \"provider_key_invalid\", \"capability_unavailable\").",
+            "title": "Effective",
+            "type": "object"
+          },
+          "embedding_model": {
+            "title": "Embedding Model",
+            "type": "string"
+          },
+          "key_only": {
+            "title": "Key Only",
+            "type": "boolean"
+          },
+          "platform_ai_allowed": {
+            "title": "Platform Ai Allowed",
+            "type": "boolean"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderResponse"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "byok_allowed",
+          "platform_ai_allowed",
+          "key_only",
+          "providers",
+          "catalog",
+          "effective",
+          "embedding_model"
+        ],
+        "title": "AIProvidersResponse",
+        "type": "object"
+      },
       "AcceptedInvitationResponse": {
         "properties": {
           "workspace_id": {
@@ -1666,6 +1719,33 @@
         "title": "InviteRequest",
         "type": "object"
       },
+      "KeyOnlyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "key_only": {
+            "title": "Key Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_only"
+        ],
+        "title": "KeyOnlyRequest",
+        "type": "object"
+      },
+      "KeyOnlyResponse": {
+        "properties": {
+          "key_only": {
+            "title": "Key Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_only"
+        ],
+        "title": "KeyOnlyResponse",
+        "type": "object"
+      },
       "LivenessResponse": {
         "properties": {
           "status": {
@@ -2510,6 +2590,195 @@
         "title": "ProfileUpdateRequest",
         "type": "object"
       },
+      "ProviderCatalogEntry": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "status": {
+            "description": "\"available\" or \"planned\" (not selectable yet)",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "status",
+          "capabilities",
+          "settings"
+        ],
+        "title": "ProviderCatalogEntry",
+        "type": "object"
+      },
+      "ProviderResponse": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last 4 characters of the key, e.g. \u2026a1b2",
+            "title": "Hint"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "last_validated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Validated At"
+          },
+          "models": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "settings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "status": {
+            "description": "\"active\" or \"invalid\" (rejected by the provider)",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "name",
+          "status",
+          "hint",
+          "capabilities",
+          "settings",
+          "models",
+          "last_error_code",
+          "last_validated_at",
+          "last_used_at",
+          "created_at",
+          "created_by_user_id"
+        ],
+        "title": "ProviderResponse",
+        "type": "object"
+      },
+      "PutKeyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "description": "Write-only; never returned",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Api Key",
+            "type": "string"
+          },
+          "reindex": {
+            "default": false,
+            "description": "Confirm re-indexing when the embedding model changes (otherwise 409)",
+            "title": "Reindex",
+            "type": "boolean"
+          },
+          "settings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Optional model overrides",
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "api_key"
+        ],
+        "title": "PutKeyRequest",
+        "type": "object"
+      },
       "QuotaResponse": {
         "properties": {
           "exceeded": {
@@ -2595,6 +2864,52 @@
           "display_name"
         ],
         "title": "RegisterRequest",
+        "type": "object"
+      },
+      "ReindexResponse": {
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "current_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Current Models",
+            "type": "array"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "queued": {
+            "default": 0,
+            "title": "Queued",
+            "type": "integer"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "target_model": {
+            "title": "Target Model",
+            "type": "string"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_model",
+          "current_models",
+          "documents",
+          "chunks",
+          "tokens",
+          "required"
+        ],
+        "title": "ReindexResponse",
         "type": "object"
       },
       "RenameConversationRequest": {
@@ -4899,6 +5214,295 @@
         "summary": "Rename Workspace",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai-providers": {
+      "get": {
+        "operationId": "get_ai_providers_api_v1_workspaces__workspace_id__ai_providers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIProvidersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "AI provider keys and which key each capability uses (ai_providers.manage)",
+        "tags": [
+          "ai providers"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai-providers/{provider}": {
+      "delete": {
+        "operationId": "delete_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reindex",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Reindex",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove the workspace's key (2FA step-up required)",
+        "tags": [
+          "ai providers"
+        ]
+      },
+      "put": {
+        "description": "The key is validated with the provider before it is saved, then stored encrypted. It is never returned. Returns 409 `reindex_required` when the embedding model would change and `reindex` is false.",
+        "operationId": "put_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add or replace the workspace's key for a provider (2FA step-up required)",
+        "tags": [
+          "ai providers"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai-providers/{provider}/validate": {
+      "post": {
+        "operationId": "validate_ai_provider_api_v1_workspaces__workspace_id__ai_providers__provider__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check a saved key again (e.g. after fixing billing with the provider)",
+        "tags": [
+          "ai providers"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai-settings": {
+      "put": {
+        "operationId": "put_ai_settings_api_v1_workspaces__workspace_id__ai_settings_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyOnlyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyOnlyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "\"Use my key only\": never use DocuMind's key (turning it off needs 2FA)",
+        "tags": [
+          "ai providers"
         ]
       }
     },
@@ -7823,6 +8427,100 @@
         "summary": "Plan, quotas and metered usage this month (requires usage.read)",
         "tags": [
           "usage"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/reindex": {
+      "get": {
+        "operationId": "reindex_estimate_api_v1_workspaces__workspace_id__reindex_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documents needing re-indexing",
+        "tags": [
+          "ai providers"
+        ]
+      },
+      "post": {
+        "operationId": "start_reindex_api_v1_workspaces__workspace_id__reindex_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Re-index documents embedded with another model",
+        "tags": [
+          "ai providers"
         ]
       }
     },
