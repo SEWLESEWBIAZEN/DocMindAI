@@ -1,0 +1,26 @@
+/** Typed API contract, generated from the backend's OpenAPI document (`make api-types`). */
+import type { components } from './schema'
+
+export type Schemas = components['schemas']
+
+export type User = Schemas['UserResponse']
+export type Workspace = Schemas['WorkspaceResponse']
+export type Role = Schemas['RoleKey']
+export type Member = Schemas['MemberResponse']
+export type Invitation = Schemas['InvitationResponse']
+export type DocumentItem = Schemas['DocumentResponse']
+export type DocumentStatus = Schemas['DocumentStatus']
+export type DocumentPage = Schemas['DocumentPageResponse']
+export type DocumentVersion = Schemas['DocumentVersionResponse']
+export type ExtractedPage = Schemas['PageResponse']
+export type ProcessingStatus = Schemas['ProcessingStatusResponse']
+export type Collection = Schemas['CollectionResponse']
+export type Conversation = Schemas['ConversationResponse']
+export type ConversationDetail = Schemas['ConversationDetailResponse']
+export type ChatMessage = Schemas['documind__api__schemas__conversations__MessageResponse']
+export type Citation = Schemas['MessageCitationResponse']
+export type SearchResult = Schemas['SearchResponse']
+export type UsageSummary = Schemas['UsageSummaryResponse']
+export type AuditLog = Schemas['AuditLogResponse']
+export type MfaStatus = Schemas['MfaStatusResponse']
+export type MfaSetup = Schemas['MfaSetupResponse']

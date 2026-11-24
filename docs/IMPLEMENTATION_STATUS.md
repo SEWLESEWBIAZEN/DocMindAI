@@ -304,24 +304,46 @@ Tests: 295 unit and 160 integration tests (backend), including two against a rea
 - [ ] Per-workspace voice policy; audio not stored by default
 - [ ] Testing sessions with blind and low-vision users
 
-## Phase 7: Frontend implementation
+## Phase 7: Frontend implementation ✅
 
-- [~] **Landing page** (delivered early at the product owner's request, 2026-11-23)
-  - Animated hero product demo (typed question → streamed answer → citation-linked source highlight),
-    cycling through five team scenarios; benefits bento, use-case tabs, pipeline, security, CTA
-  - Motion: CSS transitions/animations on `transform`/`opacity` with shared easing tokens; hover gated
-    to fine pointers; reduced motion shows the finished demo state and keeps fades only
-  - Accessibility: skip link, ARIA tabs with arrow-key navigation, labelled demo region, focus styles
-  - Verified: 28 frontend tests (timeline logic, tabs, reduced motion, autoplay, routes); Playwright
-    screenshots in light, dark and 390 px mobile with no horizontal overflow
-  - Scenario companies, documents and figures are fictional and labelled illustrative; replace with
-    approved customer stories before using any as testimonials
-  - `/login` and `/register` show a "coming soon" page until authentication ships (Phase 2)
-  - Routing is a minimal pathname switch (`src/app/routes.tsx`); a full router comes with the app shell
-- [ ] Remaining pages (login, registration, dashboard, library, chat, etc.), navigation shell, chat UI
-- [ ] **Accessibility acceptance (ADR 0011):** WCAG 2.2 AA, full keyboard operation, polite live regions
-      for streamed answers, citation links, heading and page navigation; axe checks plus NVDA, JAWS
-      and VoiceOver testing
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| 16 pages: landing, login, registration, forgot password, dashboard, library, upload, viewer, collections, chat, history, organization, members, settings, profile, usage | [x] | Every page is exercised by the Playwright journey or unit tests; plus verify-email, reset-password, accept-invitation and 404 |
+| Navigation: workspace switcher, sidebar, user menu, document search, quick upload, new conversation | [x] | `features/shell/AppShell.tsx`; journey switches workspaces, uses the menus and the mobile drawer |
+| Chat: document selection, input, streaming, Markdown, citation cards, source navigation, history | [x] | Journey: stream, follow-up, regenerate, "Open source" → viewer with the excerpt highlighted |
+| Feature-based architecture, reusable components, TanStack Query | [x] | `src/features/*`, `src/components/ui` |
+| Axios interceptors, typed API contracts | [x] | Single-flight refresh, 401 retry, CSRF header (`client.test.ts`); generated `schema.d.ts` with a backend staleness test |
+| Protected routes, error boundaries, skeletons, toasts | [x] | `RequireAuth` (route tests and e2e), safe `next=` redirects, per-route error boundary, `Loading`, live-region toasts |
+| Empty, loading and error states; confirmation dialogs | [x] | All list pages; `useConfirm` for archive/delete/remove/leave; 2FA step-up dialog for permanent deletion |
+| Responsive layouts | [x] | 390 px journey: drawer navigation, no horizontal overflow on documents, chat, conversations, collections, profile, settings |
+| Accessibility and keyboard navigation (ADR 0011) | [~] | axe (WCAG 2.2 A/AA) clean on login, dashboard, documents, chat, conversations, members and usage; WAI-ARIA menus and dialogs; focus management; spoken citation labels. **Manual NVDA/JAWS/VoiceOver testing is still pending (Phase 9).** |
+| Backend support | [x] | `GET /workspaces/{id}/usage` (usage.read) for the usage dashboard |
+
+Acceptance criterion (verified 2026-11-24): **the complete user journey works without Swagger or manual API
+calls.** The Playwright journey covers:
+
+- registration, email verification (link from Mailpit) and sign-in;
+- upload, processing and the viewer;
+- a streamed answer with citations, a follow-up, regenerate, and source navigation;
+- conversation history;
+- creating an organization, inviting a colleague (who signs up in a second browser and accepts) and role-restricted UI;
+- usage, the audit log, and 2FA setup with recovery codes;
+- permanent deletion with a 2FA code, and sign-out followed by a protected-route redirect.
+
+Tests: 62 frontend unit and component tests (Vitest); 3 Playwright end-to-end tests on the live stack; backend
+296 unit and 162 integration tests.
+
+### Phase 7 follow-ups / known issues
+
+- Manual screen-reader testing (NVDA, JAWS, VoiceOver) and testing with blind users (ADR 0011) are pending.
+- The frontend Docker image wasn't rebuilt here (Docker Hub rate-limited the base-image lookup with 429).
+  The app was verified with the same Vite dev server run natively against the containerized backend.
+  `npm ci` in the image picks up the new dependencies from the updated lockfile.
+- The UI's role → permission map mirrors the backend; keep them in sync (UI only; the API enforces).
+- Very long documents render every page in the viewer (no virtualization yet).
+- End-to-end runs use real sign-ups, so repeated local runs hit the auth rate limits; raise
+  `RATE_LIMIT_AUTH_PER_IP` for the dev stack or clear the Redis `rl:*` keys.
+- The landing page's scenario companies are illustrative (see the landing notes above).
 
 ## Phase 8: Usage, administration and SaaS readiness
 

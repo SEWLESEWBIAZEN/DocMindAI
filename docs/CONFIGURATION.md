@@ -235,6 +235,17 @@ to `local`, so the stack runs without an API key.
 | ------------------------ | ----------------------- | --------------------------------------------- |
 | `VITE_API_PROXY_TARGET`  | `http://localhost:8000` | Where the Vite dev server proxies `/api`.     |
 
+
+## End-to-end tests (Playwright)
+
+| Variable          | Default                  | Description                                   |
+| ----------------- | ------------------------ | --------------------------------------------- |
+| `E2E_BASE_URL`    | `http://localhost:5173`  | App under test.                               |
+| `E2E_MAILPIT_URL` | `http://localhost:8025`  | Mailpit API used to read verification and invitation emails. |
+| `E2E_SCREENSHOTS` | *(unset)*                | Directory for journey screenshots.            |
+
+Run with `make e2e` against a running stack. Each run creates accounts, so the auth rate limits apply.
+
 ## Runtime image (uvicorn)
 
 | Variable              | Description                                                                          |

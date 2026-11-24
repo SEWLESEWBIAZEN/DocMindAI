@@ -23,8 +23,24 @@ describe('toApiError', () => {
     expect(error.requestId).toBe('abc123')
   })
 
-  it('falls back to a generic message for non-string details', () => {
-    expect(toApiError(axiosError(422, { detail: [{ msg: 'x' }] })).message).toBe('Request failed (422)')
+  it('summarises validation errors and keeps field messages', () => {
+    const error = toApiError(
+      axiosError(422, { detail: [{ loc: ['body', 'email'], msg: 'Value error, not an email' }] }),
+    )
+    expect(error.message).toBe('Please check the form: not an email')
+    expect(error.fields).toEqual({ email: 'not an email' })
+    expect(error.code).toBe('validation_failed')
+  })
+
+  it('keeps the backend error code', () => {
+    const error = toApiError(axiosError(409, { detail: 'Busy', code: 'reply_in_progress' }))
+    expect(error.code).toBe('reply_in_progress')
+    expect(error.message).toBe('Busy')
+  })
+
+  it('uses friendly messages for rate limits and server errors without a detail', () => {
+    expect(toApiError(axiosError(429, {})).message).toMatch(/Too many requests/)
+    expect(toApiError(axiosError(502, 'bad gateway')).message).toMatch(/Something went wrong/)
   })
 
   it('reports network failures without a status', () => {

@@ -4,5 +4,21 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/app/routes.tsx",
+        "src/components/ui/Toast.tsx",
+        "src/components/ui/ConfirmDialog.tsx",
+        "src/features/auth/AuthProvider.tsx",
+        "src/features/auth/routeGuards.tsx",
+        "src/features/documents/UploadManager.tsx",
+        "src/lib/workspace/WorkspaceContext.tsx"
+      ],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    }
+  ]
 }

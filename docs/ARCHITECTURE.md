@@ -298,13 +298,26 @@ production, details and error reasons are hidden from the response.
 
 ## 12. Frontend
 
-- Vite + React 19 + TypeScript, feature-based layout (`src/features/<feature>`).
-- `src/lib/api/client.ts`: a single Axios instance (`/api/v1`) whose response
-  interceptor normalises all failures into `ApiError` (status, message,
-  request ID). Auth interceptors arrive in Phase 2.
-- TanStack Query for server state. The query client does not retry 4xx errors.
-- Phase 1 ships a system status page that exercises the full path:
-  browser → Vite proxy → API → PostgreSQL/Redis/MinIO.
+See ADR 0007 (toolchain) and ADR 0017 (application architecture).
+
+```
+/ (landing) · /status · /login /register /forgot-password /reset-password /verify-email
+/invitations/accept (signed in)
+/app → /w/:workspaceId/dashboard
+/w/:workspaceId/  dashboard · documents[/:id] · upload · collections[/:id]
+                  chat/:conversationId? · conversations · members · organization
+                  settings · profile · usage
+```
+
+| Concern | Implementation |
+| --- | --- |
+| Session | Access token in memory; HttpOnly refresh cookie; silent refresh on load; one shared refresh on 401 (`lib/api/session.ts`, `client.ts`) |
+| Contract | `lib/api/openapi.json` + generated `schema.d.ts` (`make api-types`); a backend test rejects a stale contract |
+| Server state | TanStack Query, keyed per workspace (`['ws', id, …]`); polling while documents process |
+| Streaming | `fetch` + SSE parser (`lib/api/sse.ts`); stop = cancel endpoint; leaving = abort |
+| UI kit | `components/ui`: Button, Field, Dialog/useConfirm, Toast, Menu, Loading/Empty/Error states, Pagination |
+| Shell | Sidebar (workspace switcher, navigation, recent conversations), top bar (document search, quick upload, user menu), upload tray, mobile drawer |
+| Tests | Vitest + Testing Library (unit and component); Playwright + axe end-to-end journey (`make e2e`) |
 
 ## 13. Environments
 

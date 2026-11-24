@@ -66,3 +66,12 @@ test: ## Run backend unit tests and frontend tests
 .PHONY: test-integration
 test-integration: ## Run backend integration tests (needs `make infra bootstrap`)
 	$(BACKEND) uv run pytest -m integration
+
+.PHONY: api-types
+api-types: ## Regenerate the frontend's OpenAPI contract and TypeScript types
+	$(BACKEND) UPDATE_OPENAPI=1 uv run pytest -q tests/unit/test_openapi_contract.py
+	$(FRONTEND) npx --yes openapi-typescript@7.13.0 src/lib/api/openapi.json -o src/lib/api/schema.d.ts
+
+.PHONY: e2e
+e2e: ## Run Playwright end-to-end tests against the running stack (`make up`)
+	$(FRONTEND) npx playwright test --trace off

@@ -4,11 +4,11 @@ A multi-tenant AI document intelligence platform: upload documents to a personal
 or organization workspace, then search them semantically and hold cited,
 grounded conversations across them.
 
-> **Status: Phases 1–6 complete.** Foundation, identity and tenancy, document
-> management, the asynchronous processing pipeline (with OCR for scanned PDFs),
-> AI search with grounded, page-cited answers, and persistent conversations with
-> streamed (SSE), cancellable answers are in place. The app UI arrives in
-> Phase 7. See
+> **Status: Phases 1–7 complete.** The full product works in the browser:
+> sign-up and 2FA, personal and organization workspaces with roles,
+> uploads with OCR and indexing, search, and conversations with streamed,
+> page-cited answers that link back to the highlighted source passage. Usage
+> tracking, plans and production deployment follow in Phases 8–10. See
 > [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 **Accessibility is a product goal.** DocuMind is being designed for blind
@@ -60,7 +60,7 @@ docker compose up --build
 
 | URL                                 | What                                      |
 | ----------------------------------- | ----------------------------------------- |
-| http://localhost:5173               | Frontend landing page with live product demo |
+| http://localhost:5173               | DocuMind: landing page, then **Create account** to use the app |
 | http://localhost:5173/status        | System status page                        |
 | http://localhost:8000/api/v1/health | Readiness: app + dependency health        |
 | http://localhost:8000/api/docs      | OpenAPI docs (disabled in production)     |
@@ -91,12 +91,24 @@ make frontend-dev # Vite on :5173, proxies /api to :8000
 
 `make help` lists every target.
 
+## Using the app
+
+1. Open http://localhost:5173 and choose **Create account**. The verification email is in Mailpit
+   (http://localhost:8025).
+2. Upload PDFs, Word, text or Markdown files (**Upload** in the top bar). They show **Ready** once indexed.
+3. Choose **New conversation** and ask a question. Answers stream in with numbered citations; **Open source**
+   jumps to the highlighted passage in the document.
+4. Create an organization from the workspace switcher, invite colleagues, and manage roles under **Members**.
+5. Turn on two-factor authentication under **Profile**. Admins need it to delete documents permanently.
+
 ## Testing and quality
 
 ```bash
 make lint              # ruff, mypy --strict, oxlint, tsc
 make test              # backend unit tests + frontend tests
 make test-integration  # backend tests against real Postgres/Redis/MinIO
+make e2e               # Playwright journey + axe accessibility scans (needs the running stack)
+make api-types         # regenerate the frontend's typed API contract after API changes
 ```
 
 Backend integration tests are opt-in (`pytest -m integration`) and require
