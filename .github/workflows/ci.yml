@@ -1,4 +1,3 @@
-
 name: CI
 
 on:
@@ -9,94 +8,11 @@ on:
 permissions:
   contents: read
 
-# Avoid cancelling a workflow while a database migration is running.
+# Superseded runs on branches and pull requests are cancelled. On main they are
+# never cancelled, so a production database migration can't be interrupted.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: falsename: CI
-
-on:
-  push:
-  pull_request:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  backend:
-    name: Backend (lint, types, unit, integration)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.11.32"
-      - name: Install dependencies
-        working-directory: backend
-        run: uv sync --locked
-      - name: Lint
-        working-directory: backend
-        run: uv run ruff check . && uv run ruff format --check .
-      - name: Type-check
-        working-directory: backend
-        run: uv run mypy
-      - name: Unit tests
-        working-directory: backend
-        run: uv run pytest
-      - name: Install Tesseract (OCR tests)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
-      - name: Start infrastructure
-        run: |
-          cp .env.example .env
-          docker compose up -d --wait postgres redis minio
-      - name: Migrate and bootstrap storage
-        working-directory: backend
-        run: uv run alembic upgrade head && uv run documind-manage bootstrap-storage
-      - name: Integration tests
-        working-directory: backend
-        run: uv run pytest -m integration
-      - name: Infrastructure logs on failure
-        if: failure()
-        run: docker compose logs --no-color
-
-  frontend:
-    name: Frontend (lint, types, tests, build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-
-  images:
-    name: Docker images build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build backend (dev and runtime)
-        run: |
-          docker build --target dev -t documind-backend:dev backend
-          docker build --target runtime -t documind-backend:runtime backend
-      - name: Build frontend (dev and build)
-        run: |
-          docker build --target dev -t documind-frontend:dev frontend
-          docker build --target build -t documind-frontend:build frontend
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # ============================================
@@ -267,12 +183,13 @@ jobs:
             exit 1
           fi
 
+          # The application and Alembic use the asyncpg driver.
           case "$DATABASE_URL" in
-            postgresql://*|postgres://*)
+            postgresql+asyncpg://*)
               echo "Production database URL configuration is valid."
               ;;
             *)
-              echo "::error::Invalid PostgreSQL connection URL."
+              echo "::error::PRODUCTION_DATABASE_URL must start with postgresql+asyncpg://"
               exit 1
               ;;
           esac
@@ -284,7 +201,8 @@ jobs:
         run: |
           echo "Applying production Alembic migrations..."
 
-          uv run alembic upgrade head
+          # Pass the URL directly: Alembic then needs no other application settings.
+          uv run alembic -x database_url="$DATABASE_URL" upgrade head
 
           echo "Production database migration completed."
 
@@ -293,4 +211,4 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
         run: |
-          uv run alembic current
+          uv run alembic -x database_url="$DATABASE_URL" current
