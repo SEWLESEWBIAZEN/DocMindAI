@@ -10,6 +10,7 @@ from documind.api.routes import (
     health,
     infrastructure,
     me,
+    metrics,
     rag,
     usage,
     voice,
@@ -32,3 +33,4 @@ api_router.include_router(voice.router)
 api_router.include_router(ai_providers.router)
 api_router.include_router(infrastructure.router)
 api_router.include_router(worker_api.router)
+api_router.include_router(metrics.router)

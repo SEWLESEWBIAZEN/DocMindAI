@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import ssl
 import uuid
 from dataclasses import dataclass
@@ -33,7 +34,14 @@ logger = logging.getLogger(__name__)
 
 PLANE_INFO_KEY = "documind_plane"
 ISOLATED = "isolated"
-_ALEMBIC_INI = Path(__file__).resolve().parents[4] / "alembic.ini"
+def _alembic_ini() -> Path:
+    """alembic.ini: DOCUMIND_ALEMBIC_INI, else the source checkout, else the working
+    directory (/app in the runtime image, where the package is installed non-editable)."""
+    explicit = os.environ.get("DOCUMIND_ALEMBIC_INI")
+    if explicit:
+        return Path(explicit)
+    checkout = Path(__file__).resolve().parents[4] / "alembic.ini"
+    return checkout if checkout.is_file() else Path.cwd() / "alembic.ini"
 
 
 def is_isolated(session: AsyncSession) -> bool:
@@ -114,7 +122,7 @@ async def migrate(engine: AsyncEngine) -> str | None:
     async with engine.begin() as conn:
 
         def run(sync_conn: Any) -> None:
-            cfg = Config(str(_ALEMBIC_INI), ini_section="dataplane")
+            cfg = Config(str(_alembic_ini()), ini_section="dataplane")
             cfg.attributes["connection"] = sync_conn
             command.upgrade(cfg, "head")
 
@@ -127,7 +135,7 @@ def head_revision() -> str:
     from alembic.script import ScriptDirectory
 
     heads = ScriptDirectory.from_config(
-        Config(str(_ALEMBIC_INI), ini_section="dataplane")
+        Config(str(_alembic_ini()), ini_section="dataplane")
     ).get_heads()
     return str(heads[0])
 

@@ -11,7 +11,7 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0003](0003-async-data-access-and-migrations.md) | Async SQLAlchemy + asyncpg, Alembic, pgvector in the primary database | Accepted |
 | [0004](0004-configuration-and-secrets.md) | Environment-based configuration with fail-fast validation | Accepted |
 | [0005](0005-logging-and-health-checks.md) | Structured stdlib logging, request IDs, liveness vs readiness | Accepted |
-| [0006](0006-local-object-storage-image.md) | Local object storage image after MinIO's distribution change | Accepted (development) / Open (production) |
+| [0006](0006-local-object-storage-image.md) | Local object storage image after MinIO's distribution change | Accepted (development); production: 0023 |
 | [0007](0007-frontend-toolchain.md) | Frontend toolchain: Vite, TypeScript 7, oxlint, Vitest | Accepted |
 | [0008](0008-authentication-and-sessions.md) | Authentication and session tokens | Accepted |
 | [0009](0009-tenancy-and-authorization.md) | Tenancy model and authorization policy | Accepted |
@@ -28,5 +28,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0020](0020-plans-usage-and-quotas.md) | Plans, entitlements, usage metering and quotas | Accepted |
 | [0021](0021-infrastructure-profiles-and-data-planes.md) | Infrastructure profiles, resolution and data planes | Accepted |
 | [0022](0022-credential-vault.md) | Credential vault (envelope encryption and rotation) | Accepted |
+| [0023](0023-production-object-storage.md) | Production object storage (closes 0006) | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

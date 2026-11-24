@@ -1,0 +1,61 @@
+# Production smoke test (staging rehearsal): the production stack in production mode,
+# Paths are relative to deploy/production (the first Compose file's directory).
+# with local stand-ins only where an external service would be (storage, email, AI).
+#   deploy/production/smoke/run.sh
+services:
+  web:
+    # Uses a pre-built bundle when the node image can't be pulled: same nginx config.
+    image: nginx:1.27-alpine
+    entrypoint: ["/usr/local/bin/documind-nginx"]
+    volumes:
+      - ../../frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx/documind.conf.template:/etc/nginx/templates/documind.conf.template:ro
+      - ./nginx/entrypoint.sh:/usr/local/bin/documind-nginx:ro
+      - ./smoke/work/certs:/etc/nginx/certs:ro
+      - acme:/var/www/acme
+    ports: !override
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8443:443"
+
+  migrate:
+    depends_on:
+      minio: { condition: service_started }
+      mailpit: { condition: service_started }
+      openai-stub: { condition: service_started }
+
+  api:
+    environment:
+      SSL_CERT_FILE: /smoke/ca.pem
+    volumes:
+      - ./smoke/work/ca.pem:/smoke/ca.pem:ro
+  worker:
+    environment:
+      SSL_CERT_FILE: /smoke/ca.pem
+    volumes:
+      - ./smoke/work/ca.pem:/smoke/ca.pem:ro
+  minio:
+    image: bitnamilegacy/minio:2025.7.23
+    environment:
+      MINIO_ROOT_USER: smoke-minio-user
+      MINIO_ROOT_PASSWORD: smoke-minio-password-123
+    networks: [egress]
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    environment:
+      MP_SMTP_TLS_CERT: /certs/mailpit.pem
+      MP_SMTP_TLS_KEY: /certs/mailpit-key.pem
+    volumes:
+      - ./smoke/work/mailpit:/certs:ro
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks: [egress]
+
+  openai-stub:
+    image: ${DOCUMIND_IMAGE:-documind-backend:runtime}
+    command: ["uvicorn", "openai_stub:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "/smoke"]
+    volumes:
+      - ./smoke/openai_stub.py:/smoke/openai_stub.py:ro
+    healthcheck:
+      disable: true
+    networks: [egress]

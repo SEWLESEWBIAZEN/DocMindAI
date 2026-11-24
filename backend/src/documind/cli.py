@@ -215,12 +215,41 @@ async def _plan_assign(
     return 0
 
 
+def _offsite_client(settings: Any) -> Any:
+    """Offsite backups can use their own credentials and endpoint (BACKUP_S3_*),
+    so a compromised application key can't delete the backups."""
+    import os
+
+    import boto3
+
+    return boto3.session.Session().client(
+        "s3",
+        endpoint_url=os.environ.get("BACKUP_S3_ENDPOINT_URL") or settings.s3_endpoint_url,
+        region_name=os.environ.get("BACKUP_S3_REGION") or settings.s3_region,
+        aws_access_key_id=os.environ.get("BACKUP_S3_ACCESS_KEY_ID")
+        or settings.s3_access_key_id.get_secret_value(),
+        aws_secret_access_key=os.environ.get("BACKUP_S3_SECRET_ACCESS_KEY")
+        or settings.s3_secret_access_key.get_secret_value(),
+    )
+
+
 def _objects(command: str, directory: str, bucket: str | None) -> int:
     from pathlib import Path
 
     from documind.ops.objects import export_objects, import_objects
 
     settings = get_settings()
+    if command == "upload-file":
+        if not bucket:
+            raise SystemExit("--bucket is required for upload-file")
+        path = Path(directory)
+        offsite = _offsite_client(settings)
+        try:
+            offsite.upload_file(str(path), bucket, path.name)
+        finally:
+            offsite.close()
+        _print({"bucket": bucket, "uploaded": path.name, "bytes": path.stat().st_size})
+        return 0
     client = create_s3_client(settings)
     target = bucket or settings.s3_bucket
     try:
@@ -248,6 +277,79 @@ def _backup(command: str, source: str, target: str, passphrase_file: str) -> int
     return 0
 
 
+async def _mark_backup(container: Container) -> int:
+    import time
+
+    from documind.ops.metrics import BACKUP_KEY
+
+    await container.redis.set(BACKUP_KEY, str(int(time.time())))
+    return 0
+
+
+async def _dataplanes_migrate(container: Container) -> int:
+    """Upgrade every active dedicated data plane, and external ones whose owners
+    allowed DocuMind to manage the schema; report the others (ADR 0021)."""
+    from documind.application.infrastructure.resolver import verify
+    from documind.infrastructure.database.dataplane_runtime import (
+        create_dataplane_engine,
+        head_revision,
+        migrate,
+        schema_revision,
+    )
+    from documind.infrastructure.database.models import (
+        Credential,
+        InfrastructureProfileVersion,
+        WorkspaceInfrastructure,
+    )
+
+    head = head_revision()
+    results: list[dict[str, Any]] = []
+    failed = 0
+    async with container.session_factory() as session:
+        rows = (
+            await session.execute(
+                select(InfrastructureProfileVersion).join(
+                    WorkspaceInfrastructure,
+                    WorkspaceInfrastructure.version_id == InfrastructureProfileVersion.id,
+                )
+            )
+        ).scalars()
+        vault = CredentialVault(session, container.cipher)
+        for row in list(rows):
+            config = verify(row)
+            db = config.database
+            if db.mode == "shared":
+                continue
+            entry: dict[str, Any] = {"workspace_id": row.workspace_id, "mode": db.mode}
+            try:
+                cred = (
+                    await vault.get(row.workspace_id, db.password_credential_id)
+                    if db.password_credential_id
+                    else None
+                )
+                if not isinstance(cred, Credential):
+                    raise RuntimeError("credential missing")
+                engine = create_dataplane_engine(
+                    container.settings, db, vault.reveal(cred), pool_size=1
+                )
+                try:
+                    before = await schema_revision(engine)
+                    if before == head:
+                        entry["status"] = "current"
+                    elif db.mode == "dedicated" or db.manage_schema:
+                        entry["status"] = f"migrated {before} -> {await migrate(engine)}"
+                    else:
+                        entry["status"] = f"needs customer migration ({before} != {head})"
+                finally:
+                    await engine.dispose()
+            except Exception as exc:  # report and continue: one plane must not block others
+                failed += 1
+                entry["status"] = f"error: {type(exc).__name__}"
+            results.append(entry)
+    _print({"head": head, "dataplanes": results})
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="documind-manage",
@@ -272,20 +374,22 @@ def main(argv: list[str] | None = None) -> int:
     reindex = sub.add_parser("reindex", help="re-embed documents indexed with another model")
     reindex.add_argument("--workspace", type=uuid.UUID, default=None)
     reindex.add_argument("--all", action="store_true", help="re-index every ready document")
+    planes = sub.add_parser("dataplanes", help="dedicated and external data planes (ADR 0021)")
+    planes.add_argument("dataplanes_command", choices=["migrate"])
     creds = sub.add_parser("credentials", help="credential vault maintenance (ADR 0022)")
     creds_sub = creds.add_subparsers(dest="credentials_command", required=True)
     creds_sub.add_parser(
         "rewrap", help="re-wrap every credential with the first key in CREDENTIAL_ENCRYPTION_KEYS"
     )
     objects = sub.add_parser("objects", help="export or import object storage (backups)")
-    objects.add_argument("objects_command", choices=["export", "import"])
-    objects.add_argument("directory")
+    objects.add_argument("objects_command", choices=["export", "import", "upload-file"])
+    objects.add_argument("directory", help="export/import directory, or the file to upload")
     objects.add_argument("--bucket", default=None, help="defaults to S3_BUCKET")
     backup = sub.add_parser("backup", help="encrypt or decrypt a backup archive")
-    backup.add_argument("backup_command", choices=["seal", "unseal"])
-    backup.add_argument("source")
-    backup.add_argument("target")
-    backup.add_argument("--passphrase-file", required=True)
+    backup.add_argument("backup_command", choices=["seal", "unseal", "mark-success"])
+    backup.add_argument("source", nargs="?")
+    backup.add_argument("target", nargs="?")
+    backup.add_argument("--passphrase-file")
     plan = sub.add_parser("plan", help="list plans or assign one to a workspace (audited)")
     plan_sub = plan.add_subparsers(dest="plan_command", required=True)
     plan_sub.add_parser("list", help="show the plan catalog")
@@ -313,10 +417,16 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(lambda c: _jobs(c, args.status, args.limit)))
     if args.command == "sweep":
         return asyncio.run(_with_container(_sweep))
+    if args.command == "backup" and args.backup_command == "mark-success":
+        return asyncio.run(_with_container(_mark_backup))
     if args.command == "backup":
+        if not (args.source and args.target and args.passphrase_file):
+            parser.error("seal/unseal need SOURCE TARGET --passphrase-file")
         return _backup(args.backup_command, args.source, args.target, args.passphrase_file)
     if args.command == "objects":
         return _objects(args.objects_command, args.directory, args.bucket)
+    if args.command == "dataplanes":
+        return asyncio.run(_with_container(_dataplanes_migrate))
     if args.command == "credentials":
         return asyncio.run(_with_container(_rewrap))
     if args.command == "plan":

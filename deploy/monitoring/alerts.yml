@@ -1,0 +1,63 @@
+# Alert rules for DocuMind (Phase 10). Thresholds are starting points; tune them per site.
+groups:
+  - name: documind
+    rules:
+      - alert: DocuMindDown
+        expr: up{job="documind"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "DocuMind API not answering metrics scrapes"
+          runbook: docs/runbooks/incident-response.md#api-down
+
+      - alert: DocuMindDependencyDown
+        expr: documind_dependency_up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.component }} is failing health checks"
+          runbook: docs/runbooks/incident-response.md#dependency-down
+
+      - alert: DocuMindProcessingBacklog
+        expr: documind_oldest_queued_job_seconds > 900 or documind_queue_depth > 200
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Documents are waiting more than 15 minutes to be processed"
+          runbook: docs/runbooks/incident-response.md#processing-backlog
+
+      - alert: DocuMindProcessingFailures
+        expr: sum(documind_processing_jobs_24h{status=~"failed|dead"}) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: "Unusual number of failed processing jobs in 24 h"
+          runbook: docs/runbooks/incident-response.md#processing-failures
+
+      - alert: DocuMindAnswerFailures
+        expr: documind_failed_answers_24h > 50
+        labels: { severity: warning }
+        annotations:
+          summary: "Many answers failed in 24 h (AI provider problems?)"
+          runbook: docs/runbooks/incident-response.md#ai-provider
+
+      - alert: DocuMindDataPlaneDown
+        expr: documind_dataplanes{state="up"} < documind_dataplanes{state="total"}
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "A dedicated or external database is unreachable"
+          runbook: docs/runbooks/incident-response.md#data-plane-down
+
+      - alert: DocuMindBackupStale
+        expr: time() - documind_backup_last_success_timestamp > 26 * 3600
+        labels: { severity: critical }
+        annotations:
+          summary: "No successful backup in the last 26 hours"
+          runbook: docs/runbooks/backup-and-restore.md
+
+      - alert: DocuMindInvalidAIKeys
+        expr: documind_ai_keys_invalid > 0
+        for: 1h
+        labels: { severity: info }
+        annotations:
+          summary: "Workspace AI keys are being rejected (customers were emailed)"

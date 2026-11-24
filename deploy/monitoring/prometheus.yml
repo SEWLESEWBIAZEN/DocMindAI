@@ -1,0 +1,26 @@
+# Prometheus for DocuMind (Phase 10). Run it on the stack's internal network.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: documind
+    metrics_path: /api/v1/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token   # the METRICS_TOKEN value
+    static_configs:
+      - targets: ["api:8000"]
+
+  # External availability as users see it (blackbox_exporter, optional).
+  - job_name: documind-https
+    metrics_path: /probe
+    params: { module: [http_2xx] }
+    static_configs:
+      - targets: ["https://documind.example.com/api/v1/health"]
+    relabel_configs:
+      - { source_labels: [__address__], target_label: __param_target }
+      - { target_label: __address__, replacement: "blackbox:9115" }

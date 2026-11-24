@@ -16,6 +16,12 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
     trace: 'off',
     screenshot: 'only-on-failure',
+    // Production smoke tests (deploy/production/smoke): a local CA and a hostname
+    // mapped to 127.0.0.1.
+    ignoreHTTPSErrors: process.env.E2E_IGNORE_HTTPS_ERRORS === '1',
+    launchOptions: process.env.E2E_HOST_RESOLVER_RULES
+      ? { args: [`--host-resolver-rules=${process.env.E2E_HOST_RESOLVER_RULES}`, '--no-proxy-server'] }
+      : {},
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1360, height: 860 } } },

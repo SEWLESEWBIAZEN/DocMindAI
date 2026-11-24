@@ -238,6 +238,8 @@ class Settings(BaseSettings):
     dedicated_database_sslmode: Literal["disable", "require", "verify-ca", "verify-full"] = (
         "verify-full"
     )
+    # Bearer token for GET /api/v1/metrics (Prometheus). Unset: the endpoint is off (404).
+    metrics_token: SecretStr | None = None
     dataplane_pool_size: int = Field(default=5, ge=1, le=50)
     dataplane_max_open: int = Field(default=20, ge=1, le=500)
     # How long a successful 2FA check authorizes sensitive actions (e.g. delete).
@@ -308,6 +310,7 @@ class Settings(BaseSettings):
         "smtp_password",
         "credential_encryption_keys",
         "dedicated_database_admin_url",
+        "metrics_token",
         mode="before",
     )
     @classmethod

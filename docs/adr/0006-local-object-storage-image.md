@@ -1,6 +1,6 @@
 # ADR 0006: Local object storage image after MinIO's distribution change
 
-- Status: Accepted for development. **Open for production. Decision required before Phase 10.**
+- Status: Accepted for development. Production decided by [ADR 0023](0023-production-object-storage.md).
 - Date: 2026-11-23
 
 ## Context

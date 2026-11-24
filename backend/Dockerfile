@@ -56,9 +56,31 @@ COPY --from=builder /opt/venv /opt/venv
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY alembic_dataplane ./alembic_dataplane
+# Fail the build, not production, when a runtime import is missing (e.g. kombu's
+# undeclared dependency on packaging).
+RUN python -c "import kombu.transport.redis, celery, documind.main, documind.worker.tasks, documind.cli"
 USER documind
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["python", "-c", "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=4).status != 200)"]
 # Trusted proxy IPs come from FORWARDED_ALLOW_IPS (read by uvicorn), set at deploy time.
 CMD ["uvicorn", "documind.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-graceful-shutdown", "20"]
+
+# --------------------------------------------------------------------------- #
+# Scheduled encrypted backups (infra/backup): runtime + PostgreSQL 16 client tools.
+FROM runtime AS backup
+USER root
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+ && install -d /usr/share/postgresql-common/pgdg \
+ && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+ && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client-16 \
+ && apt-get purge -y gnupg curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+# Scripts come from infra/backup via a named build context:
+#   docker build --build-context backup-scripts=infra/backup --target backup backend
+COPY --chmod=0755 --from=backup-scripts backup.sh restore.sh schedule.sh /usr/local/bin/
+USER documind
+HEALTHCHECK NONE
+ENTRYPOINT ["/usr/local/bin/schedule.sh"]
