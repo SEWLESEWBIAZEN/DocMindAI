@@ -215,6 +215,39 @@ async def _plan_assign(
     return 0
 
 
+def _objects(command: str, directory: str, bucket: str | None) -> int:
+    from pathlib import Path
+
+    from documind.ops.objects import export_objects, import_objects
+
+    settings = get_settings()
+    client = create_s3_client(settings)
+    target = bucket or settings.s3_bucket
+    try:
+        if command == "export":
+            manifest = export_objects(client, target, Path(directory))
+            _print({"bucket": target, "exported": len(manifest["objects"])})
+        else:
+            ensure_private_bucket(client, target, settings.s3_region)
+            _print({"bucket": target, "imported": import_objects(client, target, Path(directory))})
+    finally:
+        client.close()
+    return 0
+
+
+def _backup(command: str, source: str, target: str, passphrase_file: str) -> int:
+    from documind.ops.backup_crypto import BackupIntegrityError, passphrase_from, seal, unseal
+
+    passphrase = passphrase_from(passphrase_file)
+    with open(source, "rb") as src, open(target, "wb") as dst:
+        try:
+            (seal if command == "seal" else unseal)(src, dst, passphrase)
+        except BackupIntegrityError as exc:
+            sys.stderr.write(f"error: {exc}\n")
+            return 2
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="documind-manage",
@@ -244,6 +277,15 @@ def main(argv: list[str] | None = None) -> int:
     creds_sub.add_parser(
         "rewrap", help="re-wrap every credential with the first key in CREDENTIAL_ENCRYPTION_KEYS"
     )
+    objects = sub.add_parser("objects", help="export or import object storage (backups)")
+    objects.add_argument("objects_command", choices=["export", "import"])
+    objects.add_argument("directory")
+    objects.add_argument("--bucket", default=None, help="defaults to S3_BUCKET")
+    backup = sub.add_parser("backup", help="encrypt or decrypt a backup archive")
+    backup.add_argument("backup_command", choices=["seal", "unseal"])
+    backup.add_argument("source")
+    backup.add_argument("target")
+    backup.add_argument("--passphrase-file", required=True)
     plan = sub.add_parser("plan", help="list plans or assign one to a workspace (audited)")
     plan_sub = plan.add_subparsers(dest="plan_command", required=True)
     plan_sub.add_parser("list", help="show the plan catalog")
@@ -271,6 +313,10 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(lambda c: _jobs(c, args.status, args.limit)))
     if args.command == "sweep":
         return asyncio.run(_with_container(_sweep))
+    if args.command == "backup":
+        return _backup(args.backup_command, args.source, args.target, args.passphrase_file)
+    if args.command == "objects":
+        return _objects(args.objects_command, args.directory, args.bucket)
     if args.command == "credentials":
         return asyncio.run(_with_container(_rewrap))
     if args.command == "plan":

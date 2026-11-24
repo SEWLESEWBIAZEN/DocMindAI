@@ -344,8 +344,10 @@ def make_api(
     monkeypatch.setattr(mfa_service, "_totp_clock", lambda: time.time() + clock["offset"])
 
     def _make(container_overrides: dict[str, Any] | None = None, **overrides: Any) -> Api:
+        skip_reset = bool(overrides.pop("_skip_reset", False))  # e.g. a restored copy
         settings = identity_settings.model_copy(update=overrides)
-        asyncio.run(_reset_state(settings))
+        if not skip_reset:
+            asyncio.run(_reset_state(settings))
         dispatcher = RecordingDispatcher()
         container_overrides = {"job_dispatcher": dispatcher, **(container_overrides or {})}
 
