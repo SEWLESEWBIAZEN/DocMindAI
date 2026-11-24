@@ -1026,6 +1026,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and start a planned data migration (owner, 2FA step-up) */
+        post: operations["approve_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/cancel": {
         parameters: {
             query?: never;
@@ -1037,6 +1054,23 @@ export interface paths {
         put?: never;
         /** Cancel a planned migration */
         post: operations["cancel_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete the retained source copy of a completed migration (owner, 2FA step-up) */
+        post: operations["cleanup_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cleanup_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1580,6 +1614,15 @@ export interface components {
              * @description Screen-reader/voice label, e.g. "MSA, page 14".
              */
             spoken_label: string;
+        };
+        /** CleanupResponse */
+        CleanupResponse: {
+            /** Objects */
+            objects: number;
+            /** Rows */
+            rows: {
+                [key: string]: number;
+            };
         };
         /** CollectionResponse */
         CollectionResponse: {
@@ -2272,6 +2315,21 @@ export interface components {
             enabled_at: string | null;
             /** Recovery Codes Remaining */
             recovery_codes_remaining: number;
+        };
+        /** MigrationStarted */
+        MigrationStarted: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Queued */
+            queued: boolean;
+            /**
+             * Status
+             * @description approved: queued to run; the workspace locks while it runs
+             */
+            status: string;
         };
         /**
          * OverallStatus
@@ -5430,6 +5488,38 @@ export interface operations {
             };
         };
     };
+    approve_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                migration_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationStarted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cancel_post: {
         parameters: {
             query?: never;
@@ -5448,6 +5538,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cleanup_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cleanup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                migration_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

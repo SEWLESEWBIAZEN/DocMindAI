@@ -6,7 +6,14 @@ import logging
 import uuid
 
 from documind.worker import runtime
-from documind.worker.celery_app import PROCESS_TASK, QUEUE, REPLY_SWEEP_TASK, SWEEP_TASK, app
+from documind.worker.celery_app import (
+    MIGRATION_TASK,
+    PROCESS_TASK,
+    QUEUE,
+    REPLY_SWEEP_TASK,
+    SWEEP_TASK,
+    app,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +40,13 @@ def sweep_stale_replies() -> int:
     if failed:
         logger.warning("marked interrupted answers as failed", extra={"count": failed})
     return failed
+
+
+# Not acks_late: a migration must never be redelivered half-done. A run whose worker died
+# stays "running" until an operator aborts it (documind-manage migrations abort).
+@app.task(  # type: ignore[untyped-decorator]
+    name=MIGRATION_TASK, ignore_result=True, time_limit=12 * 3600, soft_time_limit=None
+)
+def run_infrastructure_migration(migration_id: str) -> str:
+    report = runtime.run(runtime.run_migration(uuid.UUID(migration_id)))
+    return str(report.get("rows", {}))

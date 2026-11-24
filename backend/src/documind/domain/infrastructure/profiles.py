@@ -30,6 +30,8 @@ _BUCKET = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
 _REGION = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$|^us-east-1$")
 _PREFIX = re.compile(r"^[A-Za-z0-9!_.*'()/-]{0,200}$")
 _ACCESS_KEY = re.compile(r"^[A-Za-z0-9/+=_-]{3,128}$")
+_AZURE_ACCOUNT = re.compile(r"^[a-z0-9]{3,24}$")
+_AZURE_CONTAINER = re.compile(r"^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +62,8 @@ STORAGE_PROVIDERS: MappingProxyType[str, StorageProviderSpec] = MappingProxyType
         "azure_blob": StorageProviderSpec(
             "azure_blob",
             "Azure Blob Storage",
-            "planned",
-            "Planned (MI-6). Not selectable until the adapter ships.",
+            "available",
+            "A private container in your Azure storage account (account key).",
         ),
     }
 )
@@ -100,6 +102,13 @@ class StorageConfig:
 
     def location(self) -> tuple[Any, ...]:
         return (self.provider, self.endpoint_url, self.region, self.bucket, self.prefix)
+
+    @property
+    def endpoint_path(self) -> str | None:
+        """The only path an endpoint may have: Azure path-style ``/<account>``."""
+        if self.provider == "azure_blob" and self.access_key_id:
+            return f"/{self.access_key_id}"
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +222,8 @@ def parse_config(raw: dict[str, Any]) -> InfrastructureConfig:
         raise ProfileError(f"{spec.name} isn't available yet.")
     if provider == "documind":
         storage = StorageConfig()
+    elif provider == "azure_blob":
+        storage = _azure_storage(st_raw)
     else:
         bucket = _opt_str(st_raw, "bucket", _BUCKET, "Bucket name")
         if not bucket:
@@ -250,6 +261,32 @@ def parse_config(raw: dict[str, Any]) -> InfrastructureConfig:
     if pmode not in ("documind", "customer", "hybrid"):
         raise ProfileError("Processing mode must be documind, customer or hybrid.")
     return InfrastructureConfig(db, storage, ProcessingConfig(pmode))
+
+
+def _azure_storage(st_raw: dict[str, Any]) -> StorageConfig:
+    container = _opt_str(st_raw, "bucket", _AZURE_CONTAINER, "Container name")
+    if not container:
+        raise ProfileError("A container name is required.")
+    account = _opt_str(st_raw, "access_key_id", _AZURE_ACCOUNT, "Storage account name")
+    if not account:
+        raise ProfileError("A storage account name is required.")
+    prefix = st_raw.get("prefix") or ""
+    if not isinstance(prefix, str) or not _PREFIX.match(prefix) or ".." in prefix:
+        raise ProfileError("Key prefix isn't valid.")
+    endpoint = st_raw.get("endpoint_url") or f"https://{account}.blob.core.windows.net"
+    if not isinstance(endpoint, str):
+        raise ProfileError("Endpoint URL isn't valid.")
+    return StorageConfig(
+        provider="azure_blob",
+        bucket=container,
+        region=None,
+        # Always explicit, so the network policy checks the real host.
+        endpoint_url=endpoint.rstrip("/"),
+        prefix=prefix.strip("/"),
+        force_path_style=False,
+        access_key_id=account,
+        secret_credential_id=_uuid(st_raw.get("secret_credential_id")),
+    )
 
 
 def from_stored(raw: dict[str, Any]) -> InfrastructureConfig:

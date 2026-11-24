@@ -72,14 +72,23 @@ async def check_host(host: str, port: int, *, allowed: frozenset[str]) -> list[s
     return addresses
 
 
-async def check_url(url: str, *, allowed: frozenset[str]) -> tuple[str, int]:
-    """HTTPS endpoints only (plain HTTP only for allowlisted hosts)."""
+async def check_url(
+    url: str, *, allowed: frozenset[str], allowed_path: str | None = None
+) -> tuple[str, int]:
+    """HTTPS endpoints only (plain HTTP only for allowlisted hosts).
+
+    ``allowed_path``: the one path a provider's path-style endpoints may carry
+    (Azure Stack and Azurite put the account name there).
+    """
     parts = urlsplit(url)
     if parts.scheme not in ("https", "http") or not parts.hostname:
         raise BlockedHostError("The endpoint must be an https:// URL.")
     if parts.username or parts.password:
         raise BlockedHostError("Don't put credentials in the endpoint URL.")
-    if parts.path not in ("", "/") or parts.query or parts.fragment:
+    path_ok = parts.path in ("", "/") or (
+        allowed_path is not None and parts.path.rstrip("/") == allowed_path
+    )
+    if not path_ok or parts.query or parts.fragment:
         raise BlockedHostError("The endpoint must not include a path or query.")
     host = parts.hostname.lower()
     if parts.scheme == "http" and host not in allowed:

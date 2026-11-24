@@ -16,6 +16,7 @@ from documind.api.dependencies import (
     WorkspaceCtx,
     limit_outbound_checks,
 )
+from documind.application.infrastructure.migration import MigrationExecutor
 from documind.application.infrastructure.service import InfrastructureService, VersionView
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/infrastructure", tags=["infrastructure"])
@@ -188,6 +189,53 @@ async def cancel_migration(
 ) -> Response:
     await infra.cancel_migration(ctx, migration_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class MigrationStarted(BaseModel):
+    id: uuid.UUID
+    status: str = Field(description="approved: queued to run; the workspace locks while it runs")
+    queued: bool
+
+
+class CleanupResponse(BaseModel):
+    rows: dict[str, int]
+    objects: int
+
+
+@router.post(
+    "/migrations/{migration_id}/approve",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=MigrationStarted,
+    summary="Approve and start a planned data migration (owner, 2FA step-up)",
+)
+async def approve_migration(
+    migration_id: uuid.UUID, ctx: WorkspaceCtx, infra: ServiceDep, container: ContainerDep
+) -> MigrationStarted:
+    await infra.approve_migration(ctx, migration_id)
+    queued = False
+    if container.migration_dispatch is not None:
+        # Best effort: if the queue is down, an operator runs it with documind-manage.
+        queued = await container.migration_dispatch(migration_id)
+    return MigrationStarted(id=migration_id, status="approved", queued=queued)
+
+
+@router.post(
+    "/migrations/{migration_id}/cleanup",
+    response_model=CleanupResponse,
+    summary="Delete the retained source copy of a completed migration (owner, 2FA step-up)",
+)
+async def cleanup_migration(
+    migration_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    infra: ServiceDep,
+    container: ContainerDep,
+    meta: MetaDep,
+) -> CleanupResponse:
+    await infra.authorize_cleanup(ctx, migration_id)
+    report = await MigrationExecutor(
+        container.session_factory, container.infrastructure()
+    ).cleanup_source(migration_id, actor=ctx.user_id, meta=meta)
+    return CleanupResponse(rows=report.rows, objects=report.objects)
 
 
 @router.post(

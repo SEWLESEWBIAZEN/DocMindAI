@@ -5,8 +5,8 @@ retired. Versions are immutable; secrets go to the credential vault and the
 configuration only references them. Activation needs owner rights, a fresh
 2FA step-up and a successful validation of that exact version. Moving a
 non-empty workspace to another database or bucket is refused with
-``migration_required`` and recorded as a planned migration (MI-8): no data is
-moved without the migration workflow and the customer's explicit approval.
+``migration_required`` and recorded as a planned migration (MI-8): data only
+moves once an owner approves it, and runs in ``migration.py`` (ADR 0025).
 """
 
 from __future__ import annotations
@@ -219,8 +219,22 @@ class InfrastructureService:
             return None, PLATFORM_DEFAULT
         return row, verify(row)
 
+    async def _migration_busy(self, ctx: WorkspaceContext) -> bool:
+        busy = (
+            await self._s.execute(
+                select(func.count())
+                .select_from(InfrastructureMigration)
+                .where(
+                    InfrastructureMigration.workspace_id == ctx.workspace_id,
+                    InfrastructureMigration.status.in_(("approved", "running")),
+                )
+            )
+        ).scalar_one()
+        return bool(busy)
+
     async def _has_data(self, ctx: WorkspaceContext) -> bool:
-        infra = await self._resolver.resolve(ctx.workspace_id)
+        # Read-only counts: safe while a migration holds the workspace (MI-8).
+        infra = await self._resolver.resolve(ctx.workspace_id, ignore_migration=True)
         async with infra.data_plane.sessions() as data:
             docs = (
                 await data.execute(
@@ -564,6 +578,10 @@ class InfrastructureService:
                 "Validate this version before activating it.", code="version_not_validated"
             )
         target = verify(row)
+        if await self._migration_busy(ctx):
+            raise ConflictError(
+                "A data migration is under way. Wait for it to finish.", code="migration_busy"
+            )
         active, current = await self._active(ctx)
         moves = requires_migration(current, target)
         if moves and await self._has_data(ctx):
@@ -581,7 +599,8 @@ class InfrastructureService:
             raise ConflictError(
                 "This workspace already has documents or conversations, and this version moves its "
                 f"{' and '.join(moves)}. That needs a data migration, which DocuMind plans but "
-                "doesn't run without your explicit approval. A migration plan was recorded.",
+                "doesn't run without your explicit approval. A migration plan was recorded: "
+                "approve it under Data migrations to move the data.",
                 code="migration_required",
             )
         if target.database.mode != "shared":
@@ -654,6 +673,71 @@ class InfrastructureService:
             target_id=migration_id,
         )
         await self._s.commit()
+
+    async def approve_migration(self, ctx: WorkspaceContext, migration_id: uuid.UUID) -> None:
+        """The customer's explicit consent to move data (owner, fresh 2FA)."""
+        self._require(ctx)
+        self._step_up(ctx)
+        migration = (
+            await self._s.execute(
+                select(InfrastructureMigration)
+                .where(
+                    InfrastructureMigration.id == migration_id,
+                    InfrastructureMigration.workspace_id == ctx.workspace_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if migration is None or migration.status != "planned":
+            raise NotFoundError("No planned migration with that id.")
+        target = await self._version(ctx, migration.to_version_id, lock=True)
+        if target.status != "validated":
+            raise ConflictError(
+                "Validate the target version again before approving the migration.",
+                code="version_not_validated",
+            )
+        active, current = await self._active(ctx)
+        if (active.id if active else None) != migration.from_version_id or requires_migration(
+            current, verify(target)
+        ) != list(migration.plan.get("moves", [])):
+            raise ConflictError(
+                "The workspace's infrastructure changed since this plan was made. "
+                "Activate the version again to get a new plan.",
+                code="migration_plan_stale",
+            )
+        if await self._migration_busy(ctx):
+            raise ConflictError("Another migration is already under way.", code="migration_busy")
+        migration.status = "approved"
+        migration.plan = {
+            **migration.plan,
+            "approved_by": str(ctx.user_id),
+            "approved_at": utcnow().isoformat(),
+        }
+        self._event(ctx, "migration_approved", target.id, ok=None, migration=str(migration.id))
+        self._audit.record(
+            "infrastructure.migration_approved",
+            actor_user_id=ctx.user_id,
+            workspace_id=ctx.workspace_id,
+            target_type="infrastructure_migration",
+            target_id=migration.id,
+            details={"moves": migration.plan.get("moves", [])},
+        )
+        await self._s.commit()
+
+    async def authorize_cleanup(self, ctx: WorkspaceContext, migration_id: uuid.UUID) -> None:
+        """Deleting the retained source copy is irreversible: owner and fresh 2FA."""
+        self._require(ctx)
+        self._step_up(ctx)
+        found = (
+            await self._s.execute(
+                select(InfrastructureMigration.id).where(
+                    InfrastructureMigration.id == migration_id,
+                    InfrastructureMigration.workspace_id == ctx.workspace_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if found is None:
+            raise NotFoundError("Migration not found.")
 
     # -------------------------------------------------------------- workers
 

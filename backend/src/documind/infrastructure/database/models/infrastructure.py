@@ -137,10 +137,10 @@ class WorkerRegistration(Base):
 
 
 class InfrastructureMigration(Base):
-    """A planned move between data planes or storage (MI-8 foundation).
+    """A move between data planes or storage (MI-8, ADR 0025).
 
-    Only planning is implemented: no data is moved without the workflow and
-    explicit customer approval.
+    planned → approved (owner, 2FA) → running → completed or failed. Data only
+    moves after approval; the source copy is kept until an explicit cleanup.
     """
 
     __tablename__ = "infrastructure_migrations"

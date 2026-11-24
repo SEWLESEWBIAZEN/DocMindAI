@@ -20,7 +20,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from documind.application.credentials.vault import CredentialVault
@@ -38,6 +38,7 @@ from documind.infrastructure.database.dataplane_runtime import (
     dataplane_sessions,
 )
 from documind.infrastructure.database.models import (
+    InfrastructureMigration,
     InfrastructureProfileVersion,
     WorkspaceInfrastructure,
 )
@@ -50,6 +51,12 @@ logger = logging.getLogger(__name__)
 
 class InfrastructureUnavailableError(ServiceUnavailableError):
     code = "infrastructure_unavailable"
+
+
+class WorkspaceMigratingError(ServiceUnavailableError):
+    """An approved migration is moving this workspace's data (MI-8): try again later."""
+
+    code = "migration_in_progress"
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,9 +117,14 @@ class InfrastructureResolver:
         self._platform_storage = platform_storage
         self._ttl = cache_seconds
         self.shared = DataPlane("shared", control_sessions)
-        self._mapping: dict[uuid.UUID, tuple[float, uuid.UUID | None]] = {}
+        self._mapping: dict[uuid.UUID, tuple[float, uuid.UUID | None, bool]] = {}
         self._built: OrderedDict[uuid.UUID, _Built] = OrderedDict()
         self._lock = asyncio.Lock()
+
+    @property
+    def cache_seconds(self) -> float:
+        """How long other processes may keep routing a workspace after a change."""
+        return self._ttl
 
     def invalidate(self, workspace_id: uuid.UUID) -> None:
         self._mapping.pop(workspace_id, None)
@@ -122,23 +134,47 @@ class InfrastructureResolver:
             workspace_id, None, PLATFORM_DEFAULT, self.shared, self._platform_storage
         )
 
-    async def _version_for(self, workspace_id: uuid.UUID) -> uuid.UUID | None:
+    async def _route(self, workspace_id: uuid.UUID) -> tuple[uuid.UUID | None, bool]:
         now = time.monotonic()
         hit = self._mapping.get(workspace_id)
         if hit is not None and now - hit[0] < self._ttl:
-            return hit[1]
+            return hit[1], hit[2]
         async with self._control() as session:
             row = await session.get(WorkspaceInfrastructure, workspace_id)
+            migrating = (
+                await session.execute(
+                    select(
+                        exists().where(
+                            InfrastructureMigration.workspace_id == workspace_id,
+                            InfrastructureMigration.status == "running",
+                        )
+                    )
+                )
+            ).scalar_one()
         version_id = row.version_id if row is not None else None
         if len(self._mapping) > 50_000:
             self._mapping.clear()
-        self._mapping[workspace_id] = (now, version_id)
-        return version_id
+        self._mapping[workspace_id] = (now, version_id, bool(migrating))
+        return version_id, bool(migrating)
 
-    async def resolve(self, workspace_id: uuid.UUID) -> ResolvedInfrastructure:
-        version_id = await self._version_for(workspace_id)
+    async def resolve(
+        self, workspace_id: uuid.UUID, *, ignore_migration: bool = False
+    ) -> ResolvedInfrastructure:
+        """``ignore_migration`` is only for the migration executor itself."""
+        version_id, migrating = await self._route(workspace_id)
+        if migrating and not ignore_migration:
+            raise WorkspaceMigratingError(
+                "This workspace's data is being moved to new infrastructure. "
+                "Try again in a few minutes."
+            )
         if version_id is None:
             return self.platform(workspace_id)
+        return await self.build_version(workspace_id, version_id)
+
+    async def build_version(
+        self, workspace_id: uuid.UUID, version_id: uuid.UUID
+    ) -> ResolvedInfrastructure:
+        """The data plane and storage of one profile version (also not yet active ones)."""
         built = await self._built_for(version_id)
         return ResolvedInfrastructure(
             workspace_id, version_id, built.config, built.data_plane, built.storage
@@ -216,7 +252,11 @@ class InfrastructureResolver:
                     config.database.host, config.database.port or 5432, allowed=allowed
                 )
             if config.storage.endpoint_url:
-                await check_url(config.storage.endpoint_url, allowed=allowed)
+                await check_url(
+                    config.storage.endpoint_url,
+                    allowed=allowed,
+                    allowed_path=config.storage.endpoint_path,
+                )
         except BlockedHostError as exc:
             logger.error(
                 "customer host now resolves to a blocked address", extra={"reason": str(exc)}

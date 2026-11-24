@@ -149,7 +149,23 @@ def embedding_provider_from_env() -> EmbeddingProvider:
     )
 
 
-def storage_from_env() -> tuple[S3ObjectStorage, Any]:
+def storage_from_env() -> tuple[Any, Any]:
+    """S3-compatible storage by default; ``STORAGE_PROVIDER=azure_blob`` for Azure (MI-6)."""
+    if os.environ.get("STORAGE_PROVIDER", "s3") == "azure_blob":
+        from documind.infrastructure.storage.azure_provider import (
+            AzureBlobStorage,
+            blob_service,
+            default_endpoint,
+        )
+
+        account, key = _env("AZURE_STORAGE_ACCOUNT"), _env("AZURE_STORAGE_KEY")
+        service = blob_service(
+            os.environ.get("AZURE_BLOB_ENDPOINT") or default_endpoint(account), account, key
+        )
+        storage = AzureBlobStorage(
+            service, _env("AZURE_CONTAINER"), key, prefix=os.environ.get("S3_PREFIX", "")
+        )
+        return storage, service
     client = boto3.session.Session().client(
         "s3",
         endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,

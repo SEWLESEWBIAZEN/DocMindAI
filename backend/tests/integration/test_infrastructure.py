@@ -241,7 +241,7 @@ def test_new_organizations_use_platform_defaults(iapi: Api) -> None:
     assert overview["active_config"]["database"]["mode"] == "shared"
     assert overview["active_config"]["storage"]["provider"] == "documind"
     providers = {p["key"]: p["status"] for p in overview["storage_providers"]}
-    assert providers["azure_blob"] == "planned"
+    assert providers["azure_blob"] == "available"  # MI-6 shipped (tested against Azurite)
     assert overview["dedicated_available"] is True
 
 

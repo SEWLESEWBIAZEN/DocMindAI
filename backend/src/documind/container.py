@@ -7,6 +7,8 @@ Everything else depends on abstractions or receives collaborators explicitly.
 from __future__ import annotations
 
 import logging
+import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -70,7 +72,7 @@ from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
 from documind.infrastructure.tasks.celery_dispatcher import CeleryJobDispatcher
-from documind.worker.celery_factory import PROCESS_TASK, QUEUE, create_celery
+from documind.worker.celery_factory import MIGRATION_TASK, PROCESS_TASK, QUEUE, create_celery
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +106,8 @@ class Container:
     provider_factory: ProviderFactory | None = None
     workspace_keys: SqlWorkspaceKeys | None = None
     infra: InfrastructureResolver | None = None
+    #: Starts an approved infrastructure migration in the background (MI-8).
+    migration_dispatch: Callable[[uuid.UUID], Awaitable[bool]] | None = None
 
     def infrastructure(self) -> InfrastructureResolver:
         if self.infra is None:  # pragma: no cover - always set by build_container
@@ -145,6 +149,7 @@ def build_container(settings: Settings) -> Container:
         timeout_seconds=settings.health_check_timeout_seconds,
     )
     session_factory = create_session_factory(engine)
+    celery = create_celery(settings)
     container = Container(
         settings=settings,
         engine=engine,
@@ -188,9 +193,7 @@ def build_container(settings: Settings) -> Container:
             ),
         ),
         embedding_provider=_build_embedding_provider(settings),
-        job_dispatcher=CeleryJobDispatcher(
-            create_celery(settings), task_name=PROCESS_TASK, queue=QUEUE
-        ),
+        job_dispatcher=CeleryJobDispatcher(celery, task_name=PROCESS_TASK, queue=QUEUE),
         llm_provider=_build_llm_provider(settings),
         cancellation=RedisCancellationRegistry(redis),
         image_describer=image_describer,
@@ -223,6 +226,9 @@ def build_container(settings: Settings) -> Container:
         cache_seconds=settings.tenant_settings_cache_seconds,
     )
     container.workspace_keys.invalidated.append(container.ai.invalidate)
+    container.migration_dispatch = CeleryJobDispatcher(
+        celery, task_name=MIGRATION_TASK, queue=QUEUE
+    ).dispatch
     container.infra = InfrastructureResolver(
         session_factory,
         settings,

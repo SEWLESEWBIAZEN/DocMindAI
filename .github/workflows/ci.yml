@@ -58,7 +58,7 @@ jobs:
       - name: Start infrastructure
         run: |
           cp .env.example .env
-          docker compose up -d --wait postgres redis minio
+          docker compose --profile azure up -d --wait postgres redis minio azurite
 
       # This migration targets the temporary CI database,
       # NOT the production database.

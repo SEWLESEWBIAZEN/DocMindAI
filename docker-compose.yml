@@ -98,6 +98,16 @@ services:
       retries: 20
     restart: unless-stopped
 
+  azurite:
+    # Azure Blob Storage emulator for the Azure storage adapter's tests (MI-6).
+    # Not started by default: docker compose --profile azure up -d azurite
+    profiles: ["azure"]
+    image: mcr.microsoft.com/azure-storage/azurite:3.33.0
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--skipApiVersionCheck", "--loose"]
+    ports:
+      - "127.0.0.1:${AZURITE_BLOB_HOST_PORT:-10000}:10000"
+    restart: unless-stopped
+
   mailpit:
     # Development mail catcher: every email the app sends lands here.
     image: axllent/mailpit:v1.34

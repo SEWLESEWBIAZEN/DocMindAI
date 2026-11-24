@@ -651,6 +651,27 @@
         "title": "CitationResponse",
         "type": "object"
       },
+      "CleanupResponse": {
+        "properties": {
+          "objects": {
+            "title": "Objects",
+            "type": "integer"
+          },
+          "rows": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Rows",
+            "type": "object"
+          }
+        },
+        "required": [
+          "rows",
+          "objects"
+        ],
+        "title": "CleanupResponse",
+        "type": "object"
+      },
       "CollectionResponse": {
         "properties": {
           "created_at": {
@@ -2445,6 +2466,31 @@
           "recovery_codes_remaining"
         ],
         "title": "MfaStatusResponse",
+        "type": "object"
+      },
+      "MigrationStarted": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "approved: queued to run; the workspace locks while it runs",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "queued"
+        ],
+        "title": "MigrationStarted",
         "type": "object"
       },
       "OverallStatus": {
@@ -8710,6 +8756,64 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/approve": {
+      "post": {
+        "operationId": "approve_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "migration_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Migration Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve and start a planned data migration (owner, 2FA step-up)",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/cancel": {
       "post": {
         "operationId": "cancel_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cancel_post",
@@ -8756,6 +8860,64 @@
           }
         ],
         "summary": "Cancel a planned migration",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/infrastructure/migrations/{migration_id}/cleanup": {
+      "post": {
+        "operationId": "cleanup_migration_api_v1_workspaces__workspace_id__infrastructure_migrations__migration_id__cleanup_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "migration_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Migration Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete the retained source copy of a completed migration (owner, 2FA step-up)",
         "tags": [
           "infrastructure"
         ]

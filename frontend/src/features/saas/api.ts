@@ -87,6 +87,26 @@ export async function cancelMigration(id: string, migrationId: string): Promise<
   await apiClient.post(`${ws(id)}/infrastructure/migrations/${migrationId}/cancel`)
 }
 
+export async function approveMigration(id: string, migrationId: string, token: string): Promise<{ queued: boolean }> {
+  return (
+    await apiClient.post<{ queued: boolean }>(
+      `${ws(id)}/infrastructure/migrations/${migrationId}/approve`,
+      undefined,
+      elevated(token),
+    )
+  ).data
+}
+
+export async function cleanupMigration(id: string, migrationId: string, token: string): Promise<{ objects: number }> {
+  return (
+    await apiClient.post<{ objects: number }>(
+      `${ws(id)}/infrastructure/migrations/${migrationId}/cleanup`,
+      undefined,
+      elevated(token),
+    )
+  ).data
+}
+
 export async function registerWorker(id: string, name: string, token: string): Promise<WorkerToken> {
   return (await apiClient.post<WorkerToken>(`${ws(id)}/infrastructure/workers`, { name }, elevated(token))).data
 }

@@ -10,6 +10,7 @@ QUEUE = "documents"
 PROCESS_TASK = "documind.process_document"
 SWEEP_TASK = "documind.sweep_processing_jobs"
 REPLY_SWEEP_TASK = "documind.sweep_stale_replies"
+MIGRATION_TASK = "documind.run_infrastructure_migration"
 
 
 def create_celery(settings: Settings) -> Celery:

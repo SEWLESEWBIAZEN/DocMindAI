@@ -21,7 +21,9 @@ import { formatDateTime } from '../documents/format'
 import { StepUpDialog } from '../documents/StepUpDialog'
 import {
   activateVersion,
+  approveMigration,
   cancelMigration,
+  cleanupMigration,
   createVersion,
   getInfrastructure,
   infrastructureKey,
@@ -34,11 +36,42 @@ import {
 } from './api'
 
 type DbMode = 'shared' | 'dedicated' | 'external'
-type StorageProvider = 'documind' | 'aws_s3' | 's3_compatible' | 'minio'
+type StorageProvider = 'documind' | 'aws_s3' | 's3_compatible' | 'minio' | 'azure_blob'
 type Pending =
   | { kind: 'create'; body: CreateVersion }
   | { kind: 'activate'; version: InfrastructureVersion }
   | { kind: 'worker'; name: string }
+  | { kind: 'approve'; migrationId: string; moves: string }
+  | { kind: 'cleanup'; migrationId: string }
+
+const DIALOG: Record<Pending['kind'], { title: (p: Pending | null) => string; description: string; action: string }> = {
+  create: {
+    title: () => 'Save this configuration?',
+    description: 'Secrets are encrypted and stored. A dedicated database is created now if you chose one.',
+    action: 'Save draft',
+  },
+  activate: {
+    title: (p) => (p?.kind === 'activate' ? `Activate version ${p.version.version}?` : 'Activate?'),
+    description: 'New documents and conversations go to this infrastructure right away.',
+    action: 'Activate',
+  },
+  worker: {
+    title: () => 'Register a worker?',
+    description: 'A token is issued for this worker and shown once.',
+    action: 'Register',
+  },
+  approve: {
+    title: (p) => (p?.kind === 'approve' ? `Move this workspace's ${p.moves}?` : 'Approve migration?'),
+    description:
+      "Documents, conversations and files are copied to the new location and checked. The workspace is unavailable while this runs. If anything fails, nothing changes.",
+    action: 'Approve and start',
+  },
+  cleanup: {
+    title: () => 'Delete the old copy?',
+    description: 'The data at the previous location is permanently deleted. Your workspace keeps working from its new location.',
+    action: 'Delete old copy',
+  },
+}
 
 const STATUS_TONE: Record<string, BadgeTone> = {
   draft: 'neutral',
@@ -131,6 +164,7 @@ export function InfrastructurePage() {
   const data: Infrastructure = query.data
   const ents = data.entitlements
 
+  const azure = provider === 'azure_blob'
   const buildBody = (): CreateVersion => ({
     note: note.trim() || null,
     database:
@@ -153,7 +187,7 @@ export function InfrastructurePage() {
             provider,
             bucket: st.bucket.trim(),
             region: st.region.trim() || null,
-            endpoint_url: provider === 'aws_s3' ? null : st.endpoint.trim(),
+            endpoint_url: provider === 'aws_s3' || (azure && !st.endpoint.trim()) ? null : st.endpoint.trim(),
             prefix: st.prefix.trim(),
             access_key_id: st.accessKey.trim(),
             secret_access_key: st.secret || null,
@@ -178,6 +212,16 @@ export function InfrastructurePage() {
       } else if (pending.kind === 'activate') {
         await activateVersion(workspace.id, pending.version.id, token)
         toast.success(`Version ${pending.version.version} is now active.`)
+      } else if (pending.kind === 'approve') {
+        const started = await approveMigration(workspace.id, pending.migrationId, token)
+        toast.success(
+          started.queued
+            ? 'Migration approved and started. This workspace is unavailable until it finishes.'
+            : 'Migration approved. It starts when an operator runs it.',
+        )
+      } else if (pending.kind === 'cleanup') {
+        const cleaned = await cleanupMigration(workspace.id, pending.migrationId, token)
+        toast.success(`The old copy was deleted (${cleaned.objects} files).`)
       } else {
         const issued = await registerWorker(workspace.id, pending.name, token)
         setIssuedToken(issued.token)
@@ -300,15 +344,17 @@ export function InfrastructurePage() {
               </Field>
               {provider !== 'documind' && (
                 <div className="form-grid">
-                  <Field label="Bucket"><TextInput value={st.bucket} onChange={(e) => setSt({ ...st, bucket: e.target.value })} /></Field>
-                  {provider === 'aws_s3' ? (
+                  <Field label={azure ? 'Container' : 'Bucket'}><TextInput value={st.bucket} onChange={(e) => setSt({ ...st, bucket: e.target.value })} /></Field>
+                  {azure ? (
+                    <Field label="Blob endpoint" hint="Leave empty for https://ACCOUNT.blob.core.windows.net."><TextInput value={st.endpoint} placeholder="https://acme.blob.core.windows.net" onChange={(e) => setSt({ ...st, endpoint: e.target.value })} /></Field>
+                  ) : provider === 'aws_s3' ? (
                     <Field label="Region"><TextInput value={st.region} placeholder="eu-central-1" onChange={(e) => setSt({ ...st, region: e.target.value })} /></Field>
                   ) : (
                     <Field label="Endpoint URL" hint="https:// only."><TextInput value={st.endpoint} placeholder="https://storage.example.com" onChange={(e) => setSt({ ...st, endpoint: e.target.value })} /></Field>
                   )}
                   <Field label="Key prefix" hint="DocuMind only writes under this prefix."><TextInput value={st.prefix} onChange={(e) => setSt({ ...st, prefix: e.target.value })} /></Field>
-                  <Field label="Access key ID"><TextInput value={st.accessKey} onChange={(e) => setSt({ ...st, accessKey: e.target.value })} autoComplete="off" /></Field>
-                  <Field label="Secret access key" hint="Leave empty to keep the saved key for the same bucket."><TextInput type="password" value={st.secret} onChange={(e) => setSt({ ...st, secret: e.target.value })} autoComplete="new-password" /></Field>
+                  <Field label={azure ? 'Storage account name' : 'Access key ID'}><TextInput value={st.accessKey} onChange={(e) => setSt({ ...st, accessKey: e.target.value })} autoComplete="off" /></Field>
+                  <Field label={azure ? 'Account key' : 'Secret access key'} hint="Leave empty to keep the saved key for the same location."><TextInput type="password" value={st.secret} onChange={(e) => setSt({ ...st, secret: e.target.value })} autoComplete="new-password" /></Field>
                 </div>
               )}
             </fieldset>
@@ -379,22 +425,43 @@ export function InfrastructurePage() {
           <section className="panel" aria-labelledby="migrations-heading">
             <header className="panel__header">
               <div>
-                <h2 id="migrations-heading">Planned migrations</h2>
-                <p className="panel__description">Recorded when a change would move existing data. Nothing runs without your approval.</p>
+                <h2 id="migrations-heading">Data migrations</h2>
+                <p className="panel__description">
+                  Recorded when a change would move existing data. Nothing moves until you approve it. While a migration runs, this
+                  workspace is unavailable; the old copy is kept until you delete it.
+                </p>
               </div>
             </header>
             <div className="panel__body">
               <ul className="plain-list">
-                {data.migrations.map((m) => (
-                  <li key={String(m.id)} className="row row--between">
-                    <span>
-                      Move {((m.plan as { moves?: string[] }).moves ?? []).join(' and ')} · {String(m.status)} · {formatDateTime(String(m.created_at))}
-                    </span>
-                    {(m.status === 'planned' || m.status === 'approved') && (
-                      <Button size="sm" onClick={async () => { await cancelMigration(workspace.id, String(m.id)); await refresh() }}>Cancel</Button>
-                    )}
-                  </li>
-                ))}
+                {data.migrations.map((m) => {
+                  const plan = m.plan as { moves?: string[]; error?: string; source_cleaned?: boolean }
+                  const moves = (plan.moves ?? []).join(' and ')
+                  return (
+                    <li key={String(m.id)} className="row row--between">
+                      <span>
+                        Move {moves} · {String(m.status)} · {formatDateTime(String(m.created_at))}
+                        {m.status === 'failed' && plan.error ? ` · ${plan.error}. Your data was not changed.` : ''}
+                        {m.status === 'completed' && !plan.source_cleaned ? ' · the old copy is kept until you delete it' : ''}
+                      </span>
+                      <span className="row">
+                        {m.status === 'planned' && (
+                          <Button size="sm" variant="primary" onClick={() => setPending({ kind: 'approve', migrationId: String(m.id), moves })}>
+                            Approve and start
+                          </Button>
+                        )}
+                        {(m.status === 'planned' || m.status === 'approved') && (
+                          <Button size="sm" onClick={async () => { await cancelMigration(workspace.id, String(m.id)); await refresh() }}>Cancel</Button>
+                        )}
+                        {m.status === 'completed' && !plan.source_cleaned && (
+                          <Button size="sm" variant="danger" onClick={() => setPending({ kind: 'cleanup', migrationId: String(m.id) })}>
+                            Delete old copy
+                          </Button>
+                        )}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           </section>
@@ -467,15 +534,9 @@ export function InfrastructurePage() {
       </div>
       <StepUpDialog
         open={pending !== null}
-        title={pending?.kind === 'activate' ? `Activate version ${pending.version.version}?` : pending?.kind === 'worker' ? 'Register a worker?' : 'Save this configuration?'}
-        description={
-          pending?.kind === 'activate'
-            ? 'New documents and conversations go to this infrastructure right away.'
-            : pending?.kind === 'worker'
-              ? 'A token is issued for this worker and shown once.'
-              : 'Secrets are encrypted and stored. A dedicated database is created now if you chose one.'
-        }
-        actionLabel={pending?.kind === 'activate' ? 'Activate' : pending?.kind === 'worker' ? 'Register' : 'Save draft'}
+        title={DIALOG[pending?.kind ?? 'create'].title(pending)}
+        description={DIALOG[pending?.kind ?? 'create'].description}
+        actionLabel={DIALOG[pending?.kind ?? 'create'].action}
         onClose={() => setPending(null)}
         onVerified={onVerified}
       />

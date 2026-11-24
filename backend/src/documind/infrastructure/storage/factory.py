@@ -9,12 +9,23 @@ from dataclasses import dataclass
 from typing import Any
 
 import boto3
+from azure.core.exceptions import (
+    ClientAuthenticationError,
+    HttpResponseError,
+    ResourceNotFoundError,
+    ServiceRequestError,
+)
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from documind.core.config import Settings
 from documind.domain.infrastructure.profiles import StorageConfig
 from documind.infrastructure.network.ssrf import BlockedHostError, check_url
+from documind.infrastructure.storage.azure_provider import (
+    AzureBlobStorage,
+    blob_service,
+    default_endpoint,
+)
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
 
 
@@ -37,7 +48,7 @@ def _client(settings: Settings, config: StorageConfig, secret: str) -> Any:
 
 @dataclass(slots=True)
 class BuiltStorage:
-    storage: S3ObjectStorage
+    storage: S3ObjectStorage | AzureBlobStorage
     client: Any
 
     def close(self) -> None:
@@ -45,9 +56,20 @@ class BuiltStorage:
 
 
 def build_storage(settings: Settings, config: StorageConfig, secret: str) -> BuiltStorage:
-    """A storage adapter for a customer bucket. The secret is held only by boto3."""
+    """A storage adapter for a customer bucket. The secret is held only by the SDK client."""
     if config.provider == "documind" or not config.bucket:
         raise ValueError("platform storage is built by the container")
+    if config.provider == "azure_blob":
+        account = config.access_key_id or ""
+        service = blob_service(
+            config.endpoint_url or default_endpoint(account),
+            account,
+            secret,
+            timeout=float(settings.s3_read_timeout_seconds),
+        )
+        return BuiltStorage(
+            AzureBlobStorage(service, config.bucket, secret, prefix=config.prefix), service
+        )
     client = _client(settings, config, secret)
     return BuiltStorage(S3ObjectStorage(client, config.bucket, prefix=config.prefix), client)
 
@@ -65,7 +87,7 @@ async def validate_storage(settings: Settings, config: StorageConfig, secret: st
     allowed = frozenset(settings.infrastructure_allowed_private_hosts)
     if config.endpoint_url:
         try:
-            await check_url(config.endpoint_url, allowed=allowed)
+            await check_url(config.endpoint_url, allowed=allowed, allowed_path=config.endpoint_path)
         except BlockedHostError as exc:
             return StorageCheck(False, "endpoint_not_allowed", str(exc))
     built = build_storage(settings, config, secret)
@@ -80,7 +102,10 @@ async def validate_storage(settings: Settings, config: StorageConfig, secret: st
         if buffer.getvalue() != payload:
             return StorageCheck(False, "storage_inconsistent", "The probe object didn't read back.")
         await built.storage.delete(probe)
-        public = await _is_public(built.client, config.bucket or "")
+        if isinstance(built.storage, AzureBlobStorage):
+            public = await asyncio.to_thread(built.storage.is_public)
+        else:
+            public = await _is_public(built.client, config.bucket or "")
         if public:
             return StorageCheck(
                 False,
@@ -101,7 +126,25 @@ async def validate_storage(settings: Settings, config: StorageConfig, secret: st
             "storage_rejected",
             friendly.get(code, "The storage service refused the request."),
         )
-    except (BotoCoreError, OSError):
+    except ClientAuthenticationError:
+        return StorageCheck(
+            False, "storage_rejected", "The account key doesn't match the storage account."
+        )
+    except ResourceNotFoundError:
+        return StorageCheck(False, "storage_rejected", "The container doesn't exist.")
+    except HttpResponseError as exc:
+        friendly = {
+            "AuthorizationFailure": "The account key can't read and write this container.",
+            "AuthorizationPermissionMismatch": "The key can't read and write this container.",
+        }
+        return StorageCheck(
+            False,
+            "storage_rejected",
+            friendly.get(
+                str(getattr(exc, "error_code", "")), "The storage service refused the request."
+            ),
+        )
+    except (BotoCoreError, ServiceRequestError, OSError):
         return StorageCheck(
             False, "storage_unreachable", "The storage endpoint couldn't be reached."
         )

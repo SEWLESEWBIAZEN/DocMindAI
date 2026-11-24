@@ -57,7 +57,9 @@ def test_external_database_defaults_to_verified_tls() -> None:
         {"storage": {**MINIO, "bucket": "Bad_Bucket"}},
         {"storage": {**MINIO, "prefix": "../escape"}},
         {"storage": {"provider": "aws_s3", "bucket": "acme-docs", "access_key_id": "AKIA0"}},
-        {"storage": {"provider": "azure_blob", "bucket": "x-container"}},
+        {"storage": {"provider": "azure_blob", "bucket": "x-container"}},  # no account
+        {"storage": {"provider": "azure_blob", "bucket": "a--b", "access_key_id": "acme"}},
+        {"storage": {"provider": "azure_blob", "bucket": "docs", "access_key_id": "Acme_1"}},
         {"processing": {"mode": "cluster"}},
     ],
 )
@@ -147,3 +149,39 @@ async def test_endpoint_urls_must_be_plain_https() -> None:
         "localhost",
         9000,
     )
+
+
+def test_azure_blob_profiles() -> None:
+    config = parse_config(
+        {"storage": {"provider": "azure_blob", "bucket": "documind", "access_key_id": "acmedocs"}}
+    )
+    storage = config.storage
+    assert storage.endpoint_url == "https://acmedocs.blob.core.windows.net"  # always explicit
+    assert storage.region is None
+    assert storage.endpoint_path == "/acmedocs"
+    emulator = parse_config(
+        {
+            "storage": {
+                "provider": "azure_blob",
+                "bucket": "documind",
+                "access_key_id": "devstoreaccount1",
+                "endpoint_url": "http://127.0.0.1:10000/devstoreaccount1/",
+            }
+        }
+    ).storage
+    assert emulator.endpoint_url == "http://127.0.0.1:10000/devstoreaccount1"
+    assert parse_config({"storage": MINIO}).storage.endpoint_path is None
+
+
+async def test_only_the_azure_account_path_is_allowed() -> None:
+    allowed = frozenset({"127.0.0.1"})
+    assert await check_url(
+        "http://127.0.0.1:10000/devstoreaccount1", allowed=allowed, allowed_path="/devstoreaccount1"
+    ) == ("127.0.0.1", 10000)
+    for url in (
+        "http://127.0.0.1:10000/other",
+        "http://127.0.0.1:10000/devstoreaccount1/x",
+        "http://127.0.0.1:10000/devstoreaccount1?comp=list",
+    ):
+        with pytest.raises(BlockedHostError):
+            await check_url(url, allowed=allowed, allowed_path="/devstoreaccount1")

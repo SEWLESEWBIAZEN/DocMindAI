@@ -350,6 +350,52 @@ async def _dataplanes_migrate(container: Container) -> int:
     return 1 if failed else 0
 
 
+async def _migrations(container: Container, command: str, migration_id: uuid.UUID | None) -> int:
+    """Approved infrastructure migrations (MI-8). Approval itself happens in the app."""
+    from sqlalchemy import select
+
+    from documind.application.infrastructure.migration import (
+        MigrationExecutor,
+        MigrationFailedError,
+    )
+    from documind.infrastructure.database.models import InfrastructureMigration
+
+    if command == "list":
+        async with container.session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(InfrastructureMigration)
+                    .where(InfrastructureMigration.status.in_(("approved", "running", "failed")))
+                    .order_by(InfrastructureMigration.created_at.desc())
+                    .limit(100)
+                )
+            ).scalars()
+            _print(
+                [
+                    {
+                        "id": str(m.id),
+                        "workspace_id": str(m.workspace_id),
+                        "status": m.status,
+                        "moves": m.plan.get("moves", []),
+                        "error": m.plan.get("error"),
+                    }
+                    for m in rows
+                ]
+            )
+        return 0
+    assert migration_id is not None  # noqa: S101 - argparse requires it
+    executor = MigrationExecutor(container.session_factory, container.infrastructure())
+    if command == "abort":
+        await executor.abort(migration_id)
+        return 0
+    try:
+        _print((await executor.run(migration_id)).as_dict())
+    except MigrationFailedError as exc:
+        print(f"migration failed, the source is untouched: {exc}", file=sys.stderr)  # noqa: T201
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="documind-manage",
@@ -390,6 +436,9 @@ def main(argv: list[str] | None = None) -> int:
     backup.add_argument("source", nargs="?")
     backup.add_argument("target", nargs="?")
     backup.add_argument("--passphrase-file")
+    mig = sub.add_parser("migrations", help="approved infrastructure migrations (MI-8)")
+    mig.add_argument("migrations_command", choices=["list", "run", "abort"])
+    mig.add_argument("migration_id", nargs="?", type=uuid.UUID)
     plan = sub.add_parser("plan", help="list plans or assign one to a workspace (audited)")
     plan_sub = plan.add_subparsers(dest="plan_command", required=True)
     plan_sub.add_parser("list", help="show the plan catalog")
@@ -429,6 +478,12 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(_dataplanes_migrate))
     if args.command == "credentials":
         return asyncio.run(_with_container(_rewrap))
+    if args.command == "migrations":
+        if args.migrations_command != "list" and args.migration_id is None:
+            parser.error("run and abort need MIGRATION_ID")
+        return asyncio.run(
+            _with_container(lambda c: _migrations(c, args.migrations_command, args.migration_id))
+        )
     if args.command == "plan":
         if args.plan_command == "list":
             return asyncio.run(_plans())

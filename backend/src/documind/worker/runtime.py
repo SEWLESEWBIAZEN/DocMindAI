@@ -10,9 +10,11 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+import uuid
 from collections.abc import Coroutine
 from typing import Any
 
+from documind.application.infrastructure.migration import MigrationExecutor
 from documind.application.infrastructure.resolver import InfrastructureTargets
 from documind.application.infrastructure.sweeps import sweep_processing, sweep_replies
 from documind.application.processing.orchestrator import ProcessingOrchestrator
@@ -64,3 +66,9 @@ async def sweep_replies_all() -> int:
     return await sweep_replies(
         c.infrastructure(), stale_after_seconds=c.settings.chat_stream_stale_seconds
     )
+
+
+async def run_migration(migration_id: uuid.UUID) -> dict[str, object]:
+    c = container()
+    executor = MigrationExecutor(c.session_factory, c.infrastructure())
+    return (await executor.run(migration_id)).as_dict()
