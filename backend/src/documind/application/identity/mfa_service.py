@@ -172,7 +172,7 @@ class MfaService:
         self._audit.record("auth.mfa_failed", actor_user_id=user.id, details={"reason": "code"})
         await self._session.commit()
         raise AuthenticationError(
-            "That code isn't valid. Try the latest code from your app.", code="invalid_mfa_code"
+            "That code isn't valid or has expired. Try the latest code.", code="invalid_mfa_code"
         )
 
     async def _notify(self, user: User, method: str) -> None:

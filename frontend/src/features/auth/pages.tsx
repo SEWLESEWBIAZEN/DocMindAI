@@ -80,6 +80,7 @@ export function LoginPage() {
   // Authenticator app, a saved recovery code, or a one-time code by email (ADR 0027).
   const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>('totp')
   const [notice, setNotice] = useState<string | null>(null)
+  const [methods, setMethods] = useState<string[]>([])
 
   const finish = () => navigate(safeNext(params.get('next')), { replace: true })
 
@@ -92,6 +93,7 @@ export function LoginPage() {
       const result = await signIn(email.trim(), password)
       if ('challenge' in result) {
         setChallenge(result.challenge)
+        setMethods(result.methods)
         setPassword('')
         setCode('')
         // Email-only 2FA (ADR 0028): send the code straight away.
@@ -187,8 +189,8 @@ export function LoginPage() {
             Verify and sign in
           </Button>
           <div className="stack stack--sm">
-            <p className="muted">Lost your phone or can't use the app?</p>
-            {method !== 'totp' && (
+            {methods.includes('authenticator') && <p className="muted">Lost your phone or can't use the app?</p>}
+            {method !== 'totp' && methods.includes('authenticator') && (
               <button type="button" className="link-button" onClick={() => switchTo('totp')}>
                 Use your authenticator app
               </button>

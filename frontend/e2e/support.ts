@@ -25,8 +25,11 @@ export async function linkFromEmail(to: string, path: string, timeoutMs = 30_000
   throw new Error(`No email with ${path} for ${to}`)
 }
 
-/** The newest one-time code emailed to `to` (ADR 0027); mailpit lists newest first. */
-export async function codeFromEmail(to: string, timeoutMs = 30_000): Promise<string> {
+/**
+ * The newest one-time code emailed to `to` (ADR 0027); mailpit lists newest first.
+ * Pass the previous code to wait for a new email instead of reading the old one.
+ */
+export async function codeFromEmail(to: string, previous?: string, timeoutMs = 30_000): Promise<string> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const search = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`)
@@ -34,7 +37,11 @@ export async function codeFromEmail(to: string, timeoutMs = 30_000): Promise<str
     for (const message of messages) {
       const body = (await (await fetch(`${MAILPIT}/api/v1/message/${message.ID}`)).json()) as { Text: string }
       const match = body.Text.match(/one-time code is (\d{3}) (\d{3})/)
-      if (match) return `${match[1]}${match[2]}`
+      if (match) {
+        const code = `${match[1]}${match[2]}`
+        if (code !== previous) return code
+        break // newest is still the old one: wait for the new email
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 400))
   }
