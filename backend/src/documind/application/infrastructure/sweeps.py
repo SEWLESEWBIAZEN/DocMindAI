@@ -5,10 +5,13 @@ from __future__ import annotations
 import dataclasses
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from documind.application.conversations.sweeper import StaleReplySweeper
 from documind.application.infrastructure.resolver import InfrastructureResolver
-from documind.application.ports import JobDispatcher
+from documind.application.ports import EmailSender, JobDispatcher
 from documind.application.processing.sweeper import ProcessingSweeper, SweepResult
 from documind.core.config import Settings
 from documind.infrastructure.database.dataplane_runtime import DataPlane, relay_outbox
@@ -68,3 +71,41 @@ async def sweep_replies(resolver: InfrastructureResolver, *, stale_after_seconds
         except Exception:
             logger.exception("reply sweep failed for a data plane", extra={"plane": plane.key})
     return failed
+
+
+async def sweep_extractions(
+    resolver: InfrastructureResolver,
+    dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]],
+    *,
+    stale_seconds: int,
+) -> int:
+    from documind.application.extraction.reminders import recover_extractions
+
+    changed = 0
+    for plane in await _planes(resolver):
+        try:
+            changed += await recover_extractions(
+                plane.sessions, dispatch, stale_seconds=stale_seconds
+            )
+        except Exception:
+            logger.exception("extraction sweep failed for a data plane", extra={"plane": plane.key})
+    return changed
+
+
+async def send_deadline_reminders(
+    resolver: InfrastructureResolver,
+    control: async_sessionmaker[AsyncSession],
+    email: EmailSender,
+    base_url: str,
+) -> int:
+    from documind.application.extraction.reminders import send_reminders
+
+    sent = 0
+    for plane in await _planes(resolver):
+        try:
+            sent += await send_reminders(plane.sessions, control, email, base_url)
+        except Exception:
+            logger.exception(
+                "deadline reminders failed for a data plane", extra={"plane": plane.key}
+            )
+    return sent

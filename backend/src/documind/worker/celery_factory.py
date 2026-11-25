@@ -12,6 +12,9 @@ SWEEP_TASK = "documind.sweep_processing_jobs"
 REPLY_SWEEP_TASK = "documind.sweep_stale_replies"
 MIGRATION_TASK = "documind.run_infrastructure_migration"
 SEAT_SYNC_TASK = "documind.sync_billing_seats"
+EXTRACTION_TASK = "documind.run_extraction"
+EXTRACTION_SWEEP_TASK = "documind.sweep_extractions"
+REMINDER_TASK = "documind.send_deadline_reminders"
 
 
 def create_celery(settings: Settings) -> Celery:
@@ -42,6 +45,17 @@ def create_celery(settings: Settings) -> Celery:
                 "task": REPLY_SWEEP_TASK,
                 "schedule": 60.0,
                 "options": {"queue": QUEUE, "expires": 60},
+            },
+            # Extraction runs whose worker stopped, or whose message was lost (ADR 0034).
+            "sweep-extractions": {
+                "task": EXTRACTION_SWEEP_TASK,
+                "schedule": 120.0,
+                "options": {"queue": QUEUE, "expires": 120},
+            },
+            "deadline-reminders": {
+                "task": REMINDER_TASK,
+                "schedule": float(settings.deadline_reminder_interval_seconds),
+                "options": {"queue": QUEUE, "expires": settings.deadline_reminder_interval_seconds},
             },
             # Subscription quantity follows the member count (ADR 0032). No-op without Stripe.
             "sync-billing-seats": {

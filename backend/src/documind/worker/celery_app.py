@@ -13,9 +13,12 @@ from celery.signals import setup_logging
 from documind.core.config import get_settings
 from documind.core.logging import configure_logging
 from documind.worker.celery_factory import (
+    EXTRACTION_SWEEP_TASK,
+    EXTRACTION_TASK,
     MIGRATION_TASK,
     PROCESS_TASK,
     QUEUE,
+    REMINDER_TASK,
     REPLY_SWEEP_TASK,
     SEAT_SYNC_TASK,
     SWEEP_TASK,
@@ -23,9 +26,12 @@ from documind.worker.celery_factory import (
 )
 
 __all__ = [
+    "EXTRACTION_SWEEP_TASK",
+    "EXTRACTION_TASK",
     "MIGRATION_TASK",
     "PROCESS_TASK",
     "QUEUE",
+    "REMINDER_TASK",
     "REPLY_SWEEP_TASK",
     "SEAT_SYNC_TASK",
     "SWEEP_TASK",

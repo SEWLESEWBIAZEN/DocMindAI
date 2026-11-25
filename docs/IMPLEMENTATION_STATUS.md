@@ -406,6 +406,9 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Self-serve billing: Stripe Checkout, portal, signed idempotent webhooks, seat sync, plan changes guarded by infrastructure in use | [x] | `test_billing_api.py` (6), `e2e/billing.spec.ts`; runbook `runbooks/billing.md` |
 | 14-day free Pro trial without a card (once per workspace and per person), trial-ending email | [x] | ADR 0033; `test_free_pro_trial_once_per_workspace_and_person` |
 | Onboarding: sample documents (load, suggested questions, one-click removal), getting-started checklist | [x] | ADR 0033; `test_onboarding_api.py` (4), `e2e/onboarding.spec.ts` |
+| Structured extraction: templates (obligations and deadlines, contract terms, invoice) and custom fields; every value cited; CSV export | [x] | ADR 0034; `test_extraction.py` (9), `test_extraction_api.py` (5), `e2e/extraction.spec.ts` |
+| Side-by-side comparison of documents, with differing fields marked | [x] | Fields view in `features/extraction/pages.tsx`; `test_compare_contract_terms_and_limits` |
+| Tracked deadlines: email reminders (7/1/0 days by default), calendar file (.ics) | [x] | `test_deadlines_reminders_and_calendar` |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 

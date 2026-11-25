@@ -194,6 +194,15 @@ class Settings(BaseSettings):
     # How often a running stream checks for a cancel request.
     chat_cancel_poll_seconds: float = Field(default=0.5, gt=0, le=10)
 
+    # --- Structured extraction and deadlines (ADR 0034) ---------------------
+    extraction_max_documents: int = Field(default=20, ge=1, le=200)
+    extraction_window_tokens: int = Field(default=6000, ge=500, le=100_000)
+    extraction_max_calls_per_document: int = Field(default=8, ge=1, le=100)
+    extraction_max_output_tokens: int = Field(default=2000, ge=200, le=16_000)
+    extraction_active_runs_per_workspace: int = Field(default=3, ge=1, le=50)
+    extraction_stale_seconds: int = Field(default=900, ge=60, le=86_400)
+    deadline_reminder_interval_seconds: int = Field(default=3600, ge=60, le=86_400)
+
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
 

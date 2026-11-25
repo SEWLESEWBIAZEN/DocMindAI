@@ -43,6 +43,11 @@ def page_label(start: int | None, end: int | None) -> str:
     return str(start) if end in (None, start) else f"{start}-{end}"
 
 
+def source_block(number: int, chunk: RetrievedChunk) -> str:
+    """One numbered ``<source>`` block; its text is neutralized (prompt-injection guard)."""
+    return _source_block(number, chunk)
+
+
 def _source_block(number: int, chunk: RetrievedChunk) -> str:
     attrs = [f'id="{number}"', f'document="{_attr(chunk.document_title)}"']
     pages = page_label(chunk.page_start, chunk.page_end)

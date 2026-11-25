@@ -126,6 +126,8 @@ function Sidebar({ onClose }: { onClose: () => void }) {
     { to: `${base}/documents`, label: 'Documents', icon: 'file', permission: 'documents.read' },
     { to: `${base}/collections`, label: 'Collections', icon: 'layers', permission: 'documents.read' },
     { to: `${base}/upload`, label: 'Upload', icon: 'upload', permission: 'documents.write' },
+    { to: `${base}/extract`, label: 'Extract', icon: 'flask', permission: 'documents.read' },
+    { to: `${base}/deadlines`, label: 'Deadlines', icon: 'clock', permission: 'documents.read' },
   ]
   const admin: NavItem[] = [
     { to: `${base}/members`, label: 'Members', icon: 'users', permission: 'members.read' },

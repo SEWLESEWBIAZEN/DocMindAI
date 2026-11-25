@@ -1085,6 +1085,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Deadlines */
+        get: operations["list_deadlines_api_v1_workspaces__workspace_id__deadlines_get"];
+        put?: never;
+        /** Create Deadline */
+        post: operations["create_deadline_api_v1_workspaces__workspace_id__deadlines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/deadlines/calendar.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open deadlines as an iCalendar file */
+        get: operations["deadlines_calendar_api_v1_workspaces__workspace_id__deadlines_calendar_ics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/deadlines/{deadline_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Deadline */
+        delete: operations["delete_deadline_api_v1_workspaces__workspace_id__deadlines__deadline_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Deadline */
+        patch: operations["update_deadline_api_v1_workspaces__workspace_id__deadlines__deadline_id__patch"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents": {
         parameters: {
             query?: never;
@@ -1276,6 +1329,76 @@ export interface paths {
         put?: never;
         /** Upload a new version (the document is reprocessed) */
         post: operations["upload_version_api_v1_workspaces__workspace_id__documents__document_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/extraction-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_v1_workspaces__workspace_id__extraction_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/extractions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Extractions */
+        get: operations["list_extractions_api_v1_workspaces__workspace_id__extractions_get"];
+        put?: never;
+        /** Extract fields or items from documents, with a source for every value */
+        post: operations["start_extraction_api_v1_workspaces__workspace_id__extractions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/extractions/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Extraction */
+        get: operations["get_extraction_api_v1_workspaces__workspace_id__extractions__run_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Extraction */
+        delete: operations["delete_extraction_api_v1_workspaces__workspace_id__extractions__run_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/extractions/{run_id}/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Extraction */
+        get: operations["export_extraction_api_v1_workspaces__workspace_id__extractions__run_id__export_csv_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1978,6 +2101,21 @@ export interface components {
              */
             spoken_label: string;
         };
+        /** CitedValue */
+        CitedValue: {
+            /** Chunk Id */
+            chunk_id?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Page End */
+            page_end?: number | null;
+            /** Page Start */
+            page_start?: number | null;
+            /** Value */
+            value: string;
+        };
         /** CleanupResponse */
         CleanupResponse: {
             /** Objects */
@@ -2209,6 +2347,85 @@ export interface components {
             /** Username */
             username?: string | null;
         };
+        /** DeadlineRequest */
+        DeadlineRequest: {
+            /** Assignee User Ids */
+            assignee_user_ids?: string[] | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            /** Notes */
+            notes?: string | null;
+            /** Remind Days Before */
+            remind_days_before?: number[] | null;
+            source?: components["schemas"]["CitedValue"] | null;
+            /** Title */
+            title: string;
+        };
+        /** DeadlineResponse */
+        DeadlineResponse: {
+            /** Assignee User Ids */
+            assignee_user_ids: string[];
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /** Document Id */
+            document_id: string | null;
+            /** Document Title */
+            document_title: string | null;
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notes */
+            notes: string | null;
+            /** Remind Days Before */
+            remind_days_before: number[];
+            /** Reminders Sent */
+            reminders_sent: number[];
+            /** Source */
+            source: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "done";
+            /** Title */
+            title: string;
+        };
+        /** DeadlineUpdate */
+        DeadlineUpdate: {
+            /** Assignee User Ids */
+            assignee_user_ids?: string[] | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Remind Days Before */
+            remind_days_before?: number[] | null;
+            /** Status */
+            status?: ("open" | "done") | null;
+            /** Title */
+            title?: string | null;
+        };
         /**
          * DocumentFormat
          * @enum {string}
@@ -2392,6 +2609,21 @@ export interface components {
             server_voice: boolean;
             /** Storage Bytes */
             storage_bytes: number | null;
+        };
+        /** FieldSpec */
+        FieldSpec: {
+            /** Description */
+            description?: string | null;
+            /** Key */
+            key?: string | null;
+            /** Label */
+            label: string;
+            /**
+             * Type
+             * @default text
+             * @enum {string}
+             */
+            type: "text" | "date" | "money" | "number";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3288,11 +3520,129 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** ResultRow */
+        ResultRow: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Values */
+            values: {
+                [key: string]: components["schemas"]["CitedValue"];
+            };
+        };
         /**
          * RoleKey
          * @enum {string}
          */
         RoleKey: "owner" | "admin" | "member" | "viewer";
+        /** RunDetailResponse */
+        RunDetailResponse: {
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            /**
+             * Documents
+             * @description Document id → title (missing: deleted).
+             */
+            documents: {
+                [key: string]: string;
+            };
+            /** Documents Done */
+            documents_done: number;
+            /** Error Code */
+            error_code: string | null;
+            /** Fields */
+            fields: components["schemas"]["FieldSpec"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fields" | "items";
+            /** Results */
+            results: components["schemas"]["ResultRow"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "completed" | "failed";
+            /** Template Key */
+            template_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Warnings
+             * @description Per document: not_ready, partial, unreadable…
+             */
+            warnings: {
+                [key: string]: string;
+            };
+        };
+        /** RunResponse */
+        RunResponse: {
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            /** Documents Done */
+            documents_done: number;
+            /** Error Code */
+            error_code: string | null;
+            /** Fields */
+            fields: components["schemas"]["FieldSpec"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fields" | "items";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "completed" | "failed";
+            /** Template Key */
+            template_key: string;
+            /** Title */
+            title: string;
+            /**
+             * Warnings
+             * @description Per document: not_ready, partial, unreadable…
+             */
+            warnings: {
+                [key: string]: string;
+            };
+        };
         /** SampleRemovalResponse */
         SampleRemovalResponse: {
             /** Removed */
@@ -3427,6 +3777,24 @@ export interface components {
             /** Voice */
             voice?: string | null;
         };
+        /** StartExtractionRequest */
+        StartExtractionRequest: {
+            /** Collection Id */
+            collection_id?: string | null;
+            /** Document Ids */
+            document_ids?: string[];
+            /** Fields */
+            fields?: components["schemas"]["FieldSpec"][] | null;
+            /** Mode */
+            mode?: ("fields" | "items") | null;
+            /**
+             * Template
+             * @description A template key, or `custom` with `fields`.
+             */
+            template: string;
+            /** Title */
+            title?: string | null;
+        };
         /** StepUpResponse */
         StepUpResponse: {
             /** Access Token */
@@ -3483,6 +3851,22 @@ export interface components {
              * @description First page (omit for the whole document)
              */
             page_start?: number | null;
+        };
+        /** TemplateResponse */
+        TemplateResponse: {
+            /** Description */
+            description: string;
+            /** Fields */
+            fields: components["schemas"]["FieldSpec"][];
+            /** Key */
+            key: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fields" | "items";
+            /** Name */
+            name: string;
         };
         /** TokenRequest */
         TokenRequest: {
@@ -6150,6 +6534,171 @@ export interface operations {
             };
         };
     };
+    list_deadlines_api_v1_workspaces__workspace_id__deadlines_get: {
+        parameters: {
+            query?: {
+                status?: "open" | "done" | "all";
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeadlineResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_deadline_api_v1_workspaces__workspace_id__deadlines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeadlineRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeadlineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deadlines_calendar_api_v1_workspaces__workspace_id__deadlines_calendar_ics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_deadline_api_v1_workspaces__workspace_id__deadlines__deadline_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deadline_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_deadline_api_v1_workspaces__workspace_id__deadlines__deadline_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deadline_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeadlineUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeadlineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_documents_api_v1_workspaces__workspace_id__documents_get: {
         parameters: {
             query?: {
@@ -6650,6 +7199,197 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_api_v1_workspaces__workspace_id__extraction_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_extractions_api_v1_workspaces__workspace_id__extractions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_extraction_api_v1_workspaces__workspace_id__extractions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartExtractionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_extraction_api_v1_workspaces__workspace_id__extractions__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_extraction_api_v1_workspaces__workspace_id__extractions__run_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_extraction_api_v1_workspaces__workspace_id__extractions__run_id__export_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Validation Error */

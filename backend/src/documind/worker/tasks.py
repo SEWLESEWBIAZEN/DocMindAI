@@ -7,9 +7,12 @@ import uuid
 
 from documind.worker import runtime
 from documind.worker.celery_app import (
+    EXTRACTION_SWEEP_TASK,
+    EXTRACTION_TASK,
     MIGRATION_TASK,
     PROCESS_TASK,
     QUEUE,
+    REMINDER_TASK,
     REPLY_SWEEP_TASK,
     SEAT_SYNC_TASK,
     SWEEP_TASK,
@@ -59,3 +62,23 @@ def sync_billing_seats() -> int:
     if changed:
         logger.info("updated subscription seats", extra={"count": changed})
     return changed
+
+
+# Not acks_late: a run picked up twice would be skipped anyway (it's no longer queued),
+# and a run whose worker died is failed by the sweep, then started again by the user.
+@app.task(name=EXTRACTION_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def run_extraction(run_id: str, workspace_id: str) -> str:
+    return runtime.run(runtime.run_extraction(uuid.UUID(run_id), uuid.UUID(workspace_id)))
+
+
+@app.task(name=EXTRACTION_SWEEP_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def sweep_extractions() -> int:
+    return runtime.run(runtime.sweep_extractions())
+
+
+@app.task(name=REMINDER_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def send_deadline_reminders() -> int:
+    sent = runtime.run(runtime.deadline_reminders())
+    if sent:
+        logger.info("sent deadline reminders", extra={"count": sent})
+    return sent

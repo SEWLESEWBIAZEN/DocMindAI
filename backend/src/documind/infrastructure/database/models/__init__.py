@@ -25,6 +25,11 @@ from documind.infrastructure.database.models.documents import (
     DocumentCollectionItem,
     DocumentVersion,
 )
+from documind.infrastructure.database.models.extraction import (
+    Deadline,
+    ExtractionResult,
+    ExtractionRun,
+)
 from documind.infrastructure.database.models.identity import (
     AccountToken,
     AuditLog,
@@ -64,12 +69,15 @@ __all__ = [
     "ConversationCollection",
     "ConversationDocument",
     "Credential",
+    "Deadline",
     "Document",
     "DocumentChunk",
     "DocumentCollection",
     "DocumentCollectionItem",
     "DocumentPage",
     "DocumentVersion",
+    "ExtractionResult",
+    "ExtractionRun",
     "InfrastructureEvent",
     "InfrastructureMigration",
     "InfrastructureProfile",

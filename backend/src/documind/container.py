@@ -74,7 +74,13 @@ from documind.infrastructure.storage.client import create_s3_client
 from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
 from documind.infrastructure.tasks.celery_dispatcher import CeleryJobDispatcher
-from documind.worker.celery_factory import MIGRATION_TASK, PROCESS_TASK, QUEUE, create_celery
+from documind.worker.celery_factory import (
+    EXTRACTION_TASK,
+    MIGRATION_TASK,
+    PROCESS_TASK,
+    QUEUE,
+    create_celery,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +114,8 @@ class Container:
     provider_factory: ProviderFactory | None = None
     workspace_keys: SqlWorkspaceKeys | None = None
     infra: InfrastructureResolver | None = None
+    #: Starts an extraction run in the background (ADR 0034): ``(run_id, workspace_id)``.
+    extraction_dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]] | None = None
     #: Stripe (ADR 0032); None when self-serve billing isn't configured.
     billing_gateway: BillingGateway | None = None
     #: Starts an approved infrastructure migration in the background (MI-8).
@@ -122,6 +130,11 @@ class Container:
         if self.provider_factory is None:  # pragma: no cover - always set by build_container
             raise RuntimeError("provider factory not configured")
         return self.provider_factory
+
+    def extraction(self) -> Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]]:
+        if self.extraction_dispatch is None:  # pragma: no cover - always set by build_container
+            raise RuntimeError("extraction dispatcher not configured")
+        return self.extraction_dispatch
 
     def ai_resolver(self) -> AIResolver:
         if self.ai is None:  # pragma: no cover - always set by build_container
@@ -241,6 +254,12 @@ def build_container(settings: Settings) -> Container:
         cache_seconds=settings.tenant_settings_cache_seconds,
     )
     container.billing_gateway = _build_billing_gateway(settings)
+    extraction = CeleryJobDispatcher(celery, task_name=EXTRACTION_TASK, queue=QUEUE)
+
+    async def dispatch_extraction(run_id: uuid.UUID, workspace_id: uuid.UUID) -> bool:
+        return await extraction.dispatch(run_id, workspace_id=workspace_id)
+
+    container.extraction_dispatch = dispatch_extraction
     return container
 
 

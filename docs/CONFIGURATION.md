@@ -233,6 +233,21 @@ Prices live in `domain/billing/plans.py` next to the limits, and are shown by th
 All six Stripe values are set together or not at all; a partial setup is rejected at start-up. Setup
 steps: [`runbooks/billing.md`](runbooks/billing.md).
 
+## Structured extraction and deadlines (ADR 0034)
+
+Extraction uses the workspace's chat model (its own key or the platform's) and counts towards
+`chat_tokens` like answers. Runs execute on the worker (`documind.run_extraction`).
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `EXTRACTION_MAX_DOCUMENTS` | `20` | Documents per extraction. |
+| `EXTRACTION_WINDOW_TOKENS` | `6000` | Document text per model call; longer documents take several calls. |
+| `EXTRACTION_MAX_CALLS_PER_DOCUMENT` | `8` | Cap per document; beyond it only the first part is read (the run says so). |
+| `EXTRACTION_MAX_OUTPUT_TOKENS` | `2000` | Per model call. |
+| `EXTRACTION_ACTIVE_RUNS_PER_WORKSPACE` | `3` | Queued or running at once. |
+| `EXTRACTION_STALE_SECONDS` | `900` | A run without progress for this long is marked failed (`interrupted`). |
+| `DEADLINE_REMINDER_INTERVAL_SECONDS` | `3600` | How often the worker sends due reminder emails. |
+
 ## Credential vault and your own AI keys (ADR 0019, ADR 0022)
 
 | Variable                     | Default | Description                                                      |

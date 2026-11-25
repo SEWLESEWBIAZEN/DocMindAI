@@ -28,6 +28,7 @@ from documind.application.infrastructure.sweeps import sweep_processing
 from documind.application.processing.orchestrator import JobOutcome, ProcessingOrchestrator
 from documind.container import build_container, processing_ai
 from documind.infrastructure.database.dataplane import DataPlaneBase, dataplane_metadata
+from documind.infrastructure.database.dataplane_runtime import head_revision
 from tests.integration.conftest import Api
 from tests.integration.test_documents_api import upload
 from tests.integration.test_processing_pipeline import sql
@@ -301,7 +302,8 @@ def test_external_database_and_customer_storage(
     )
     validated = api.client.post(url(w, f"/versions/{vid}/validate"), headers=elevated).json()
     assert validated["status"] == "validated", validated["validation"]
-    assert validated["validation"]["database"]["schema_revision"] == "dp0001"
+    # Validation migrated the customer's database to the latest data-plane schema.
+    assert validated["validation"]["database"]["schema_revision"] == head_revision()
     assert (
         api.client.post(url(w, f"/versions/{vid}/activate"), headers=elevated).json()["status"]
         == "active"

@@ -61,6 +61,37 @@ async def sweep() -> object:
     return await sweep_processing(c.infrastructure(), c.settings, c.job_dispatcher)
 
 
+async def run_extraction(run_id: uuid.UUID, workspace_id: uuid.UUID) -> str:
+    """One extraction run on the workspace's own data plane, with its own AI settings."""
+    from documind.application.extraction.runner import ExtractionRunner
+
+    c = container()
+    infra = await c.infrastructure().resolve(workspace_id)
+
+    async def llm_for(ws: uuid.UUID, user: uuid.UUID | None) -> Any:
+        return (await c.ai_resolver().resolve(ws, user_id=user)).llm
+
+    return await ExtractionRunner(infra.data_plane.sessions, llm_for, c.settings).run(run_id)
+
+
+async def sweep_extractions() -> int:
+    from documind.application.infrastructure.sweeps import sweep_extractions as sweep
+
+    c = container()
+    return await sweep(
+        c.infrastructure(), c.extraction(), stale_seconds=c.settings.extraction_stale_seconds
+    )
+
+
+async def deadline_reminders() -> int:
+    from documind.application.infrastructure.sweeps import send_deadline_reminders
+
+    c = container()
+    return await send_deadline_reminders(
+        c.infrastructure(), c.session_factory, c.email_sender, c.settings.public_app_url
+    )
+
+
 async def sync_seats() -> int:
     """Keep Stripe subscription quantities equal to member counts (ADR 0032)."""
     from documind.application.billing.subscriptions import SubscriptionService

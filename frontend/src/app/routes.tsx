@@ -28,6 +28,8 @@ const dashboard = () => import('../features/dashboard/DashboardPage')
 const aiProviders = () => import('../features/saas/AIProvidersPage')
 const infrastructure = () => import('../features/saas/InfrastructurePage')
 const billing = () => import('../features/saas/BillingPage')
+const extraction = () => import('../features/extraction/pages')
+const deadlines = () => import('../features/extraction/DeadlinesPage')
 
 function Public({ children }: { children: ReactNode }) {
   return <RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
@@ -78,6 +80,9 @@ export const routes: RouteObject[] = [
           { path: 'ai-providers', element: page(aiProviders, 'AIProvidersPage') },
           { path: 'infrastructure', element: page(infrastructure, 'InfrastructurePage') },
           { path: 'billing', element: page(billing, 'BillingPage') },
+          { path: 'extract', element: page(extraction, 'ExtractionsPage') },
+          { path: 'extract/:runId', element: page(extraction, 'ExtractionRunPage') },
+          { path: 'deadlines', element: page(deadlines, 'DeadlinesPage') },
           { path: '*', element: <NotFoundPage inApp /> },
         ],
       },

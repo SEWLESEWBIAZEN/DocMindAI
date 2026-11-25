@@ -34,10 +34,16 @@ def upgrade() -> None:
             "cancel_at_period_end", sa.Boolean(), server_default=sa.text("false"), nullable=False
         ),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint(
             "interval IS NULL OR interval IN ('month', 'year')",
@@ -62,7 +68,10 @@ def upgrade() -> None:
         sa.Column("type", sa.String(length=64), nullable=False),
         sa.Column("workspace_id", sa.Uuid(), nullable=True),
         sa.Column(
-            "received_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "received_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_billing_events")),
     )

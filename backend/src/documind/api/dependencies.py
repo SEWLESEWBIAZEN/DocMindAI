@@ -18,6 +18,7 @@ from documind.application.conversations.service import ConversationService
 from documind.application.conversations.streaming import ReplyRunner, StreamOptions
 from documind.application.documents.collection_service import CollectionService
 from documind.application.documents.document_service import DocumentService
+from documind.application.extraction.service import DeadlineService, ExtractionService
 from documind.application.health_service import HealthService
 from documind.application.identity.account_service import AccountService
 from documind.application.identity.auth_service import AuthService
@@ -469,6 +470,24 @@ async def get_index_freshness(
 
 
 IndexFreshnessDep = Annotated[IndexFreshness, Depends(get_index_freshness)]
+
+
+def get_extraction_service(
+    session: DataSessionDep, container: ContainerDep, meta: MetaDep
+) -> ExtractionService:
+    return ExtractionService(session, container.settings, container.extraction(), meta)
+
+
+ExtractionServiceDep = Annotated[ExtractionService, Depends(get_extraction_service)]
+
+
+def get_deadline_service(
+    data: DataSessionDep, session: SessionDep, meta: MetaDep
+) -> DeadlineService:
+    return DeadlineService(data, session, meta)
+
+
+DeadlineServiceDep = Annotated[DeadlineService, Depends(get_deadline_service)]
 
 
 # --------------------------------------------------------------------------- #

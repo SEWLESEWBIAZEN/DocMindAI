@@ -41,6 +41,9 @@ DATA_PLANE_TABLES: tuple[str, ...] = (
     "conversation_collections",
     "messages",
     "message_citations",
+    "extraction_runs",
+    "extraction_results",
+    "deadlines",
 )
 CONTROL_PLANE_REFERENCES = {"workspaces", "users"}
 DATAPLANE_SCHEMA = "documind"

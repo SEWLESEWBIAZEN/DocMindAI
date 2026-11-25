@@ -8,6 +8,7 @@ from documind.api.routes import (
     billing,
     conversations,
     documents,
+    extraction,
     health,
     infrastructure,
     me,
@@ -29,6 +30,7 @@ api_router.include_router(workspaces.router)
 api_router.include_router(workspaces.invitations_router)
 api_router.include_router(documents.router)
 api_router.include_router(onboarding.router)
+api_router.include_router(extraction.router)
 api_router.include_router(rag.router)
 api_router.include_router(conversations.router)
 api_router.include_router(usage.router)

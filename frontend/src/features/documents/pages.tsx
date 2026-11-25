@@ -528,7 +528,10 @@ export function DocumentLibraryPage() {
                           items={actions(doc, [
                             { label: 'Open', icon: 'eye', onSelect: () => navigate(`${base}/documents/${doc.id}`) },
                             ...(doc.status === 'ready' && !doc.archived_at && can('conversations.use')
-                              ? [{ label: 'Ask about this', icon: 'message' as const, onSelect: () => navigate(`${base}/chat?documents=${doc.id}`) }]
+                              ? [
+                                  { label: 'Ask about this', icon: 'message' as const, onSelect: () => navigate(`${base}/chat?documents=${doc.id}`) },
+                                  { label: 'Extract information', icon: 'flask' as const, onSelect: () => navigate(`${base}/extract?documents=${doc.id}`) },
+                                ]
                               : []),
                           ])}
                         />
