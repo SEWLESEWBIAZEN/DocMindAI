@@ -178,7 +178,7 @@ test('complete journey: sign up, upload, ask with citations, team, 2FA', async (
   await expectAccessible(page, 'sign-in code')
   await page.getByLabel('Authentication code').fill('000000')
   await page.getByRole('button', { name: 'Verify and sign in' }).click()
-  await expect(page.getByRole('alert')).toContainText("isn't valid")
+  await expect(page.locator('.alert--error')).toContainText("isn't valid")
   // The step-up code above used the current window: take the next one.
   await page.waitForTimeout(31_000 - (Date.now() % 30_000))
   await page.getByLabel('Authentication code').fill(totp(secret))

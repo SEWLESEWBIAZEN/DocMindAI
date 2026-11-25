@@ -193,7 +193,12 @@ def test_encrypted_backup_and_full_restore(
         s3_bucket=RESTORE_BUCKET,
         _skip_reset=True,
     )
-    hc = copy.login("owner@example.com").json()
+    # The owner has 2FA: signing in needs a code, which also proves the encrypted
+    # TOTP secret survived the restore (ADR 0026).
+    challenge = copy.login("owner@example.com").json()["challenge_token"]
+    hc = copy.client.post(
+        "/api/v1/auth/login/mfa", json={"challenge_token": challenge, "code": copy.totp(secret)}
+    ).json()
     headers = {"Authorization": f"Bearer {hc['access_token']}"}
     docs = copy.client.get(f"/api/v1/workspaces/{w}/documents", headers=headers).json()
     assert docs["total"] == 1
