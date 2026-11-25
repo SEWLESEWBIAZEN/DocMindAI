@@ -126,6 +126,7 @@ services:
       context: ./backend
       target: dev
     image: documind-backend
+    pull_policy: build  # local image: build it, never look for it on Docker Hub
     environment: *backend-environment
     # Development convenience: apply migrations and create the bucket on start.
     # Production runs these as explicit deployment steps instead.
@@ -167,6 +168,7 @@ services:
       context: ./backend
       target: dev
     image: documind-backend
+    pull_policy: build  # local image: build it, never look for it on Docker Hub
     environment: *backend-environment
     command:
       - celery
@@ -199,6 +201,7 @@ services:
   # Schedules the recovery sweep (re-dispatch lost jobs, recover crashed workers).
   beat:
     image: documind-backend
+    pull_policy: never  # the image built for backend and worker
     environment: *backend-environment
     command:
       - celery
