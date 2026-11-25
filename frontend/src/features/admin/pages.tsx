@@ -28,6 +28,7 @@ import { useAuth, useUser } from '../auth/AuthProvider'
 import { PasswordMeter } from '../auth/pages'
 import { validatePassword } from '../auth/password'
 import { formatBytes, formatDate, formatDateTime, formatNumber, formatRelative } from '../documents/format'
+import { createPasskey, passkeyErrorMessage, passkeysSupported, type Json } from '../../lib/webauthn'
 import { sendEmailCode } from '../documents/api'
 import { StepUpDialog } from '../documents/StepUpDialog'
 import { PlanPanel } from '../saas/PlanPanel'
@@ -652,6 +653,7 @@ export function ProfilePage() {
         <VoiceSettingsPanel />
         <PasswordPanel />
         <SecurityPanel />
+        <PasskeysPanel />
         <SessionsPanel />
       </div>
     </>
@@ -1106,6 +1108,162 @@ function SecurityPanel() {
               </Button>
             </div>
           </form>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+type Passkey = Schemas['PasskeyResponse']
+
+/** Passkeys (ADR 0029): phishing-resistant, and they count everywhere. */
+function PasskeysPanel() {
+  const { refreshUser } = useAuth()
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const passkeys = useQuery({
+    queryKey: ['me', 'passkeys'],
+    queryFn: async () => (await apiClient.get<Passkey[]>('/me/mfa/passkeys')).data,
+  })
+  const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState<Passkey | null>(null)
+  const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
+  const [codes, setCodes] = useState<string[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const supported = passkeysSupported()
+
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['me', 'passkeys'] })
+    await queryClient.invalidateQueries({ queryKey: ['me', 'mfa'] })
+    await queryClient.invalidateQueries({ queryKey: workspacesKey })
+    await refreshUser()
+  }
+  const reset = () => {
+    setAdding(false)
+    setRemoving(null)
+    setPassword('')
+    setName('')
+    setError(null)
+  }
+
+  const add = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const { data: options } = await apiClient.post<Json>('/me/mfa/passkeys/options', { password })
+      const credential = await createPasskey(options)
+      const { data } = await apiClient.post<Schemas['PasskeyRegisteredResponse']>('/me/mfa/passkeys', {
+        name: name.trim() || 'Passkey',
+        credential,
+      })
+      reset()
+      if (data.recovery_codes) setCodes(data.recovery_codes)
+      toast.success(`Passkey “${data.passkey.name}” added.`)
+      await refresh()
+    } catch (err) {
+      setError(passkeyErrorMessage(err) ?? errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!removing) return
+    setBusy(true)
+    setError(null)
+    try {
+      await apiClient.post(`/me/mfa/passkeys/${removing.id}/remove`, { password })
+      toast.success(`Passkey “${removing.name}” removed.`)
+      reset()
+      await refresh()
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Panel
+      id="passkeys"
+      title="Passkeys"
+      description="Confirm it's you with your fingerprint, face, device PIN or a security key. Passkeys can't be phished, and every organization accepts them."
+      actions={!adding && supported && <Button icon="plus" onClick={() => { setAdding(true); setCodes(null) }}>Add a passkey</Button>}
+    >
+      <div className="stack">
+        {!supported && <Alert tone="info">This browser doesn't support passkeys.</Alert>}
+        {error && <Alert>{error}</Alert>}
+        {codes && (
+          <div className="stack">
+            <Alert tone="warning">
+              Two-factor authentication is on. Save these recovery codes somewhere safe; each works once if you lose your
+              passkeys. They won't be shown again.
+            </Alert>
+            <ul className="codes" aria-label="Passkey recovery codes">
+              {codes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+            <div className="row">
+              <Button variant="primary" onClick={() => setCodes(null)}>
+                I've saved them
+              </Button>
+            </div>
+          </div>
+        )}
+        {adding && (
+          <form className="form" onSubmit={(e) => { e.preventDefault(); void add() }}>
+            <div className="grid-2">
+              <Field label="Passkey name" hint="So you can tell them apart, e.g. “Work laptop”.">
+                <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />
+              </Field>
+              <Field label="Your password">
+                <TextInput type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </Field>
+            </div>
+            <div className="form__actions">
+              <Button onClick={reset}>Cancel</Button>
+              <Button type="submit" variant="primary" icon="key" loading={busy} disabled={!password}>
+                Create passkey
+              </Button>
+            </div>
+          </form>
+        )}
+        {removing && (
+          <form className="form" onSubmit={(e) => { e.preventDefault(); void remove() }}>
+            <Field label={`Your password, to remove “${removing.name}”`}>
+              <TextInput type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+            </Field>
+            <div className="form__actions">
+              <Button onClick={reset}>Cancel</Button>
+              <Button type="submit" variant="danger" loading={busy} disabled={!password}>
+                Remove passkey
+              </Button>
+            </div>
+          </form>
+        )}
+        {passkeys.isLoading ? (
+          <Loading lines={2} />
+        ) : passkeys.data && passkeys.data.length > 0 ? (
+          <ul className="plain-list" aria-label="Your passkeys">
+            {passkeys.data.map((p) => (
+              <li key={p.id} className="row row--between">
+                <span>
+                  <strong>{p.name}</strong> {p.backed_up && <Badge>Synced</Badge>}
+                  <span className="table__sub">
+                    {' '}
+                    Added {formatDate(p.created_at)}
+                    {p.last_used_at ? ` · last used ${formatRelative(p.last_used_at)}` : ' · not used yet'}
+                  </span>
+                </span>
+                <Button size="sm" variant="ghost" icon="trash" label={`Remove ${p.name}`} onClick={() => { setRemoving(p); setAdding(false); setPassword('') }} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          !adding && <p className="muted">No passkeys yet.</p>
         )}
       </div>
     </Panel>

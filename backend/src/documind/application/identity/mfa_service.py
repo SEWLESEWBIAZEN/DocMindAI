@@ -21,31 +21,48 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.identity import emails
 from documind.application.identity.common import AuditRecorder, RequestMeta, utcnow
+from documind.application.identity.mfa_reset import (
+    MfaResetService,
+    clear_all_factors,
+    delete_factor_rows,
+)
 from documind.application.ports import EmailSender, PasswordHasher, RateLimiter
 from documind.core.config import Settings, mfa_key_bytes
 from documind.domain.errors import (
     AuthenticationError,
     ConflictError,
     InvalidTokenError,
+    NotFoundError,
     PermissionDeniedError,
     ValidationFailedError,
 )
 from documind.domain.identity import totp
-from documind.infrastructure.database.models import AccountToken, User
+from documind.infrastructure.database.models import AccountToken, User, WebAuthnCredential
 from documind.infrastructure.database.repositories.identity import (
     AccountTokenRepository,
     AuditLogRepository,
     MfaRecoveryCodeRepository,
     UserRepository,
 )
+from documind.infrastructure.security.passkeys import (
+    PasskeyError,
+    RelyingParty,
+    client_challenge,
+    credential_id,
+)
 from documind.infrastructure.security.secret_box import SecretBox
 
 MFA_EMAIL = "mfa_email"
+WEBAUTHN_REG = "webauthn_reg"
+WEBAUTHN_AUTH = "webauthn_auth"
+PASSKEY_CHALLENGE_TTL = timedelta(minutes=5)
 # A password reset proves control of the mailbox only; don't let the mailbox be both factors.
 EMAIL_CODE_BLOCK_AFTER_RESET = timedelta(hours=24)
 
@@ -99,6 +116,9 @@ class MfaService:
         self._users = UserRepository(session)
         self._codes = MfaRecoveryCodeRepository(session)
         self._tokens = AccountTokenRepository(session)
+        rp_id, origins = settings.webauthn_rp
+        self._rp = RelyingParty(rp_id, settings.webauthn_rp_name, origins)
+        self._meta = meta
         self._audit = AuditRecorder(AuditLogRepository(session), meta)
 
     # ----------------------------------------------------------------- helpers
@@ -141,14 +161,27 @@ class MfaService:
         code: str | None,
         recovery_code: str | None,
         email_code: str | None = None,
+        passkey: dict[str, Any] | None = None,
     ) -> str:
-        """Verify one factor: TOTP, a recovery code or an email code; returns the method used.
+        """Verify one factor: TOTP, a recovery code, an email code or a passkey.
 
-        Caller commits.
+        Returns the method used. Caller commits.
         """
-        if sum(f is not None for f in (code, recovery_code, email_code)) != 1:
+        if sum(f is not None for f in (code, recovery_code, email_code, passkey)) != 1:
             raise ValidationFailedError(
-                "Provide one of: an authenticator code, a recovery code or an email code."
+                "Provide one of: a passkey, an authenticator code, a recovery code or an email "
+                "code."
+            )
+        if passkey is not None:
+            if await self._verify_passkey(user, passkey):
+                return "passkey"
+            self._audit.record(
+                "auth.mfa_failed", actor_user_id=user.id, details={"reason": "passkey"}
+            )
+            await self._session.commit()
+            raise AuthenticationError(
+                "That passkey couldn't be verified. Try again, or use another method.",
+                code="invalid_passkey",
             )
         if code is not None and user.totp_secret_encrypted:
             secret = self._box.decrypt(user.totp_secret_encrypted, context=self._context(user))
@@ -173,6 +206,195 @@ class MfaService:
         await self._session.commit()
         raise AuthenticationError(
             "That code isn't valid or has expired. Try the latest code.", code="invalid_mfa_code"
+        )
+
+    # ------------------------------------------------------------ passkeys
+
+    @staticmethod
+    def _challenge_hash(challenge: bytes) -> str:
+        return hashlib.sha256(challenge).hexdigest()
+
+    def _store_challenge(self, user: User, purpose: str, challenge: bytes) -> None:
+        self._tokens.add(
+            AccountToken(
+                user_id=user.id,
+                purpose=purpose,
+                token_hash=self._challenge_hash(challenge),
+                expires_at=utcnow() + PASSKEY_CHALLENGE_TTL,
+            )
+        )
+
+    async def _take_challenge(
+        self, user: User, purpose: str, credential: dict[str, Any]
+    ) -> bytes | None:
+        """The challenge this response answers, if we issued it to this user (single use)."""
+        try:
+            challenge = client_challenge(credential)
+        except PasskeyError:
+            return None
+        row = await self._tokens.get_by_hash(self._challenge_hash(challenge), purpose)
+        now = utcnow()
+        if row is None or row.user_id != user.id or row.used_at or row.expires_at <= now:
+            return None
+        row.used_at = now
+        return challenge
+
+    async def _passkeys(self, user_id: uuid.UUID) -> list[WebAuthnCredential]:
+        rows = await self._session.execute(
+            select(WebAuthnCredential)
+            .where(WebAuthnCredential.user_id == user_id)
+            .order_by(WebAuthnCredential.created_at)
+        )
+        return list(rows.scalars())
+
+    async def _verify_passkey(self, user: User, credential: dict[str, Any]) -> bool:
+        challenge = await self._take_challenge(user, WEBAUTHN_AUTH, credential)
+        if challenge is None:
+            return False
+        try:
+            raw_id = credential_id(credential)
+        except PasskeyError:
+            return False
+        row = (
+            await self._session.execute(
+                select(WebAuthnCredential).where(
+                    WebAuthnCredential.user_id == user.id,
+                    WebAuthnCredential.credential_id == raw_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return False
+        try:
+            # A counter that goes backwards means a cloned authenticator: rejected.
+            row.sign_count = self._rp.verify_authentication(
+                credential, challenge, row.public_key, row.sign_count
+            )
+        except PasskeyError:
+            return False
+        row.last_used_at = utcnow()
+        return True
+
+    async def passkey_options(self, user: User) -> dict[str, Any]:
+        """WebAuthn request options for confirming it's you with a passkey."""
+        keys = await self._passkeys(user.id)
+        if not keys:
+            raise ConflictError("You have no passkeys yet.", code="no_passkeys")
+        options, challenge = self._rp.authentication_options(
+            [(k.credential_id, list(k.transports)) for k in keys]
+        )
+        self._store_challenge(user, WEBAUTHN_AUTH, challenge)
+        await self._session.commit()
+        return options
+
+    async def passkey_registration_options(self, user: User, password: str) -> dict[str, Any]:
+        await self._limit(user)
+        locked = await self._users.require(user.id, for_update=True)
+        await self._require_password(locked, password)
+        keys = await self._passkeys(locked.id)
+        if len(keys) >= 10:
+            raise ConflictError("You can have up to 10 passkeys.", code="too_many_passkeys")
+        options, challenge = self._rp.registration_options(
+            user_handle=locked.id.bytes,
+            user_name=locked.email,
+            display_name=locked.display_name,
+            exclude=[(k.credential_id, list(k.transports)) for k in keys],
+        )
+        self._store_challenge(locked, WEBAUTHN_REG, challenge)
+        await self._session.commit()
+        return options
+
+    async def register_passkey(
+        self, user: User, credential: dict[str, Any], name: str
+    ) -> tuple[WebAuthnCredential, list[str] | None]:
+        """Save a new passkey. As the first 2FA method it turns 2FA on, with recovery codes."""
+        await self._limit(user)
+        locked = await self._users.require(user.id, for_update=True)
+        label = " ".join(name.split())[:64] or "Passkey"
+        challenge = await self._take_challenge(locked, WEBAUTHN_REG, credential)
+        if challenge is None:
+            raise AuthenticationError(
+                "This passkey request expired. Start again.", code="passkey_challenge_expired"
+            )
+        try:
+            new = self._rp.verify_registration(credential, challenge)
+        except PasskeyError as exc:
+            await self._session.commit()  # the challenge stays used
+            raise AuthenticationError(str(exc), code="invalid_passkey") from exc
+        exists = (
+            await self._session.execute(
+                select(WebAuthnCredential.id).where(
+                    WebAuthnCredential.credential_id == new.credential_id
+                )
+            )
+        ).first()
+        if exists:
+            raise ConflictError("This passkey is already registered.", code="passkey_exists")
+        row = WebAuthnCredential(
+            user_id=locked.id,
+            credential_id=new.credential_id,
+            public_key=new.public_key,
+            sign_count=new.sign_count,
+            transports=new.transports,
+            name=label,
+            backed_up=new.backed_up,
+        )
+        self._session.add(row)
+        first = not locked.mfa_enabled
+        if locked.mfa_passkey_enabled_at is None:
+            locked.mfa_passkey_enabled_at = utcnow()
+        codes = await self._new_recovery_codes(locked) if first else None
+        await self._session.flush()
+        self._audit.record(
+            "user.passkey_added",
+            actor_user_id=locked.id,
+            target_type="passkey",
+            target_id=row.id,
+            details={"name": label, "first_factor": first},
+        )
+        if first:
+            self._audit.record(
+                "user.mfa_enabled",
+                actor_user_id=locked.id,
+                target_type="user",
+                target_id=locked.id,
+                details={"method": "passkey"},
+            )
+        await self._session.commit()
+        await self._email.send(emails.passkey_added_email(locked.email, locked.display_name, label))
+        return row, codes
+
+    async def list_passkeys(self, user: User) -> list[WebAuthnCredential]:
+        return await self._passkeys(user.id)
+
+    async def remove_passkey(self, user: User, passkey_id: uuid.UUID, password: str) -> None:
+        await self._limit(user)
+        locked = await self._users.require(user.id, for_update=True)
+        await self._require_password(locked, password)
+        keys = await self._passkeys(locked.id)
+        row = next((k for k in keys if k.id == passkey_id), None)
+        if row is None:
+            raise NotFoundError("Passkey not found.")
+        last = len(keys) == 1
+        if last and locked.totp_enabled_at is None and locked.mfa_email_enabled_at is None:
+            raise ConflictError(
+                "This passkey is your only way to confirm it's you. Add another method first, "
+                "or turn two-factor authentication off.",
+                code="last_mfa_method",
+            )
+        await self._session.delete(row)
+        if last:
+            locked.mfa_passkey_enabled_at = None
+        self._audit.record(
+            "user.passkey_removed",
+            actor_user_id=locked.id,
+            target_type="passkey",
+            target_id=passkey_id,
+            details={"name": row.name},
+        )
+        await self._session.commit()
+        await self._email.send(
+            emails.passkey_removed_email(locked.email, locked.display_name, row.name)
         )
 
     async def _notify(self, user: User, method: str) -> None:
@@ -379,6 +601,7 @@ class MfaService:
         code: str | None,
         recovery_code: str | None,
         email_code: str | None = None,
+        passkey: dict[str, Any] | None = None,
     ) -> None:
         """Turn 2FA off. With a lost authenticator: password plus a recovery or email code."""
         await self._limit(user)
@@ -386,12 +609,9 @@ class MfaService:
         await self._require_password(locked, password)
         if not locked.mfa_enabled:
             raise ConflictError("Two-factor authentication is not on.", code="mfa_not_enabled")
-        method = await self._check_second_factor(locked, code, recovery_code, email_code)
-        locked.totp_secret_encrypted = None
-        locked.totp_enabled_at = None
-        locked.totp_last_used_step = None
-        locked.mfa_email_enabled_at = None
-        await self._codes.delete_all(locked.id)
+        method = await self._check_second_factor(locked, code, recovery_code, email_code, passkey)
+        clear_all_factors(locked)
+        await delete_factor_rows(self._session, locked.id)
         self._audit.record(
             "user.mfa_disabled",
             actor_user_id=locked.id,
@@ -403,14 +623,18 @@ class MfaService:
         await self._email.send(emails.mfa_disabled_email(locked.email, locked.display_name))
 
     async def regenerate_recovery_codes(
-        self, user: User, code: str | None, email_code: str | None = None
+        self,
+        user: User,
+        code: str | None,
+        email_code: str | None = None,
+        passkey: dict[str, Any] | None = None,
     ) -> list[str]:
-        """New recovery codes, confirmed with the authenticator or an email code."""
+        """New recovery codes, confirmed with a passkey, the authenticator or an email code."""
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
         if not locked.mfa_enabled:
             raise ConflictError("Two-factor authentication is not on.", code="mfa_not_enabled")
-        await self._check_second_factor(locked, code, None, email_code)
+        await self._check_second_factor(locked, code, None, email_code, passkey)
         codes = await self._new_recovery_codes(locked)
         self._audit.record(
             "user.mfa_recovery_codes_regenerated",
@@ -429,6 +653,7 @@ class MfaService:
         code: str | None,
         recovery_code: str | None,
         email_code: str | None = None,
+        passkey: dict[str, Any] | None = None,
     ) -> Verified:
         """Check the second factor; returns when and how, for the step-up token."""
         await self._limit(user)
@@ -437,9 +662,13 @@ class MfaService:
             raise PermissionDeniedError(
                 "Set up two-factor authentication first.", code="mfa_enrollment_required"
             )
-        method = await self._check_second_factor(locked, code, recovery_code, email_code)
+        method = await self._check_second_factor(locked, code, recovery_code, email_code, passkey)
         now = utcnow()
         self._audit.record("auth.mfa_verified", actor_user_id=locked.id, details={"method": method})
+        # A real second factor: any open support reset wasn't needed (ADR 0030).
+        await MfaResetService(self._session, self._email, self._meta).cancel_open(
+            locked, f"signed in with {method}"
+        )
         await self._session.commit()
         await self._notify(locked, method)
         return Verified(at=now, method=method)

@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Table,
@@ -23,7 +24,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from documind.infrastructure.database.base import Base
@@ -64,26 +65,48 @@ class User(Base):
     totp_pending_expires_at: Mapped[datetime | None] = mapped_column(TZ)
     # Email-only 2FA (ADR 0028): codes by email instead of an authenticator app.
     mfa_email_enabled_at: Mapped[datetime | None] = mapped_column(TZ)
+    # Passkeys (ADR 0029): set while the user has at least one registered passkey.
+    mfa_passkey_enabled_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
     @property
     def mfa_enabled(self) -> bool:
-        return self.totp_enabled_at is not None or self.mfa_email_enabled_at is not None
+        return (
+            self.totp_enabled_at is not None
+            or self.mfa_passkey_enabled_at is not None
+            or self.mfa_email_enabled_at is not None
+        )
 
     @property
     def mfa_method(self) -> str | None:
-        """The primary second factor: "authenticator", "email", or None (2FA off)."""
+        """The strongest second factor: "passkey", "authenticator", "email", or None (off)."""
+        if self.mfa_passkey_enabled_at is not None:
+            return "passkey"
         if self.totp_enabled_at is not None:
             return "authenticator"
         if self.mfa_email_enabled_at is not None:
             return "email"
         return None
 
+    @property
+    def mfa_methods(self) -> list[str]:
+        """Everything usable at a 2FA prompt (email codes are always a fallback)."""
+        if not self.mfa_enabled:
+            return []
+        methods = []
+        if self.mfa_passkey_enabled_at is not None:
+            methods.append("passkey")
+        if self.totp_enabled_at is not None:
+            methods.append("authenticator")
+        return [*methods, "email", "recovery_code"]
+
     def mfa_allowed_in(self, allow_email: bool) -> bool:
         """Whether this user's 2FA counts where email codes may or may not be used."""
-        return self.totp_enabled_at is not None or (
-            allow_email and self.mfa_email_enabled_at is not None
+        return (
+            self.totp_enabled_at is not None
+            or self.mfa_passkey_enabled_at is not None
+            or (allow_email and self.mfa_email_enabled_at is not None)
         )
 
 
@@ -98,6 +121,55 @@ class MfaRecoveryCode(Base):
     code_hash: Mapped[str] = mapped_column(String(64))
     used_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = _created()
+
+
+class WebAuthnCredential(Base):
+    """A registered passkey (ADR 0029). Only the public key is stored."""
+
+    __tablename__ = "webauthn_credentials"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    credential_id: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary)
+    sign_count: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))
+    transports: Mapped[list[str]] = mapped_column(
+        ARRAY(String(16)), default=list, server_default=text("'{}'")
+    )
+    name: Mapped[str] = mapped_column(String(64))
+    backed_up: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = _created()
+    last_used_at: Mapped[datetime | None] = mapped_column(TZ)
+
+
+class MfaResetRequest(Base):
+    """Support-assisted 2FA reset for someone who lost every factor (ADR 0030)."""
+
+    __tablename__ = "mfa_reset_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'denied', 'cancelled', 'completed')",
+            name="status_valid",
+        ),
+        Index("ix_mfa_reset_requests_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending")
+    reason: Mapped[str] = mapped_column(Text)
+    ip_address: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = _created()
+    decided_at: Mapped[datetime | None] = mapped_column(TZ)
+    decided_by: Mapped[str | None] = mapped_column(String(128))
+    decision_note: Mapped[str | None] = mapped_column(String(500))
+    effective_at: Mapped[datetime | None] = mapped_column(TZ)
+    completed_at: Mapped[datetime | None] = mapped_column(TZ)
 
 
 class Organization(Base):
@@ -237,7 +309,8 @@ class AccountToken(Base):
     __tablename__ = "account_tokens"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('email_verification', 'password_reset', 'mfa_login', 'mfa_email')",
+            "purpose IN ('email_verification', 'password_reset', 'mfa_login', 'mfa_email', "
+            "'webauthn_reg', 'webauthn_auth')",
             name="purpose_valid",
         ),
         Index("ix_account_tokens_user_id_purpose", "user_id", "purpose"),

@@ -163,13 +163,17 @@ Follow-ups:
       `test_mfa_enforcement.py`, Playwright journey)
 - [x] Self-service recovery of a lost authenticator: sign in and turn 2FA off with one-time codes by
       email (ADR 0027, `test_mfa_email_codes.py`, Playwright journey)
-- [ ] Support-assisted 2FA reset for users who lose their authenticator, their recovery codes
-      **and** access to their email
+- [x] Support-assisted 2FA reset for users who lose every factor and their email: reviewed by
+      support, 72-hour waiting period, cancelled by any real 2FA use (ADR 0030,
+      `test_mfa_support_reset.py`, `documind-manage mfa-reset`)
 - [x] Email one-time codes as a fallback factor (ADR 0027); 24-hour block after a password reset
 - [x] Email-only 2FA for people who can't use an authenticator app; organizations can accept or
       refuse email codes; recovery codes can be regenerated with an email code (ADR 0028,
       `test_mfa_email_method.py`, `e2e/mfa-email.spec.ts`)
-- [ ] Passkeys (WebAuthn)
+- [x] Passkeys (WebAuthn) as a second factor: phishing-resistant, accepted everywhere (ADR 0029,
+      `test_passkeys.py` with a software authenticator, `e2e/passkeys.spec.ts` with Chromium's
+      virtual authenticator)
+- [ ] Passwordless (usernameless) sign-in with passkeys
 - [x] Frontend 2FA screens (QR code, manual secret, recovery codes): built in Phase 7
       (`features/admin/pages.tsx`, Security section); covered by the Playwright journey
 

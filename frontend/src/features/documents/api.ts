@@ -153,9 +153,19 @@ export async function removeFromCollection(ws: string, collectionId: string, doc
 }
 
 /** 2FA step-up: a short-lived elevated token for one sensitive action. */
-export async function stepUp(body: { code?: string; recovery_code?: string; email_code?: string }): Promise<string> {
+export async function stepUp(body: {
+  code?: string
+  recovery_code?: string
+  email_code?: string
+  passkey?: Record<string, unknown>
+}): Promise<string> {
   const { data } = await apiClient.post<Schemas['StepUpResponse']>('/auth/mfa/verify', body)
   return data.access_token
+}
+
+/** WebAuthn request options for confirming with a passkey (ADR 0029). */
+export async function passkeyOptions(): Promise<Record<string, unknown>> {
+  return (await apiClient.post<Record<string, unknown>>('/auth/mfa/passkey-options')).data
 }
 
 /** Email a one-time code to the signed-in user (fallback second factor, ADR 0027). */

@@ -20,6 +20,7 @@ def user_response(user: User) -> UserResponse:
         email_verified=user.email_verified_at is not None,
         mfa_enabled=user.mfa_enabled,
         mfa_method=user.mfa_method,
+        mfa_methods=user.mfa_methods,
         default_workspace_id=user.default_workspace_id,
         created_at=user.created_at,
     )

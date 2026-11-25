@@ -396,6 +396,52 @@ async def _migrations(container: Container, command: str, migration_id: uuid.UUI
     return 0
 
 
+async def _mfa_reset(
+    container: Container,
+    command: str,
+    request_id: uuid.UUID | None,
+    operator: str | None,
+    note: str | None,
+    status: str | None,
+) -> int:
+    """Support-assisted 2FA reset (ADR 0030). Verify identity out of band first."""
+    from documind.application.identity.common import RequestMeta
+    from documind.application.identity.mfa_reset import MfaResetService
+
+    async with container.session_factory() as session:
+        service = MfaResetService(
+            session,
+            container.email_sender,
+            RequestMeta(),
+            delay_hours=container.settings.mfa_reset_delay_hours,
+        )
+        if command == "list":
+            _print(
+                [
+                    {
+                        "id": str(r.id),
+                        "email": r.email,
+                        "status": r.status,
+                        "reason": r.reason,
+                        "requested_at": r.created_at.isoformat(),
+                        "ip_address": r.ip_address,
+                        "decided_by": r.decided_by,
+                        "effective_at": r.effective_at.isoformat() if r.effective_at else None,
+                    }
+                    for r in await service.list(status)
+                ]
+            )
+            return 0
+        assert request_id is not None  # noqa: S101 - checked by main()
+        if command == "approve":
+            effective = await service.approve(request_id, operator or "", note)
+            print(f"approved; takes effect at {effective.isoformat()}")  # noqa: T201
+        else:
+            await service.deny(request_id, operator or "", note)
+            print("denied")  # noqa: T201
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="documind-manage",
@@ -436,6 +482,14 @@ def main(argv: list[str] | None = None) -> int:
     backup.add_argument("source", nargs="?")
     backup.add_argument("target", nargs="?")
     backup.add_argument("--passphrase-file")
+    reset = sub.add_parser("mfa-reset", help="support-assisted 2FA reset requests (ADR 0030)")
+    reset.add_argument("mfa_reset_command", choices=["list", "approve", "deny"])
+    reset.add_argument("request_id", nargs="?", type=uuid.UUID)
+    reset.add_argument("--operator", help="who verified the person's identity (recorded)")
+    reset.add_argument("--note", help="how identity was verified (recorded)")
+    reset.add_argument(
+        "--status", choices=["pending", "approved", "denied", "cancelled", "completed"]
+    )
     mig = sub.add_parser("migrations", help="approved infrastructure migrations (MI-8)")
     mig.add_argument("migrations_command", choices=["list", "run", "abort"])
     mig.add_argument("migration_id", nargs="?", type=uuid.UUID)
@@ -478,6 +532,21 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(_dataplanes_migrate))
     if args.command == "credentials":
         return asyncio.run(_with_container(_rewrap))
+    if args.command == "mfa-reset":
+        if args.mfa_reset_command != "list" and (args.request_id is None or not args.operator):
+            parser.error("approve and deny need REQUEST_ID and --operator")
+        return asyncio.run(
+            _with_container(
+                lambda c: _mfa_reset(
+                    c,
+                    args.mfa_reset_command,
+                    args.request_id,
+                    args.operator,
+                    args.note,
+                    args.status,
+                )
+            )
+        )
     if args.command == "migrations":
         if args.migrations_command != "list" and args.migration_id is None:
             parser.error("run and abort need MIGRATION_ID")

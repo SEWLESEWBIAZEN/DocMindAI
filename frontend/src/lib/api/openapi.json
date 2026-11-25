@@ -2063,6 +2063,7 @@
             "anyOf": [
               {
                 "enum": [
+                  "passkey",
                   "authenticator",
                   "email"
                 ],
@@ -2347,6 +2348,7 @@
             "description": "Second factors this account can use",
             "items": {
               "enum": [
+                "passkey",
                 "authenticator",
                 "email",
                 "recovery_code"
@@ -2433,6 +2435,19 @@
             "description": "6-digit code sent by email",
             "title": "Email Code"
           },
+          "passkey": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The browser's WebAuthn response (PublicKeyCredential JSON)",
+            "title": "Passkey"
+          },
           "password": {
             "maxLength": 1000,
             "minLength": 1,
@@ -2511,6 +2526,19 @@
             "description": "6-digit code sent by email",
             "title": "Email Code"
           },
+          "passkey": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The browser's WebAuthn response (PublicKeyCredential JSON)",
+            "title": "Passkey"
+          },
           "recovery_code": {
             "anyOf": [
               {
@@ -2560,6 +2588,19 @@
               }
             ],
             "title": "Email Code"
+          },
+          "passkey": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The browser's WebAuthn response (PublicKeyCredential JSON)",
+            "title": "Passkey"
           }
         },
         "title": "MfaRegenerateRequest",
@@ -2596,6 +2637,30 @@
         "title": "MfaRequirementRequest",
         "type": "object"
       },
+      "MfaResetRequestBody": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge_token": {
+            "maxLength": 128,
+            "minLength": 20,
+            "title": "Challenge Token",
+            "type": "string"
+          },
+          "reason": {
+            "description": "What happened, so support can verify it's you",
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_token",
+          "reason"
+        ],
+        "title": "MfaResetRequestBody",
+        "type": "object"
+      },
       "MfaSecondFactorRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2625,6 +2690,19 @@
             ],
             "description": "6-digit code sent by email",
             "title": "Email Code"
+          },
+          "passkey": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The browser's WebAuthn response (PublicKeyCredential JSON)",
+            "title": "Passkey"
           },
           "recovery_code": {
             "anyOf": [
@@ -2707,6 +2785,7 @@
             "anyOf": [
               {
                 "enum": [
+                  "passkey",
                   "authenticator",
                   "email"
                 ],
@@ -2826,6 +2905,117 @@
           "ocr"
         ],
         "title": "PageResponse",
+        "type": "object"
+      },
+      "PasskeyOptionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "PasskeyOptionsRequest",
+        "type": "object"
+      },
+      "PasskeyRegisterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "description": "The browser's WebAuthn registration response",
+            "title": "Credential",
+            "type": "object"
+          },
+          "name": {
+            "description": "e.g. 'MacBook Touch ID'",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "credential"
+        ],
+        "title": "PasskeyRegisterRequest",
+        "type": "object"
+      },
+      "PasskeyRegisteredResponse": {
+        "properties": {
+          "passkey": {
+            "$ref": "#/components/schemas/PasskeyResponse"
+          },
+          "recovery_codes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only when this passkey turned 2FA on",
+            "title": "Recovery Codes"
+          }
+        },
+        "required": [
+          "passkey"
+        ],
+        "title": "PasskeyRegisteredResponse",
+        "type": "object"
+      },
+      "PasskeyResponse": {
+        "properties": {
+          "backed_up": {
+            "description": "Synced passkey (e.g. iCloud Keychain, Google)",
+            "title": "Backed Up",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "backed_up",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "PasskeyResponse",
         "type": "object"
       },
       "PlanSummaryResponse": {
@@ -4340,6 +4530,7 @@
             "anyOf": [
               {
                 "enum": [
+                  "passkey",
                   "authenticator",
                   "email"
                 ],
@@ -4351,6 +4542,20 @@
             ],
             "description": "Primary second factor; email codes also work as a fallback",
             "title": "Mfa Method"
+          },
+          "mfa_methods": {
+            "description": "Every second factor this account can use",
+            "items": {
+              "enum": [
+                "passkey",
+                "authenticator",
+                "email",
+                "recovery_code"
+              ],
+              "type": "string"
+            },
+            "title": "Mfa Methods",
+            "type": "array"
           }
         },
         "required": [
@@ -5137,6 +5342,92 @@
         ]
       }
     },
+    "/api/v1/auth/login/mfa/passkey-options": {
+      "post": {
+        "operationId": "login_mfa_passkey_options_api_v1_auth_login_mfa_passkey_options_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaChallengeTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Login Mfa Passkey Options Api V1 Auth Login Mfa Passkey Options Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "During sign-in: WebAuthn options to confirm with a passkey",
+        "tags": [
+          "auth",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/auth/login/mfa/reset-request": {
+      "post": {
+        "operationId": "login_mfa_reset_request_api_v1_auth_login_mfa_reset_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaResetRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__identity__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lost every second factor: ask support to reset 2FA (reviewed, then delayed)",
+        "tags": [
+          "auth",
+          "mfa"
+        ]
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "logout_api_v1_auth_logout_post",
@@ -5219,6 +5510,35 @@
           }
         ],
         "summary": "Email a one-time code for step-up or for turning 2FA off (lost authenticator)",
+        "tags": [
+          "auth",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/passkey-options": {
+      "post": {
+        "operationId": "mfa_passkey_options_api_v1_auth_mfa_passkey_options_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Mfa Passkey Options Api V1 Auth Mfa Passkey Options Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "WebAuthn options for step-up",
         "tags": [
           "auth",
           "mfa"
@@ -6001,6 +6321,183 @@
           }
         ],
         "summary": "Start email-only 2FA, without an authenticator app (requires your password)",
+        "tags": [
+          "me",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/me/mfa/passkeys": {
+      "get": {
+        "operationId": "list_passkeys_api_v1_me_mfa_passkeys_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PasskeyResponse"
+                  },
+                  "title": "Response List Passkeys Api V1 Me Mfa Passkeys Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Passkeys",
+        "tags": [
+          "me",
+          "mfa"
+        ]
+      },
+      "post": {
+        "operationId": "register_passkey_api_v1_me_mfa_passkeys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyRegisteredResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save the passkey the browser created (turns 2FA on if it was off)",
+        "tags": [
+          "me",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/me/mfa/passkeys/options": {
+      "post": {
+        "operationId": "passkey_registration_options_api_v1_me_mfa_passkeys_options_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Passkey Registration Options Api V1 Me Mfa Passkeys Options Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start adding a passkey (requires your password); pass the result to the browser",
+        "tags": [
+          "me",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/me/mfa/passkeys/{passkey_id}/remove": {
+      "post": {
+        "operationId": "remove_passkey_api_v1_me_mfa_passkeys__passkey_id__remove_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "passkey_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Passkey Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove a passkey (requires your password)",
         "tags": [
           "me",
           "mfa"

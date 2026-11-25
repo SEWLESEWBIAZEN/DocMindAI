@@ -34,5 +34,7 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0026](0026-two-factor-sign-in-and-enforcement.md) | Two-factor authentication at sign-in, and required 2FA | Accepted |
 | [0027](0027-email-one-time-codes.md) | One-time codes by email, and recovering a lost authenticator | Accepted |
 | [0028](0028-email-two-factor-method.md) | Email as a 2FA method, and organizations that allow or refuse it | Accepted |
+| [0029](0029-passkeys.md) | Passkeys (WebAuthn) as a second factor | Accepted |
+| [0030](0030-support-assisted-2fa-reset.md) | Support-assisted 2FA reset | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

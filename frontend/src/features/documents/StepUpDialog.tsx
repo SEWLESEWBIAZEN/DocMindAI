@@ -5,7 +5,8 @@ import { Alert, announce, Button, Dialog, Field, TextInput } from '../../compone
 import { errorMessage } from '../../lib/api/errors'
 import { useWorkspace } from '../../lib/workspace/WorkspaceContext'
 import { useUser } from '../auth/AuthProvider'
-import { sendEmailCode, stepUp } from './api'
+import { getPasskey, passkeyErrorMessage } from '../../lib/webauthn'
+import { passkeyOptions, sendEmailCode, stepUp } from './api'
 
 /**
  * Asks for a 2FA code (or a recovery code) and hands back a short-lived
@@ -32,6 +33,7 @@ export function StepUpDialog({
   const emailAllowed = workspace.allow_email_mfa !== false
   const appOnlyButEmailUser = !emailAllowed && user.mfa_method === 'email'
   const [code, setCode] = useState('')
+  const hasPasskey = (user.mfa_methods ?? []).includes('passkey')
   const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>(user.mfa_method === 'email' ? 'email' : 'totp')
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +69,21 @@ export function StepUpDialog({
     }
   }
 
+  const withPasskey = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const options = await passkeyOptions()
+      const token = await stepUp({ passkey: await getPasskey(options) })
+      await onVerified(token)
+      close()
+    } catch (err) {
+      setError(passkeyErrorMessage(err) ?? errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (!user.mfa_enabled || appOnlyButEmailUser) {
     return (
       <Dialog
@@ -96,6 +113,14 @@ export function StepUpDialog({
       <form className="form" onSubmit={submit}>
         {error && <Alert>{error}</Alert>}
         {notice && <Alert tone="success">{notice}</Alert>}
+        {hasPasskey && (
+          <>
+            <Button variant="primary" icon="key" loading={busy} onClick={() => void withPasskey()}>
+              Confirm with a passkey
+            </Button>
+            <p className="muted">Or enter a code:</p>
+          </>
+        )}
         <Field
           label={method === 'recovery' ? 'Recovery code' : method === 'email' ? 'Email code' : 'Authentication code'}
           hint={
@@ -116,7 +141,7 @@ export function StepUpDialog({
           />
         </Field>
         <div className="stack stack--sm">
-          {method !== 'totp' && user.mfa_method === 'authenticator' && (
+          {method !== 'totp' && (user.mfa_methods ?? []).includes('authenticator') && (
             <button type="button" className="link-button" onClick={() => { setMethod('totp'); setCode(''); setNotice(null) }}>
               Use an authenticator code instead
             </button>

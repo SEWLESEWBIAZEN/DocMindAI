@@ -20,6 +20,11 @@ Password = Field(min_length=1, max_length=1000)
 Token = Field(min_length=16, max_length=256)
 
 
+_PASSKEY = Field(
+    default=None, description="The browser's WebAuthn response (PublicKeyCredential JSON)"
+)
+
+
 class _In(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
 
@@ -67,8 +72,11 @@ class UserResponse(BaseModel):
     display_name: str
     email_verified: bool
     mfa_enabled: bool
-    mfa_method: Literal["authenticator", "email"] | None = Field(
+    mfa_method: Literal["passkey", "authenticator", "email"] | None = Field(
         default=None, description="Primary second factor; email codes also work as a fallback"
+    )
+    mfa_methods: list[Literal["passkey", "authenticator", "email", "recovery_code"]] = Field(
+        default_factory=list, description="Every second factor this account can use"
     )
     default_workspace_id: uuid.UUID | None
     created_at: datetime
@@ -126,7 +134,7 @@ class MemberResponse(BaseModel):
     mfa_enabled: bool | None = Field(
         default=None, description="Shown only to members who can manage members"
     )
-    mfa_method: Literal["authenticator", "email"] | None = None
+    mfa_method: Literal["passkey", "authenticator", "email"] | None = None
 
 
 class MfaRequirementRequest(_In):
@@ -179,7 +187,7 @@ MfaCode = Field(min_length=6, max_length=10, description="6-digit code from the 
 
 class MfaStatusResponse(BaseModel):
     enabled: bool
-    method: Literal["authenticator", "email"] | None = None
+    method: Literal["passkey", "authenticator", "email"] | None = None
     enabled_at: datetime | None
     recovery_codes_remaining: int
 
@@ -189,6 +197,40 @@ class MfaRegenerateRequest(_In):
 
     code: str | None = Field(default=None, min_length=6, max_length=10)
     email_code: str | None = Field(default=None, min_length=6, max_length=8)
+    passkey: dict[str, Any] | None = _PASSKEY
+
+
+class PasskeyOptionsRequest(_In):
+    password: str = Password
+
+
+class PasskeyRegisterRequest(_In):
+    name: str = Field(min_length=1, max_length=64, description="e.g. 'MacBook Touch ID'")
+    credential: dict[str, Any] = Field(description="The browser's WebAuthn registration response")
+
+
+class PasskeyResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    backed_up: bool = Field(description="Synced passkey (e.g. iCloud Keychain, Google)")
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class PasskeyRegisteredResponse(BaseModel):
+    passkey: PasskeyResponse
+    recovery_codes: list[str] | None = Field(
+        default=None, description="Only when this passkey turned 2FA on"
+    )
+
+
+class MfaResetRequestBody(_In):
+    challenge_token: str = Field(min_length=20, max_length=128)
+    reason: str = Field(
+        min_length=10,
+        max_length=1000,
+        description="What happened, so support can verify it's you",
+    )
 
 
 class MfaEmailConfirmRequest(_In):
@@ -218,6 +260,7 @@ class MfaSecondFactorRequest(_In):
     code: str | None = Field(default=None, min_length=6, max_length=10)
     recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
     email_code: str | None = _EMAIL_CODE
+    passkey: dict[str, Any] | None = _PASSKEY
 
 
 class MfaDisableRequest(_In):
@@ -225,6 +268,7 @@ class MfaDisableRequest(_In):
     code: str | None = Field(default=None, min_length=6, max_length=10)
     recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
     email_code: str | None = _EMAIL_CODE
+    passkey: dict[str, Any] | None = _PASSKEY
 
 
 class RecoveryCodesResponse(BaseModel):
@@ -237,7 +281,7 @@ class MfaChallengeResponse(BaseModel):
     mfa_required: Literal[True] = True
     challenge_token: str = Field(description="Single use; send it with the code")
     expires_in: int = Field(description="Seconds until the password step must be repeated")
-    methods: list[Literal["authenticator", "email", "recovery_code"]] = Field(
+    methods: list[Literal["passkey", "authenticator", "email", "recovery_code"]] = Field(
         default_factory=list, description="Second factors this account can use"
     )
 
@@ -247,6 +291,7 @@ class MfaLoginRequest(_In):
     code: str | None = Field(default=None, min_length=6, max_length=10)
     recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
     email_code: str | None = _EMAIL_CODE
+    passkey: dict[str, Any] | None = _PASSKEY
 
 
 class MfaChallengeTokenRequest(_In):

@@ -2,10 +2,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
-import { Alert, Button, Field, Spinner, TextInput } from '../../components/ui'
+import { Alert, Button, Field, Spinner, TextArea, TextInput } from '../../components/ui'
 import { apiClient } from '../../lib/api/client'
 import { ApiError, errorMessage } from '../../lib/api/errors'
 import type { Schemas } from '../../lib/api/types'
+import { getPasskey, passkeyErrorMessage, type Json } from '../../lib/webauthn'
 import { workspacesKey } from '../../lib/workspace/WorkspaceContext'
 import { Logo } from '../landing/components/Logo'
 import { useAuth } from './AuthProvider'
@@ -78,7 +79,8 @@ export function LoginPage() {
   const [challenge, setChallenge] = useState<string | null>(null)
   const [code, setCode] = useState('')
   // Authenticator app, a saved recovery code, or a one-time code by email (ADR 0027).
-  const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>('totp')
+  const [method, setMethod] = useState<'passkey' | 'totp' | 'recovery' | 'email' | 'reset'>('totp')
+  const [reason, setReason] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [methods, setMethods] = useState<string[]>([])
 
@@ -96,8 +98,9 @@ export function LoginPage() {
         setMethods(result.methods)
         setPassword('')
         setCode('')
+        if (result.methods.includes('passkey')) setMethod('passkey')
         // Email-only 2FA (ADR 0028): send the code straight away.
-        if (!result.methods.includes('authenticator')) await emailCode(result.challenge)
+        else if (!result.methods.includes('authenticator')) await emailCode(result.challenge)
       } else finish()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'email_not_verified') setUnverified(true)
@@ -132,6 +135,46 @@ export function LoginPage() {
     }
   }
 
+  const signInWithPasskey = async () => {
+    if (!challenge) return
+    setError(null)
+    setBusy(true)
+    try {
+      const { data: options } = await apiClient.post<Json>(
+        '/auth/login/mfa/passkey-options',
+        { challenge_token: challenge },
+        { skipAuth: true },
+      )
+      await completeSignIn(challenge, { passkey: await getPasskey(options) })
+      finish()
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'mfa_challenge_expired') setChallenge(null)
+      setError(passkeyErrorMessage(err) ?? errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const requestReset = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!challenge) return
+    setError(null)
+    setBusy(true)
+    try {
+      const { data } = await apiClient.post<{ detail: string }>(
+        '/auth/login/mfa/reset-request',
+        { challenge_token: challenge, reason: reason.trim() },
+        { skipAuth: true },
+      )
+      setNotice(data.detail)
+      setReason('')
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function emailCode(current: string | null = challenge) {
     if (!current) return
     setError(null)
@@ -155,67 +198,103 @@ export function LoginPage() {
   }
 
   if (challenge) {
-    const switchTo = (next: 'totp' | 'recovery') => {
+    const switchTo = (next: 'passkey' | 'totp' | 'recovery' | 'reset') => {
       setMethod(next)
       setCode('')
       setError(null)
       setNotice(null)
     }
-    return (
-      <AuthLayout
-        title="Two-factor authentication"
-        subtitle={
-          method === 'recovery'
-            ? 'Enter one of the recovery codes you saved when you set up two-factor authentication.'
-            : method === 'email'
-              ? 'Enter the 6-digit code we emailed you.'
+    const others = (
+      <div className="stack stack--sm">
+        <p className="muted">Other ways to confirm it's you</p>
+        {method !== 'passkey' && methods.includes('passkey') && (
+          <button type="button" className="link-button" onClick={() => switchTo('passkey')}>
+            Use a passkey
+          </button>
+        )}
+        {method !== 'totp' && methods.includes('authenticator') && (
+          <button type="button" className="link-button" onClick={() => switchTo('totp')}>
+            Use your authenticator app
+          </button>
+        )}
+        <button type="button" className="link-button" onClick={() => void emailCode()} disabled={busy}>
+          {method === 'email' ? 'Send a new email code' : 'Email me a code instead'}
+        </button>
+        {method !== 'recovery' && (
+          <button type="button" className="link-button" onClick={() => switchTo('recovery')}>
+            Use a recovery code instead
+          </button>
+        )}
+        {method !== 'reset' && (
+          <button type="button" className="link-button" onClick={() => switchTo('reset')}>
+            Lost access to all of these? Ask support to reset 2FA
+          </button>
+        )}
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => {
+            setChallenge(null)
+            setError(null)
+            setNotice(null)
+          }}
+        >
+          Back
+        </button>
+      </div>
+    )
+    const subtitle =
+      method === 'passkey'
+        ? 'Use the passkey on this device, your phone or a security key.'
+        : method === 'recovery'
+          ? 'Enter one of the recovery codes you saved when you set up two-factor authentication.'
+          : method === 'email'
+            ? 'Enter the 6-digit code we emailed you.'
+            : method === 'reset'
+              ? 'If you lost your authenticator, passkeys, recovery codes and access to your email, support can reset two-factor authentication after verifying your identity.'
               : 'Enter the 6-digit code from your authenticator app.'
-        }
-      >
+    return (
+      <AuthLayout title="Two-factor authentication" subtitle={subtitle}>
         {error && <Alert>{error}</Alert>}
         {notice && <Alert tone="success">{notice}</Alert>}
-        <form className="form" onSubmit={submitCode} noValidate>
-          <Field label={method === 'recovery' ? 'Recovery code' : method === 'email' ? 'Email code' : 'Authentication code'}>
-            <TextInput
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              autoComplete="one-time-code"
-              inputMode={method === 'recovery' ? 'text' : 'numeric'}
-              autoFocus
-              required
-            />
-          </Field>
-          <Button type="submit" variant="primary" loading={busy} disabled={!code.trim()}>
-            Verify and sign in
-          </Button>
-          <div className="stack stack--sm">
-            {methods.includes('authenticator') && <p className="muted">Lost your phone or can't use the app?</p>}
-            {method !== 'totp' && methods.includes('authenticator') && (
-              <button type="button" className="link-button" onClick={() => switchTo('totp')}>
-                Use your authenticator app
-              </button>
-            )}
-            <button type="button" className="link-button" onClick={() => void emailCode()} disabled={busy}>
-              {method === 'email' ? 'Send a new email code' : 'Email me a code instead'}
-            </button>
-            {method !== 'recovery' && (
-              <button type="button" className="link-button" onClick={() => switchTo('recovery')}>
-                Use a recovery code instead
-              </button>
-            )}
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setChallenge(null)
-                setError(null)
-                setNotice(null)
-              }}
-            >
-              Back
-            </button>
+        {method === 'passkey' ? (
+          <div className="form">
+            <Button variant="primary" icon="key" loading={busy} onClick={() => void signInWithPasskey()}>
+              Sign in with a passkey
+            </Button>
+            {others}
           </div>
-        </form>
+        ) : method === 'reset' ? (
+          <form className="form" onSubmit={requestReset} noValidate>
+            <Field
+              label="What happened?"
+              hint="Support will contact you to verify your identity. Nothing changes until they approve, and then only after a waiting period; we email your account address at each step."
+            >
+              <TextArea value={reason} onChange={(e) => setReason(e.target.value)} rows={4} maxLength={1000} required />
+            </Field>
+            <Button type="submit" variant="primary" loading={busy} disabled={reason.trim().length < 10}>
+              Send reset request
+            </Button>
+            {others}
+          </form>
+        ) : (
+          <form className="form" onSubmit={submitCode} noValidate>
+            <Field label={method === 'recovery' ? 'Recovery code' : method === 'email' ? 'Email code' : 'Authentication code'}>
+              <TextInput
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                autoComplete="one-time-code"
+                inputMode={method === 'recovery' ? 'text' : 'numeric'}
+                autoFocus
+                required
+              />
+            </Field>
+            <Button type="submit" variant="primary" loading={busy} disabled={!code.trim()}>
+              Verify and sign in
+            </Button>
+            {others}
+          </form>
+        )}
       </AuthLayout>
     )
   }

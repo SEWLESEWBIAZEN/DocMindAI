@@ -21,13 +21,14 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.identity import emails
 from documind.application.identity.common import AuditRecorder, Principal, RequestMeta, utcnow
+from documind.application.identity.mfa_reset import MfaResetService
 from documind.application.ports import AccessTokenService, EmailSender, PasswordHasher, RateLimiter
 from documind.core.config import Settings
 from documind.domain.errors import (
@@ -102,11 +103,14 @@ class SecondFactor(Protocol):
         code: str | None,
         recovery_code: str | None,
         email_code: str | None = None,
+        passkey: dict[str, Any] | None = None,
     ) -> VerifiedFactor:
-        """Check a TOTP, recovery or email code; returns when and how."""
+        """Check a passkey, TOTP, recovery or email code; returns when and how."""
         ...
 
     async def send_email_code(self, user: User) -> None: ...
+
+    async def passkey_options(self, user: User) -> dict[str, Any]: ...
 
 
 class AuthService:
@@ -337,6 +341,11 @@ class AuthService:
 
         if self._hasher.needs_rehash(user.password_hash):
             user.password_hash = await self._hasher.hash(password)
+        if user.mfa_enabled and await MfaResetService(
+            self._session, self._email, self._meta, delay_hours=s.mfa_reset_delay_hours
+        ).apply_if_due(user):
+            # An approved support reset (ADR 0030) just turned 2FA off: sign in normally.
+            logger.info("2FA reset applied at sign-in", extra={"user_id": str(user.id)})
         if user.mfa_enabled:
             # Second step required: no session yet, only a short-lived challenge.
             await self._account_tokens.invalidate_unused(user.id, MFA_LOGIN, utcnow())
@@ -349,9 +358,8 @@ class AuthService:
                 target_id=user.id,
             )
             await self._session.commit()
-            methods = ("authenticator",) if user.totp_enabled_at else ()
             return MfaChallenge(
-                challenge_token=raw, expires_in=ttl, methods=(*methods, "email", "recovery_code")
+                challenge_token=raw, expires_in=ttl, methods=tuple(user.mfa_methods)
             )
         user.last_login_at = utcnow()
         refresh, raw = self._start_session(user)
@@ -389,6 +397,24 @@ class AuthService:
         await self._session.commit()
         await second_factor.send_email_code(user)
 
+    async def login_passkey_options(
+        self, challenge_token: str, second_factor: SecondFactor
+    ) -> dict[str, Any]:
+        """During sign-in: WebAuthn options for the user's passkeys (ADR 0029)."""
+        user = await self._challenge_user(hash_token(challenge_token))
+        await self._session.commit()
+        return await second_factor.passkey_options(user)
+
+    async def request_mfa_reset(self, challenge_token: str, reason: str) -> None:
+        """Lost every factor: ask support for a reset (the challenge proves the password)."""
+        s = self._settings
+        await self._limit_auth("mfa_reset")
+        user = await self._challenge_user(hash_token(challenge_token))
+        await self._session.commit()
+        await MfaResetService(
+            self._session, self._email, self._meta, delay_hours=s.mfa_reset_delay_hours
+        ).request(user, reason)
+
     async def complete_mfa_login(
         self,
         challenge_token: str,
@@ -396,6 +422,7 @@ class AuthService:
         recovery_code: str | None,
         second_factor: SecondFactor,
         email_code: str | None = None,
+        passkey: dict[str, Any] | None = None,
     ) -> AuthResult:
         """Second sign-in step: exchange the challenge and a valid code for a session."""
         s = self._settings
@@ -413,7 +440,7 @@ class AuthService:
         user = await self._challenge_user(digest)
         await self._session.commit()  # release the row lock while the code is checked
         # Rate-limited per user, audited, and replay-safe (TOTP steps, single-use recovery codes).
-        verified = await second_factor.verify(user, code, recovery_code, email_code)
+        verified = await second_factor.verify(user, code, recovery_code, email_code, passkey)
 
         record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
         now = utcnow()

@@ -96,6 +96,10 @@ Required variables have no default; the backend refuses to start without them.
 | `MFA_EMAIL_CODE_MINUTES`          |          | `10`       | Lifetime of a one-time code sent by email, the fallback second factor (ADR 0027). |
 | `RATE_LIMIT_MFA_EMAIL_PER_USER`   |          | `3`        | Email codes a user can request per window. |
 | `RATE_LIMIT_MFA_EMAIL_WINDOW_SECONDS` |      | `900`      | Window for the above. |
+| `WEBAUTHN_RP_ID`                  |          | host of `PUBLIC_APP_URL` | Passkey relying-party ID (ADR 0029). Changing it invalidates every registered passkey. |
+| `WEBAUTHN_RP_NAME`                |          | `DocuMind` | Name shown by the browser's passkey prompt. |
+| `WEBAUTHN_ORIGINS`                |          | origin of `PUBLIC_APP_URL` | Origins allowed to use passkeys (JSON list). Responses from any other origin are refused. |
+| `MFA_RESET_DELAY_HOURS`           |          | `72`       | Waiting period between a support-approved 2FA reset and the reset itself (ADR 0030). |
 
 ## Document processing
 

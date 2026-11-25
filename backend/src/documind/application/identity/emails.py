@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from html import escape
 from urllib.parse import urlencode
 
@@ -197,6 +198,88 @@ def mfa_email_code_used_email(to: str, name: str) -> EmailMessage:
             "instead of your authenticator app. If this was not you, change your password and "
             "your email password now.</p>",
         ),
+    )
+
+
+def _notice(to: str, subject: str, name: str, body: str) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject=subject,
+        text=f"Hi {name},\n\n{body}",
+        html=_html(subject, f"<p>Hi {escape(name)},</p><p>{escape(body)}</p>"),
+    )
+
+
+def passkey_added_email(to: str, name: str, passkey: str) -> EmailMessage:
+    return _notice(
+        to,
+        "A passkey was added to your account",
+        name,
+        f"The passkey \"{passkey}\" can now be used to confirm it's you. If this wasn't you, "
+        "sign in, remove it under Profile > Security, and change your password.",
+    )
+
+
+def passkey_removed_email(to: str, name: str, passkey: str) -> EmailMessage:
+    return _notice(
+        to,
+        "A passkey was removed from your account",
+        name,
+        f'The passkey "{passkey}" was removed. If this wasn\'t you, change your password now.',
+    )
+
+
+def mfa_reset_requested_email(to: str, name: str) -> EmailMessage:
+    return _notice(
+        to,
+        "Someone asked to reset two-factor authentication on your account",
+        name,
+        "A request to turn off two-factor authentication on your account was sent to DocuMind "
+        "support, from someone who knew your password. Support verifies every request before "
+        "approving it. If this wasn't you, sign in with your authenticator, passkey or a recovery "
+        "code: that cancels the request. Then change your password.",
+    )
+
+
+def mfa_reset_approved_email(to: str, name: str, effective_at: datetime) -> EmailMessage:
+    when = effective_at.strftime("%Y-%m-%d %H:%M UTC")
+    return _notice(
+        to,
+        "Two-factor reset approved",
+        name,
+        f"Support approved the request to reset two-factor authentication. From {when}, your "
+        "next sign-in with your password turns it off, and you can set it up again. If you "
+        "didn't ask for this, sign in with your second factor before then to cancel it.",
+    )
+
+
+def mfa_reset_denied_email(to: str, name: str) -> EmailMessage:
+    return _notice(
+        to,
+        "Two-factor reset not approved",
+        name,
+        "Support couldn't verify the request to reset two-factor authentication, so nothing "
+        "changed. Reply to support if you need help.",
+    )
+
+
+def mfa_reset_cancelled_email(to: str, name: str) -> EmailMessage:
+    return _notice(
+        to,
+        "Two-factor reset cancelled",
+        name,
+        "The open request to reset two-factor authentication was cancelled, because someone "
+        "just signed in with your second factor. If that wasn't you, change your password.",
+    )
+
+
+def mfa_reset_completed_email(to: str, name: str) -> EmailMessage:
+    return _notice(
+        to,
+        "Two-factor authentication was reset",
+        name,
+        "Two-factor authentication was turned off after the approved reset. Set it up again "
+        "under Profile > Security. Workspaces that require it give you a short grace period.",
     )
 
 

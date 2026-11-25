@@ -255,6 +255,23 @@ class Settings(BaseSettings):
     mfa_email_code_minutes: int = Field(default=10, ge=2, le=30)
     rate_limit_mfa_email_per_user: int = Field(default=3, ge=1)
     rate_limit_mfa_email_window_seconds: int = Field(default=900, ge=1)
+    # Passkeys (WebAuthn, ADR 0029). Defaults come from PUBLIC_APP_URL.
+    webauthn_rp_id: str | None = None
+    webauthn_rp_name: str = "DocuMind"
+    webauthn_origins: list[str] = Field(default_factory=list)
+    # Support-assisted 2FA reset (ADR 0030): delay between approval and the reset.
+    mfa_reset_delay_hours: int = Field(default=72, ge=0, le=720)
+
+    @property
+    def webauthn_rp(self) -> tuple[str, list[str]]:
+        """(relying party id, accepted origins) for passkeys."""
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(self.public_app_url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        return self.webauthn_rp_id or (parts.hostname or "localhost"), (
+            self.webauthn_origins or [origin]
+        )
 
     # --- Rate limits (requests per window, per client IP unless noted) ------
     rate_limit_enabled: bool = True

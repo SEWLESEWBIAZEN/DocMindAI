@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Response, status
 
@@ -29,6 +30,10 @@ from documind.api.schemas.identity import (
     MfaSetupRequest,
     MfaSetupResponse,
     MfaStatusResponse,
+    PasskeyOptionsRequest,
+    PasskeyRegisteredResponse,
+    PasskeyRegisterRequest,
+    PasskeyResponse,
     ProfileUpdateRequest,
     RecoveryCodesResponse,
     TokenResponse,
@@ -156,7 +161,9 @@ async def mfa_confirm(
 
 @router.post("/mfa/disable", status_code=status.HTTP_204_NO_CONTENT, tags=["mfa"])
 async def mfa_disable(body: MfaDisableRequest, user: CurrentUser, mfa: MfaServiceDep) -> Response:
-    await mfa.disable(user, body.password, body.code, body.recovery_code, body.email_code)
+    await mfa.disable(
+        user, body.password, body.code, body.recovery_code, body.email_code, body.passkey
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -197,6 +204,63 @@ async def mfa_email_confirm(
 async def mfa_regenerate_codes(
     body: MfaRegenerateRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
 ) -> RecoveryCodesResponse:
-    codes = await mfa.regenerate_recovery_codes(user, body.code, body.email_code)
+    codes = await mfa.regenerate_recovery_codes(user, body.code, body.email_code, body.passkey)
     response.headers["Cache-Control"] = "no-store"
     return RecoveryCodesResponse(recovery_codes=codes)
+
+
+# --- Passkeys (ADR 0029) --------------------------------------------------------
+
+
+def _passkey(row: Any) -> PasskeyResponse:
+    return PasskeyResponse(
+        id=row.id,
+        name=row.name,
+        backed_up=row.backed_up,
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
+    )
+
+
+@router.get("/mfa/passkeys", response_model=list[PasskeyResponse], tags=["mfa"])
+async def list_passkeys(user: CurrentUser, mfa: MfaServiceDep) -> list[PasskeyResponse]:
+    return [_passkey(p) for p in await mfa.list_passkeys(user)]
+
+
+@router.post(
+    "/mfa/passkeys/options",
+    tags=["mfa"],
+    summary="Start adding a passkey (requires your password); pass the result to the browser",
+)
+async def passkey_registration_options(
+    body: PasskeyOptionsRequest, user: CurrentUser, mfa: MfaServiceDep
+) -> dict[str, Any]:
+    return await mfa.passkey_registration_options(user, body.password)
+
+
+@router.post(
+    "/mfa/passkeys",
+    status_code=status.HTTP_201_CREATED,
+    response_model=PasskeyRegisteredResponse,
+    tags=["mfa"],
+    summary="Save the passkey the browser created (turns 2FA on if it was off)",
+)
+async def register_passkey(
+    body: PasskeyRegisterRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
+) -> PasskeyRegisteredResponse:
+    row, codes = await mfa.register_passkey(user, body.credential, body.name)
+    response.headers["Cache-Control"] = "no-store"
+    return PasskeyRegisteredResponse(passkey=_passkey(row), recovery_codes=codes)
+
+
+@router.post(
+    "/mfa/passkeys/{passkey_id}/remove",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["mfa"],
+    summary="Remove a passkey (requires your password)",
+)
+async def remove_passkey(
+    passkey_id: uuid.UUID, body: PasskeyOptionsRequest, user: CurrentUser, mfa: MfaServiceDep
+) -> Response:
+    await mfa.remove_passkey(user, passkey_id, body.password)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

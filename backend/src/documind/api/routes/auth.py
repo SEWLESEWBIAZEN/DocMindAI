@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -23,6 +23,7 @@ from documind.api.schemas.identity import (
     MfaChallengeResponse,
     MfaChallengeTokenRequest,
     MfaLoginRequest,
+    MfaResetRequestBody,
     MfaSecondFactorRequest,
     RegisterRequest,
     ResetPasswordRequest,
@@ -103,7 +104,12 @@ async def login_mfa(
     settings: SettingsDep,
 ) -> TokenResponse:
     result = await auth.complete_mfa_login(
-        body.challenge_token, body.code, body.recovery_code, mfa, email_code=body.email_code
+        body.challenge_token,
+        body.code,
+        body.recovery_code,
+        mfa,
+        email_code=body.email_code,
+        passkey=body.passkey,
     )
     return token_response(response, settings, result)
 
@@ -123,6 +129,39 @@ async def login_mfa_email_code(
 ) -> MessageResponse:
     await auth.send_login_email_code(body.challenge_token, mfa)
     return MessageResponse(detail=_EMAIL_SENT)
+
+
+@router.post(
+    "/login/mfa/passkey-options",
+    tags=["mfa"],
+    summary="During sign-in: WebAuthn options to confirm with a passkey",
+)
+async def login_mfa_passkey_options(
+    body: MfaChallengeTokenRequest, auth: AuthServiceDep, mfa: MfaServiceDep
+) -> dict[str, Any]:
+    return await auth.login_passkey_options(body.challenge_token, mfa)
+
+
+@router.post(
+    "/login/mfa/reset-request",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=MessageResponse,
+    tags=["mfa"],
+    summary="Lost every second factor: ask support to reset 2FA (reviewed, then delayed)",
+)
+async def login_mfa_reset_request(
+    body: MfaResetRequestBody, auth: AuthServiceDep
+) -> MessageResponse:
+    await auth.request_mfa_reset(body.challenge_token, body.reason)
+    return MessageResponse(
+        detail="Request received. Support will verify your identity before anything changes. "
+        "We emailed your account address."
+    )
+
+
+@router.post("/mfa/passkey-options", tags=["mfa"], summary="WebAuthn options for step-up")
+async def mfa_passkey_options(user: CurrentUser, mfa: MfaServiceDep) -> dict[str, Any]:
+    return await mfa.passkey_options(user)
 
 
 @router.post(
@@ -218,7 +257,7 @@ async def mfa_verify(
     mfa: MfaServiceDep,
     container: ContainerDep,
 ) -> StepUpResponse:
-    verified = await mfa.verify(user, body.code, body.recovery_code, body.email_code)
+    verified = await mfa.verify(user, body.code, body.recovery_code, body.email_code, body.passkey)
     issued = container.access_tokens.issue(
         user.id, user.auth_version, mfa_verified_at=verified.at, mfa_method=verified.method
     )

@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/mfa/passkey-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** During sign-in: WebAuthn options to confirm with a passkey */
+        post: operations["login_mfa_passkey_options_api_v1_auth_login_mfa_passkey_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/reset-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lost every second factor: ask support to reset 2FA (reviewed, then delayed) */
+        post: operations["login_mfa_reset_request_api_v1_auth_login_mfa_reset_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -100,6 +134,23 @@ export interface paths {
         put?: never;
         /** Email a one-time code for step-up or for turning 2FA off (lost authenticator) */
         post: operations["mfa_email_code_api_v1_auth_mfa_email_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/passkey-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WebAuthn options for step-up */
+        post: operations["mfa_passkey_options_api_v1_auth_mfa_passkey_options_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -427,6 +478,58 @@ export interface paths {
         put?: never;
         /** Start email-only 2FA, without an authenticator app (requires your password) */
         post: operations["mfa_email_setup_api_v1_me_mfa_email_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Passkeys */
+        get: operations["list_passkeys_api_v1_me_mfa_passkeys_get"];
+        put?: never;
+        /** Save the passkey the browser created (turns 2FA on if it was off) */
+        post: operations["register_passkey_api_v1_me_mfa_passkeys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/passkeys/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start adding a passkey (requires your password); pass the result to the browser */
+        post: operations["passkey_registration_options_api_v1_me_mfa_passkeys_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/passkeys/{passkey_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove a passkey (requires your password) */
+        post: operations["remove_passkey_api_v1_me_mfa_passkeys__passkey_id__remove_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2267,7 +2370,7 @@ export interface components {
              */
             mfa_enabled?: boolean | null;
             /** Mfa Method */
-            mfa_method?: ("authenticator" | "email") | null;
+            mfa_method?: ("passkey" | "authenticator" | "email") | null;
             role: components["schemas"]["RoleKey"];
             /**
              * User Id
@@ -2391,7 +2494,7 @@ export interface components {
              * Methods
              * @description Second factors this account can use
              */
-            methods?: ("authenticator" | "email" | "recovery_code")[];
+            methods?: ("passkey" | "authenticator" | "email" | "recovery_code")[];
             /**
              * Mfa Required
              * @default true
@@ -2421,6 +2524,13 @@ export interface components {
              * @description 6-digit code sent by email
              */
             email_code?: string | null;
+            /**
+             * Passkey
+             * @description The browser's WebAuthn response (PublicKeyCredential JSON)
+             */
+            passkey?: {
+                [key: string]: unknown;
+            } | null;
             /** Password */
             password: string;
             /** Recovery Code */
@@ -2442,6 +2552,13 @@ export interface components {
              * @description 6-digit code sent by email
              */
             email_code?: string | null;
+            /**
+             * Passkey
+             * @description The browser's WebAuthn response (PublicKeyCredential JSON)
+             */
+            passkey?: {
+                [key: string]: unknown;
+            } | null;
             /** Recovery Code */
             recovery_code?: string | null;
         };
@@ -2454,6 +2571,13 @@ export interface components {
             code?: string | null;
             /** Email Code */
             email_code?: string | null;
+            /**
+             * Passkey
+             * @description The browser's WebAuthn response (PublicKeyCredential JSON)
+             */
+            passkey?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** MfaRequirementRequest */
         MfaRequirementRequest: {
@@ -2468,6 +2592,16 @@ export interface components {
              */
             required?: boolean | null;
         };
+        /** MfaResetRequestBody */
+        MfaResetRequestBody: {
+            /** Challenge Token */
+            challenge_token: string;
+            /**
+             * Reason
+             * @description What happened, so support can verify it's you
+             */
+            reason: string;
+        };
         /** MfaSecondFactorRequest */
         MfaSecondFactorRequest: {
             /** Code */
@@ -2477,6 +2611,13 @@ export interface components {
              * @description 6-digit code sent by email
              */
             email_code?: string | null;
+            /**
+             * Passkey
+             * @description The browser's WebAuthn response (PublicKeyCredential JSON)
+             */
+            passkey?: {
+                [key: string]: unknown;
+            } | null;
             /** Recovery Code */
             recovery_code?: string | null;
         };
@@ -2510,7 +2651,7 @@ export interface components {
             /** Enabled At */
             enabled_at: string | null;
             /** Method */
-            method?: ("authenticator" | "email") | null;
+            method?: ("passkey" | "authenticator" | "email") | null;
             /** Recovery Codes Remaining */
             recovery_codes_remaining: number;
         };
@@ -2553,6 +2694,57 @@ export interface components {
             position: number;
             /** Text */
             text: string;
+        };
+        /** PasskeyOptionsRequest */
+        PasskeyOptionsRequest: {
+            /** Password */
+            password: string;
+        };
+        /** PasskeyRegisterRequest */
+        PasskeyRegisterRequest: {
+            /**
+             * Credential
+             * @description The browser's WebAuthn registration response
+             */
+            credential: {
+                [key: string]: unknown;
+            };
+            /**
+             * Name
+             * @description e.g. 'MacBook Touch ID'
+             */
+            name: string;
+        };
+        /** PasskeyRegisteredResponse */
+        PasskeyRegisteredResponse: {
+            passkey: components["schemas"]["PasskeyResponse"];
+            /**
+             * Recovery Codes
+             * @description Only when this passkey turned 2FA on
+             */
+            recovery_codes?: string[] | null;
+        };
+        /** PasskeyResponse */
+        PasskeyResponse: {
+            /**
+             * Backed Up
+             * @description Synced passkey (e.g. iCloud Keychain, Google)
+             */
+            backed_up: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
         };
         /** PlanSummaryResponse */
         PlanSummaryResponse: {
@@ -3130,7 +3322,12 @@ export interface components {
              * Mfa Method
              * @description Primary second factor; email codes also work as a fallback
              */
-            mfa_method?: ("authenticator" | "email") | null;
+            mfa_method?: ("passkey" | "authenticator" | "email") | null;
+            /**
+             * Mfa Methods
+             * @description Every second factor this account can use
+             */
+            mfa_methods?: ("passkey" | "authenticator" | "email" | "recovery_code")[];
         };
         /** ValidationError */
         ValidationError: {
@@ -3483,6 +3680,74 @@ export interface operations {
             };
         };
     };
+    login_mfa_passkey_options_api_v1_auth_login_mfa_passkey_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaChallengeTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_mfa_reset_request_api_v1_auth_login_mfa_reset_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaResetRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout_api_v1_auth_logout_post: {
         parameters: {
             query?: never;
@@ -3546,6 +3811,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+        };
+    };
+    mfa_passkey_options_api_v1_auth_mfa_passkey_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -4128,6 +4415,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_passkeys_api_v1_me_mfa_passkeys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyResponse"][];
+                };
+            };
+        };
+    };
+    register_passkey_api_v1_me_mfa_passkeys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyRegisteredResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    passkey_registration_options_api_v1_me_mfa_passkeys_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyOptionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_passkey_api_v1_me_mfa_passkeys__passkey_id__remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyOptionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

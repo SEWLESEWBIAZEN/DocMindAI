@@ -154,6 +154,32 @@ Alert: `DocuMindBackupStale`. See [`backup-and-restore.md`](backup-and-restore.m
    This takes the backup, copies it offsite and updates `documind_backup_last_success_timestamp`,
    exactly like the nightly run.
 
+## Two-factor reset requests
+
+Users who lost every second factor (app, passkeys, recovery codes **and** email) can ask for a reset
+from the sign-in screen. Requests are a favourite of attackers who know a password, so:
+
+1. List open requests with `dm mfa-reset list --status pending`. Note the email, the reason, the IP
+   address and the time.
+2. **Verify identity outside DocuMind.** Never accept anything sent to the account's own email or a
+   number or address given in the request itself. Acceptable checks:
+   - a video call comparing a government ID with the account's name;
+   - for organization members, confirmation from a known admin of their organization, reached
+     through contact details you already had;
+   - for paying customers, confirmation from the billing contact on file.
+3. Approve or deny, recording who verified and how:
+
+   ```bash
+   dm mfa-reset approve <id> --operator <you> --note "video call, passport checked"
+   dm mfa-reset deny <id> --operator <you> --note "could not verify"
+   ```
+4. An approval takes effect only after `MFA_RESET_DELAY_HOURS` (72 h). If the real owner signs in
+   with any second factor before then, the request is cancelled automatically. Tell the person how
+   long they need to wait.
+
+Several requests for one account, or many requests from one address, are signs of an attack. Deny
+them and follow [Security incident](#security-incident).
+
 ## Security incident
 
 1. **Contain.**
