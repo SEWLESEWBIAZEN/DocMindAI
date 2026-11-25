@@ -207,6 +207,39 @@ class IndexRepository:
         )
         return list(rows.scalars()), int(total)
 
+    async def stale_document_ids(
+        self, workspace_id: uuid.UUID, model: str, document_ids: list[uuid.UUID]
+    ) -> set[uuid.UUID]:
+        """Which of these ready documents have chunks from another embedding model."""
+        if not document_ids:
+            return set()
+        stmt = (
+            select(DocumentChunk.document_id)
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(
+                DocumentChunk.workspace_id == workspace_id,
+                DocumentChunk.document_id.in_(document_ids),
+                DocumentChunk.embedding_model != model,
+                Document.status == "ready",
+            )
+            .distinct()
+        )
+        return set((await self._s.execute(stmt)).scalars())
+
+    async def count_stale_documents(self, workspace_id: uuid.UUID, model: str) -> int:
+        """Ready, non-archived documents that need re-indexing to be fully searchable."""
+        stmt = (
+            select(func.count(func.distinct(DocumentChunk.document_id)))
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(
+                DocumentChunk.workspace_id == workspace_id,
+                DocumentChunk.embedding_model != model,
+                Document.status == "ready",
+                Document.archived_at.is_(None),
+            )
+        )
+        return int((await self._s.execute(stmt)).scalar_one())
+
     async def documents_needing_reindex(
         self, model: str, *, workspace_id: uuid.UUID | None, include_all: bool
     ) -> list[Document]:

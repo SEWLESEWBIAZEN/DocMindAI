@@ -57,6 +57,7 @@ import { ReadingControls, type ReadingPosition } from '../voice/ReadingMode'
 import { useCollections } from './hooks'
 import { StepUpDialog } from './StepUpDialog'
 import { useUploads } from './UploadManager'
+import { startReindex } from '../saas/api'
 
 const POLL_MS = 3000
 const isBusy = (status: DocumentStatus) => status === 'pending' || status === 'processing'
@@ -65,6 +66,53 @@ function useTitle(title: string) {
   useEffect(() => {
     document.title = `${title} · DocuMind`
   }, [title])
+}
+
+export function ReindexBadge() {
+  return (
+    <Badge tone="warning">
+      <span title="Indexed with a different AI model. Search by meaning can't find it until it is re-indexed.">
+        Needs re-indexing
+      </span>
+    </Badge>
+  )
+}
+
+/** Documents indexed with an older embedding model: say so, and offer to fix it. */
+function ReindexBanner({ count }: { count: number }) {
+  const { workspace, base, can } = useWorkspace()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const reindex = useMutation({
+    mutationFn: () => startReindex(workspace.id),
+    onSuccess: async (r) => {
+      toast.success(r.queued === 1 ? 'Re-indexing 1 document.' : `Re-indexing ${r.queued} documents.`)
+      await queryClient.invalidateQueries({ queryKey: documentKeys.all(workspace.id) })
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+  const subject = count === 1 ? '1 document was' : `${count} documents were`
+  return (
+    <div id="reindex" className="reindex-banner">
+      <Alert tone="warning">
+        <p>
+          <strong>{subject} indexed with a different AI model.</strong> Search and answers can only match{' '}
+          {count === 1 ? 'it' : 'them'} by exact words, not by meaning, until {count === 1 ? "it's" : "they're"}{' '}
+          re-indexed.
+        </p>
+        {can('ai_providers.manage') ? (
+          <div className="row" style={{ marginTop: 8 }}>
+            <Button size="sm" icon="refresh" loading={reindex.isPending} onClick={() => reindex.mutate()}>
+              Re-index all
+            </Button>
+            <Link to={`${base}/ai-providers`}>AI provider settings</Link>
+          </div>
+        ) : (
+          <p className="muted">Ask an owner or admin to re-index them, or use Reprocess on each document.</p>
+        )}
+      </Alert>
+    </div>
+  )
 }
 
 export function StatusBadge({ status }: { status: DocumentStatus }) {
@@ -421,6 +469,7 @@ export function DocumentLibraryPage() {
       ) : (
         query.data && (
           <>
+            {query.data.needs_reindex_total > 0 && <ReindexBanner count={query.data.needs_reindex_total} />}
             <div className="table-wrap">
               <table className="table">
                 <caption className="sr-only">Documents, {query.data.total} in total</caption>
@@ -459,6 +508,7 @@ export function DocumentLibraryPage() {
                       <td>
                         <div className="row">
                           <StatusBadge status={doc.status} />
+                          {doc.needs_reindex && <ReindexBadge />}
                           {doc.archived_at && <Badge tone="warning">Archived</Badge>}
                         </div>
                       </td>
@@ -685,6 +735,7 @@ export function DocumentViewerPage() {
         description={
           <span className="row">
             <StatusBadge status={d.status} />
+            {d.needs_reindex && <ReindexBadge />}
             {d.archived_at && <Badge tone="warning">Archived</Badge>}
             <span>
               {FORMAT_LABEL[d.format]} · {formatBytes(d.size_bytes)}

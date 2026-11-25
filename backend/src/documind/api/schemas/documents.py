@@ -33,6 +33,13 @@ class DocumentResponse(BaseModel):
     archived_by_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    needs_reindex: bool = Field(
+        default=False,
+        description=(
+            "Ready, but indexed with a different embedding model than the workspace uses now, "
+            "so search by meaning can't find it until it is re-indexed (reprocessed)."
+        ),
+    )
 
 
 class DocumentPageResponse(BaseModel):
@@ -40,6 +47,10 @@ class DocumentPageResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    needs_reindex_total: int = Field(
+        default=0,
+        description="Ready, non-archived documents in the workspace that need re-indexing.",
+    )
 
 
 class DocumentVersionResponse(BaseModel):

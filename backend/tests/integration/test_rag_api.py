@@ -329,6 +329,50 @@ def test_superseded_or_other_model_chunks_are_excluded(rag_api: Api) -> None:
     assert search(rag_api, w, ada, "Legal review").json()["results"] == []
 
 
+def test_documents_on_another_model_are_reported_not_silently_skipped(rag_api: Api) -> None:
+    ada = rag_api.signup("ada@example.com")
+    w = ws(rag_api, ada)
+    policy = ingest(rag_api, w, ada, POLICY, "policy.md")
+    parking = ingest(rag_api, w, ada, PARKING, "parking.md")
+    first = search(rag_api, w, ada, "Legal review").json()
+    assert not [x for x in first["warnings"] if x["code"] == "documents_need_reindex"]
+    docs = rag_api.client.get(f"/api/v1/workspaces/{w}/documents", headers=ada).json()
+    assert docs["needs_reindex_total"] == 0
+    assert not any(d["needs_reindex"] for d in docs["items"])
+
+    sql(
+        rag_api,
+        "UPDATE document_chunks SET embedding_model = 'retired-model' WHERE document_id = :doc",
+        doc=uuid.UUID(policy),
+    )
+    body = search(rag_api, w, ada, "Legal review").json()
+    (warning,) = [x for x in body["warnings"] if x["code"] == "documents_need_reindex"]
+    assert warning["count"] == 1
+    assert "'Vendor Policy'" in warning["message"] or "policy" in warning["message"].lower()
+    assert "exact words" in warning["message"]  # hybrid still matches keywords
+    answer = ask(rag_api, w, ada, "Who reviews vendor renewals?").json()
+    assert any(x["code"] == "documents_need_reindex" for x in answer["warnings"])
+    # Scoped to the other document only: nothing to report.
+    scoped = search(rag_api, w, ada, "cafeteria", document_ids=[parking]).json()
+    assert not [x for x in scoped["warnings"] if x["code"] == "documents_need_reindex"]
+
+    docs = rag_api.client.get(f"/api/v1/workspaces/{w}/documents", headers=ada).json()
+    assert docs["needs_reindex_total"] == 1
+    flags = {d["id"]: d["needs_reindex"] for d in docs["items"]}
+    assert flags == {policy: True, parking: False}
+    one = rag_api.client.get(f"/api/v1/workspaces/{w}/documents/{policy}", headers=ada).json()
+    assert one["needs_reindex"] is True
+
+    # Reprocessing re-embeds with the current model and clears the flag.
+    r = rag_api.client.post(f"/api/v1/workspaces/{w}/documents/{policy}/reprocess", headers=ada)
+    assert r.status_code == 202, r.text
+    assert run_job(rag_api, rag_api.dispatcher.dispatched[-1]).status == "succeeded"
+    one = rag_api.client.get(f"/api/v1/workspaces/{w}/documents/{policy}", headers=ada).json()
+    assert one["needs_reindex"] is False
+    body = search(rag_api, w, ada, "Legal review").json()
+    assert not [x for x in body["warnings"] if x["code"] == "documents_need_reindex"]
+
+
 # --- access, validation, limits -----------------------------------------------
 
 

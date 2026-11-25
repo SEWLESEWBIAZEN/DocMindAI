@@ -1675,6 +1675,21 @@ mark.cite-highlight {
   gap: 6px;
 }
 
+.msg__notice--warning {
+  color: var(--color-warn-strong);
+  align-items: flex-start;
+}
+
+.msg__notice--warning > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.reindex-banner {
+  margin-bottom: 16px;
+  scroll-margin-top: 80px;
+}
+
 .markdown {
   line-height: 1.65;
   overflow-wrap: anywhere;

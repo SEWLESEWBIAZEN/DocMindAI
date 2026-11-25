@@ -106,3 +106,25 @@ async def dispatch_all(
         if await dispatcher.dispatch(job_id, workspace_id=workspace_id):
             sent += 1
     return sent
+
+
+class IndexFreshness:
+    """Which documents are indexed with a model other than the workspace's current one.
+
+    ``model`` is ``None`` when the current model isn't known (for example the
+    workspace's AI key is unusable); nothing is flagged then.
+    """
+
+    def __init__(self, session: AsyncSession, model: str | None) -> None:
+        self._repo = IndexRepository(session)
+        self.model = model
+
+    async def stale(self, workspace_id: uuid.UUID, document_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+        if self.model is None:
+            return set()
+        return await self._repo.stale_document_ids(workspace_id, self.model, document_ids)
+
+    async def stale_total(self, workspace_id: uuid.UUID) -> int:
+        if self.model is None:
+            return 0
+        return await self._repo.count_stale_documents(workspace_id, self.model)

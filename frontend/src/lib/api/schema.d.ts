@@ -2065,6 +2065,12 @@ export interface components {
             items: components["schemas"]["DocumentResponse"][];
             /** Limit */
             limit: number;
+            /**
+             * Needs Reindex Total
+             * @description Ready, non-archived documents in the workspace that need re-indexing.
+             * @default 0
+             */
+            needs_reindex_total: number;
             /** Offset */
             offset: number;
             /** Total */
@@ -2097,6 +2103,12 @@ export interface components {
             id: string;
             /** Media Type */
             media_type: string;
+            /**
+             * Needs Reindex
+             * @description Ready, but indexed with a different embedding model than the workspace uses now, so search by meaning can't find it until it is re-indexed (reprocessed).
+             * @default false
+             */
+            needs_reindex: boolean;
             /** Original Filename */
             original_filename: string;
             /** Page Count */
@@ -3417,6 +3429,11 @@ export interface components {
         WarningResponse: {
             /** Code */
             code: string;
+            /**
+             * Count
+             * @description For `documents_need_reindex`: how many documents need re-indexing.
+             */
+            count?: number | null;
             /** Document Id */
             document_id?: string | null;
             /** Message */

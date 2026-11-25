@@ -10,6 +10,7 @@ from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 from documind.api.dependencies import (
     CollectionServiceDep,
     DocumentServiceDep,
+    IndexFreshnessDep,
     ProcessingQueriesDep,
     QuotasDep,
     WorkspaceCtx,
@@ -41,8 +42,19 @@ from documind.infrastructure.database.repositories.documents import DocumentFilt
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["documents"])
 
 
-def _doc(d: DocumentInfo) -> DocumentResponse:
-    return DocumentResponse(**{f: getattr(d, f) for f in DocumentResponse.model_fields})
+_COMPUTED = frozenset({"needs_reindex"})
+
+
+def _doc(d: DocumentInfo, *, needs_reindex: bool = False) -> DocumentResponse:
+    fields = {f: getattr(d, f) for f in DocumentResponse.model_fields if f not in _COMPUTED}
+    return DocumentResponse(**fields, needs_reindex=needs_reindex)
+
+
+async def _checked(
+    d: DocumentInfo, ctx: WorkspaceCtx, freshness: IndexFreshnessDep
+) -> DocumentResponse:
+    stale = await freshness.stale(ctx.workspace_id, [d.id])
+    return _doc(d, needs_reindex=d.id in stale)
 
 
 def _collection(c: CollectionInfo) -> CollectionResponse:
@@ -84,6 +96,7 @@ async def upload_document(
 async def list_documents(
     ctx: WorkspaceCtx,
     documents: DocumentServiceDep,
+    freshness: IndexFreshnessDep,
     q: Annotated[str | None, Query(max_length=200, description="Match title or filename")] = None,
     status_filter: Annotated[DocumentStatus | None, Query(alias="status")] = None,
     format_filter: Annotated[DocumentFormat | None, Query(alias="format")] = None,
@@ -113,16 +126,24 @@ async def list_documents(
             offset=offset,
         ),
     )
+    stale = await freshness.stale(ctx.workspace_id, [d.id for d in page.items])
     return DocumentPageResponse(
-        items=[_doc(d) for d in page.items], total=page.total, limit=page.limit, offset=page.offset
+        items=[_doc(d, needs_reindex=d.id in stale) for d in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+        needs_reindex_total=await freshness.stale_total(ctx.workspace_id),
     )
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
-    document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
+    document_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    documents: DocumentServiceDep,
+    freshness: IndexFreshnessDep,
 ) -> DocumentResponse:
-    return _doc(await documents.get(ctx, document_id))
+    return await _checked(await documents.get(ctx, document_id), ctx, freshness)
 
 
 @router.patch("/documents/{document_id}", response_model=DocumentResponse)
@@ -131,8 +152,9 @@ async def rename_document(
     body: RenameDocumentRequest,
     ctx: WorkspaceCtx,
     documents: DocumentServiceDep,
+    freshness: IndexFreshnessDep,
 ) -> DocumentResponse:
-    return _doc(await documents.rename(ctx, document_id, body.title))
+    return await _checked(await documents.rename(ctx, document_id, body.title), ctx, freshness)
 
 
 @router.post(
@@ -141,16 +163,22 @@ async def rename_document(
     summary="Archive (members: own uploads; admins: any). Read-only and hidden by default.",
 )
 async def archive_document(
-    document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
+    document_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    documents: DocumentServiceDep,
+    freshness: IndexFreshnessDep,
 ) -> DocumentResponse:
-    return _doc(await documents.archive(ctx, document_id))
+    return await _checked(await documents.archive(ctx, document_id), ctx, freshness)
 
 
 @router.post("/documents/{document_id}/restore", response_model=DocumentResponse)
 async def restore_document(
-    document_id: uuid.UUID, ctx: WorkspaceCtx, documents: DocumentServiceDep
+    document_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    documents: DocumentServiceDep,
+    freshness: IndexFreshnessDep,
 ) -> DocumentResponse:
-    return _doc(await documents.restore(ctx, document_id))
+    return await _checked(await documents.restore(ctx, document_id), ctx, freshness)
 
 
 @router.delete(

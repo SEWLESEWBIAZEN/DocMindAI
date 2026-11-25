@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from documind.application.ai.resolver import WorkspaceAI
+from documind.application.ai.resolver import UnavailableEmbeddings, WorkspaceAI
 from documind.application.billing.service import BillingService
 from documind.application.conversations.finalizer import ReplyFinalizer
 from documind.application.conversations.service import ConversationService
@@ -27,6 +27,7 @@ from documind.application.identity.workspace_service import WorkspaceService
 from documind.application.infrastructure.resolver import ResolvedInfrastructure
 from documind.application.ports import EmailMessage, EmailSender, JobDispatcher
 from documind.application.processing.queries import ProcessingQueries
+from documind.application.processing.reindex import IndexFreshness
 from documind.application.rag.condense import QueryCondenser
 from documind.application.rag.orchestrator import GenerationOptions, RAGOrchestrator
 from documind.application.rag.retrieval import RetrievalOptions, RetrievalService
@@ -434,6 +435,23 @@ def get_processing_queries(session: DataSessionDep) -> ProcessingQueries:
 
 
 ProcessingQueriesDep = Annotated[ProcessingQueries, Depends(get_processing_queries)]
+
+
+async def get_index_freshness(
+    ctx: WorkspaceCtx, session: DataSessionDep, container: ContainerDep
+) -> IndexFreshness:
+    """Document views flag stale indexes; a broken AI setup must not break those views."""
+    try:
+        ai = await container.ai_resolver().resolve(ctx.workspace_id)
+    except Exception:
+        logging.getLogger(__name__).warning("could not resolve the embedding model", exc_info=True)
+        return IndexFreshness(session, None)
+    if isinstance(ai.embeddings, UnavailableEmbeddings):
+        return IndexFreshness(session, None)
+    return IndexFreshness(session, ai.embeddings.model)
+
+
+IndexFreshnessDep = Annotated[IndexFreshness, Depends(get_index_freshness)]
 
 
 # --------------------------------------------------------------------------- #

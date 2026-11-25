@@ -168,6 +168,40 @@ class RetrievalRepository:
         hits.sort(key=lambda h: h.score, reverse=True)
         return hits
 
+    async def stale_documents(
+        self, scope: SearchScope, embedding_model: str, *, sample: int = 3
+    ) -> tuple[int, list[str]]:
+        """Searchable documents in scope with chunks from another embedding model.
+
+        Vector search can't see those chunks, so callers tell the user rather than
+        answering as if the documents didn't exist. Returns the count and a few titles.
+        """
+        stale = (
+            select(DocumentChunk.document_id)
+            .join(
+                Document,
+                and_(
+                    Document.id == DocumentChunk.document_id,
+                    Document.workspace_id == DocumentChunk.workspace_id,
+                ),
+            )
+            .where(*_visible(scope), DocumentChunk.embedding_model != embedding_model)
+            .distinct()
+            .subquery()
+        )
+        count = int((await self._s.execute(select(func.count()).select_from(stale))).scalar_one())
+        if not count:
+            return 0, []
+        titles = (
+            await self._s.execute(
+                select(Document.title)
+                .where(Document.id.in_(select(stale.c.document_id)))
+                .order_by(Document.title)
+                .limit(sample)
+            )
+        ).scalars()
+        return count, list(titles)
+
     async def keyword_search(
         self, scope: SearchScope, query: str, *, limit: int
     ) -> list[RetrievedChunk]:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -20,11 +21,21 @@ from documind.application.conversations.views import (
 )
 from documind.application.identity.common import utcnow
 from documind.application.rag.orchestrator import RagAnswer
+from documind.application.rag.retrieval import SearchWarning
 from documind.infrastructure.database.models import Message, MessageCitation
 from documind.infrastructure.database.repositories.conversations import (
     ConversationRepository,
     MessageRepository,
 )
+
+
+def _warning(w: SearchWarning) -> dict[str, Any]:
+    out: dict[str, Any] = {"code": w.code, "message": w.message}
+    if w.document_id:
+        out["document_id"] = str(w.document_id)
+    if w.count is not None:
+        out["count"] = w.count
+    return out
 
 
 class ReplyFinalizer:
@@ -54,12 +65,7 @@ class ReplyFinalizer:
             message.output_tokens = result.usage.output_tokens
             message.embedding_tokens = result.usage.embedding_tokens
             message.latency_ms = result.latency_ms
-            message.warnings = [
-                {"code": w.code, "message": w.message, "document_id": str(w.document_id)}
-                if w.document_id
-                else {"code": w.code, "message": w.message}
-                for w in result.warnings
-            ]
+            message.warnings = [_warning(w) for w in result.warnings]
             message.error_code = None
             message.completed_at = now
             # A chunk can be replaced by re-processing while the answer streams.

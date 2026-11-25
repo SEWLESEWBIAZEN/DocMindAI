@@ -1274,6 +1274,12 @@
             "title": "Limit",
             "type": "integer"
           },
+          "needs_reindex_total": {
+            "default": 0,
+            "description": "Ready, non-archived documents in the workspace that need re-indexing.",
+            "title": "Needs Reindex Total",
+            "type": "integer"
+          },
           "offset": {
             "title": "Offset",
             "type": "integer"
@@ -1369,6 +1375,12 @@
           "media_type": {
             "title": "Media Type",
             "type": "string"
+          },
+          "needs_reindex": {
+            "default": false,
+            "description": "Ready, but indexed with a different embedding model than the workspace uses now, so search by meaning can't find it until it is re-indexed (reprocessed).",
+            "title": "Needs Reindex",
+            "type": "boolean"
           },
           "original_filename": {
             "title": "Original Filename",
@@ -4782,6 +4794,18 @@
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For `documents_need_reindex`: how many documents need re-indexing.",
+            "title": "Count"
           },
           "document_id": {
             "anyOf": [

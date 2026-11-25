@@ -36,7 +36,8 @@ router = APIRouter(
 
 def _warnings(items: tuple[SearchWarning, ...] | list[SearchWarning]) -> list[WarningResponse]:
     return [
-        WarningResponse(code=w.code, message=w.message, document_id=w.document_id) for w in items
+        WarningResponse(code=w.code, message=w.message, document_id=w.document_id, count=w.count)
+        for w in items
     ]
 
 

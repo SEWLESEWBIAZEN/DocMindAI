@@ -43,6 +43,10 @@ class WarningResponse(BaseModel):
     code: str
     message: str
     document_id: uuid.UUID | None = None
+    count: int | None = Field(
+        default=None,
+        description="For `documents_need_reindex`: how many documents need re-indexing.",
+    )
 
 
 class SearchHitResponse(BaseModel):

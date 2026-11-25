@@ -401,6 +401,7 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Provider usage attribution (`billed_to`), excluded from platform quotas | [x] | `test_workspace_key_usage_is_attributed_and_outside_platform_quotas` |
 | Clear errors for invalid/revoked keys | [x] | `provider_key_invalid` (503) with a clear message; key marked invalid, admins emailed, jobs fail permanently, revalidation restores it |
 | Re-indexing when the embedding configuration changes | [x] | `409 reindex_required` → confirm → jobs queued; `GET/POST /reindex`; per-workspace `documind-manage reindex` |
+| Documents on an old embedding model are visible, not silently skipped | [x] | `needs_reindex` badge, "Re-index all" banner, `documents_need_reindex` warning on search and answers (ADR 0031; `test_documents_on_another_model_are_reported_not_silently_skipped`) |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 

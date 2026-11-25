@@ -36,5 +36,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0028](0028-email-two-factor-method.md) | Email as a 2FA method, and organizations that allow or refuse it | Accepted |
 | [0029](0029-passkeys.md) | Passkeys (WebAuthn) as a second factor | Accepted |
 | [0030](0030-support-assisted-2fa-reset.md) | Support-assisted 2FA reset | Accepted |
+| [0031](0031-visible-stale-indexes.md) | Make documents on an old embedding model visible | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

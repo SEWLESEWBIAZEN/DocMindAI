@@ -200,6 +200,9 @@ def test_encrypted_backup_and_full_restore(
         "/api/v1/auth/login/mfa", json={"challenge_token": challenge, "code": copy.totp(secret)}
     ).json()
     headers = {"Authorization": f"Bearer {hc['access_token']}"}
+    # Any request that needs the workspace's AI (the documents list checks the
+    # embedding model, ADR 0031) decrypts the restored key.
+    factory.state["secrets"].clear()
     docs = copy.client.get(f"/api/v1/workspaces/{w}/documents", headers=headers).json()
     assert docs["total"] == 1
     doc = docs["items"][0]["id"]
@@ -208,12 +211,11 @@ def test_encrypted_backup_and_full_restore(
     )
     assert signed.status_code == 200
     assert RESTORE_BUCKET in signed.json()["url"]
-    factory.state["secrets"].clear()
     hits = copy.client.post(
         f"/api/v1/workspaces/{w}/search", json={"query": "renewals Legal"}, headers=headers
     )
     assert hits.json()["results"]
-    assert factory.state["secrets"] == [KEY]  # the vault decrypted the restored key
+    assert set(factory.state["secrets"]) == {KEY}  # the vault decrypted the restored key
 
 
 def make_url_str(url: str, database: str) -> str:

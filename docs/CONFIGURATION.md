@@ -126,7 +126,7 @@ Required variables have no default; the backend refuses to start without them.
 | `EMBEDDING_PROVIDER`         | `openai`                  | `openai`, or `local` (deterministic, offline; development and tests only; rejected in production). |
 | `OPENAI_API_KEY`             | *(none)*                  | Required when the provider is `openai`.                        |
 | `OPENAI_BASE_URL`            | *(OpenAI)*                | Optional compatible endpoint (e.g. Azure OpenAI gateway).      |
-| `EMBEDDING_MODEL`            | `text-embedding-3-small`  | Changing it: run `documind-manage reindex`.                    |
+| `EMBEDDING_MODEL`            | `text-embedding-3-small`  | Changing it: run `documind-manage reindex`, or use "Re-index all" on the Documents page. Until then, older documents show "Needs re-indexing" and answers say they were left out (ADR 0031). |
 | `EMBEDDING_DIMENSIONS`       | `1536`                    | Must match the vector column (migration `0005`).               |
 | `EMBEDDING_BATCH_SIZE`       | `64`                      | Inputs per request (also bounded by a token budget).           |
 | `EMBEDDING_MAX_RETRIES`      | `5`                       | SDK retries for 429/5xx/connection errors (honours `Retry-After`). |

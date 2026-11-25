@@ -39,7 +39,8 @@ def provider(handler: Any, **kwargs: Any) -> tuple[AnthropicChatProvider, list[h
 
     def record(request: httpx2.Request) -> httpx2.Response:
         seen.append(request)
-        return handler(request)
+        response: httpx2.Response = handler(request)
+        return response
 
     client = httpx2.AsyncClient(transport=httpx2.MockTransport(record))
     return (

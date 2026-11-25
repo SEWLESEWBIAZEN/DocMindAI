@@ -40,6 +40,39 @@ class SearchWarning:
     code: str
     message: str
     document_id: uuid.UUID | None = None
+    count: int | None = None
+
+
+REINDEX_WARNING = "documents_need_reindex"
+
+
+def _names(titles: list[str], total: int) -> str:
+    quoted = [f"'{t}'" for t in titles]
+    more = total - len(quoted)
+    if more > 0:
+        return f"{', '.join(quoted)} and {more} more"
+    if len(quoted) == 1:
+        return quoted[0]
+    return f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+
+
+def reindex_warning(count: int, titles: list[str], *, mode: RetrievalMode) -> SearchWarning:
+    """Documents indexed with another embedding model are invisible to vector search."""
+    one = count == 1
+    subject = (
+        f"{count} document was" if one else f"{count} documents were"
+    ) + f" indexed with a different AI model ({_names(titles, count)})"
+    they, them = ("it", "it") if one else ("they", "them")
+    were = "was" if one else "were"
+    if mode == "hybrid":
+        effect = f"so {they} {were} matched only by exact words, not by meaning."
+    else:
+        effect = f"so {they} {were} not searched."
+    return SearchWarning(
+        REINDEX_WARNING,
+        f"{subject}, {effect} Re-index {them} to include {them} fully.",
+        count=count,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,4 +214,7 @@ class RetrievalService:
             mode = "hybrid"
         else:
             chunks, mode = vector_hits[:k], "vector"
+        stale, titles = await self._repo.stale_documents(scope, self._embedder.model)
+        if stale:
+            warnings.append(reindex_warning(stale, titles, mode=mode))
         return RetrievalResult(chunks, warnings, mode, self._embedder.model, batch.input_tokens)

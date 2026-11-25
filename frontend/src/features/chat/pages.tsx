@@ -618,6 +618,7 @@ function AssistantMessage({
 }) {
   const toast = useToast()
   const voice = useVoice()
+  const { base } = useWorkspace()
   const numbers = useMemo(() => new Set(message.citations.map((c) => c.number)), [message.citations])
   const cards = useRef<HTMLDivElement>(null)
 
@@ -665,12 +666,24 @@ function AssistantMessage({
             ))}
           </div>
         )}
-        {message.warnings.length > 0 && (
-          <p className="msg__notice">
-            <Icon name="info" size={15} />
-            {message.warnings.map((w) => String((w as { message?: unknown }).message ?? '')).join(' ')}
-          </p>
-        )}
+        {message.warnings.map((w, i) => {
+          const warning = w as { code?: unknown; message?: unknown }
+          const reindex = warning.code === 'documents_need_reindex'
+          return (
+            <p key={i} className={reindex ? 'msg__notice msg__notice--warning' : 'msg__notice'}>
+              <Icon name={reindex ? 'alert' : 'info'} size={15} />
+              <span>
+                {String(warning.message ?? '')}
+                {reindex && (
+                  <>
+                    {' '}
+                    <Link to={`${base}/documents#reindex`}>Re-index documents</Link>
+                  </>
+                )}
+              </span>
+            </p>
+          )
+        })}
         <div className="msg__actions">
           {message.content && (
             <Button
