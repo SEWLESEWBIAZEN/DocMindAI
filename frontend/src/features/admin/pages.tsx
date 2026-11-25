@@ -28,6 +28,7 @@ import { useAuth, useUser } from '../auth/AuthProvider'
 import { PasswordMeter } from '../auth/pages'
 import { validatePassword } from '../auth/password'
 import { formatBytes, formatDate, formatDateTime, formatNumber, formatRelative } from '../documents/format'
+import { sendEmailCode } from '../documents/api'
 import { StepUpDialog } from '../documents/StepUpDialog'
 import { PlanPanel } from '../saas/PlanPanel'
 import { VoiceSettingsPanel, WorkspaceVoicePolicy } from '../voice/VoiceSettingsPanel'
@@ -805,7 +806,18 @@ function SecurityPanel() {
     setCode('')
     setSetup(null)
     setError(null)
+    setViaEmail(false)
   }
+  // Lost authenticator (ADR 0027): turn 2FA off with the password and an email code.
+  const [viaEmail, setViaEmail] = useState(false)
+  const emailMeACode = () =>
+    call(async () => {
+      toast.success(await sendEmailCode())
+      setViaEmail(true)
+      setCode('')
+      setMode('disable')
+      setCodes(null)
+    })
   const done = async () => {
     await queryClient.invalidateQueries({ queryKey: ['me', 'mfa'] })
     // Workspaces that require 2FA drop their deadline once it's on (ADR 0026).
@@ -843,9 +855,10 @@ function SecurityPanel() {
   const disable = () =>
     call(async () => {
       const recovery = code.trim().length > 8
+      const digits = code.replace(/\s/g, '')
       await apiClient.post('/me/mfa/disable', {
         password,
-        ...(recovery ? { recovery_code: code.trim() } : { code: code.replace(/\s/g, '') }),
+        ...(viaEmail ? { email_code: digits } : recovery ? { recovery_code: code.trim() } : { code: digits }),
       })
       reset()
       await done()
@@ -902,6 +915,9 @@ function SecurityPanel() {
                 </span>
                 <Button icon="key" onClick={() => { setMode('disable'); setCodes(null) }}>
                   Manage
+                </Button>
+                <Button variant="ghost" icon="mail" loading={busy} onClick={() => void emailMeACode()}>
+                  Lost your authenticator app?
                 </Button>
               </>
             ) : (
@@ -961,10 +977,12 @@ function SecurityPanel() {
         {mode === 'disable' && (
           <form className="form" onSubmit={(e) => { e.preventDefault(); void disable() }}>
             <p className="muted">
-              Enter a code to get new recovery codes, or your password and a code to turn 2FA off.
+              {viaEmail
+                ? 'Enter the code we emailed you and your password to turn 2FA off. Then set it up again on your new phone.'
+                : 'Enter a code to get new recovery codes, or your password and a code to turn 2FA off.'}
             </p>
             <div className="grid-2">
-              <Field label="Authentication or recovery code">
+              <Field label={viaEmail ? 'Email code' : 'Authentication or recovery code'}>
                 <TextInput value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" autoFocus />
               </Field>
               <Field label="Password" hint="Only needed to turn 2FA off.">
@@ -973,9 +991,11 @@ function SecurityPanel() {
             </div>
             <div className="form__actions">
               <Button onClick={reset}>Cancel</Button>
-              <Button loading={busy} disabled={code.trim().length < 6} onClick={() => void regenerateCodes()}>
-                New recovery codes
-              </Button>
+              {!viaEmail && (
+                <Button loading={busy} disabled={code.trim().length < 6} onClick={() => void regenerateCodes()}>
+                  New recovery codes
+                </Button>
+              )}
               <Button type="submit" variant="danger" loading={busy} disabled={!password || code.trim().length < 6}>
                 Turn off 2FA
               </Button>

@@ -77,7 +77,9 @@ export function LoginPage() {
   // Second step for accounts with 2FA (ADR 0026).
   const [challenge, setChallenge] = useState<string | null>(null)
   const [code, setCode] = useState('')
-  const [useRecovery, setUseRecovery] = useState(false)
+  // Authenticator app, a saved recovery code, or a one-time code by email (ADR 0027).
+  const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>('totp')
+  const [notice, setNotice] = useState<string | null>(null)
 
   const finish = () => navigate(safeNext(params.get('next')), { replace: true })
 
@@ -108,12 +110,16 @@ export function LoginPage() {
     setBusy(true)
     try {
       const value = code.trim()
-      await completeSignIn(challenge, useRecovery ? { recovery_code: value } : { code: value.replace(/\s/g, '') })
+      const digits = value.replace(/\s/g, '')
+      await completeSignIn(
+        challenge,
+        method === 'recovery' ? { recovery_code: value } : method === 'email' ? { email_code: digits } : { code: digits },
+      )
       finish()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'mfa_challenge_expired') {
         setChallenge(null)
-        setUseRecovery(false)
+        setMethod('totp')
       }
       setError(errorMessage(err))
       setCode('')
@@ -122,24 +128,55 @@ export function LoginPage() {
     }
   }
 
+  const emailCode = async () => {
+    if (!challenge) return
+    setError(null)
+    setNotice(null)
+    setBusy(true)
+    try {
+      const { data } = await apiClient.post<{ detail: string }>(
+        '/auth/login/mfa/email-code',
+        { challenge_token: challenge },
+        { skipAuth: true },
+      )
+      setMethod('email')
+      setCode('')
+      setNotice(`${data.detail} Check ${email.trim()}.`)
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'mfa_challenge_expired') setChallenge(null)
+      setError(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (challenge) {
+    const switchTo = (next: 'totp' | 'recovery') => {
+      setMethod(next)
+      setCode('')
+      setError(null)
+      setNotice(null)
+    }
     return (
       <AuthLayout
         title="Two-factor authentication"
         subtitle={
-          useRecovery
+          method === 'recovery'
             ? 'Enter one of the recovery codes you saved when you set up two-factor authentication.'
-            : 'Enter the 6-digit code from your authenticator app.'
+            : method === 'email'
+              ? 'Enter the 6-digit code we emailed you.'
+              : 'Enter the 6-digit code from your authenticator app.'
         }
       >
         {error && <Alert>{error}</Alert>}
+        {notice && <Alert tone="success">{notice}</Alert>}
         <form className="form" onSubmit={submitCode} noValidate>
-          <Field label={useRecovery ? 'Recovery code' : 'Authentication code'}>
+          <Field label={method === 'recovery' ? 'Recovery code' : method === 'email' ? 'Email code' : 'Authentication code'}>
             <TextInput
               value={code}
               onChange={(e) => setCode(e.target.value)}
               autoComplete="one-time-code"
-              inputMode={useRecovery ? 'text' : 'numeric'}
+              inputMode={method === 'recovery' ? 'text' : 'numeric'}
               autoFocus
               required
             />
@@ -147,24 +184,28 @@ export function LoginPage() {
           <Button type="submit" variant="primary" loading={busy} disabled={!code.trim()}>
             Verify and sign in
           </Button>
-          <div className="row row--between">
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setUseRecovery(!useRecovery)
-                setCode('')
-                setError(null)
-              }}
-            >
-              {useRecovery ? 'Use your authenticator app instead' : 'Use a recovery code instead'}
+          <div className="stack stack--sm">
+            <p className="muted">Lost your phone or can't use the app?</p>
+            {method !== 'totp' && (
+              <button type="button" className="link-button" onClick={() => switchTo('totp')}>
+                Use your authenticator app
+              </button>
+            )}
+            <button type="button" className="link-button" onClick={() => void emailCode()} disabled={busy}>
+              {method === 'email' ? 'Send a new email code' : 'Email me a code instead'}
             </button>
+            {method !== 'recovery' && (
+              <button type="button" className="link-button" onClick={() => switchTo('recovery')}>
+                Use a recovery code instead
+              </button>
+            )}
             <button
               type="button"
               className="link-button"
               onClick={() => {
                 setChallenge(null)
                 setError(null)
+                setNotice(null)
               }}
             >
               Back

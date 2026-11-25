@@ -5,7 +5,7 @@ import { Alert, announce, Button, Dialog, Field, TextInput } from '../../compone
 import { errorMessage } from '../../lib/api/errors'
 import { useWorkspace } from '../../lib/workspace/WorkspaceContext'
 import { useUser } from '../auth/AuthProvider'
-import { stepUp } from './api'
+import { sendEmailCode, stepUp } from './api'
 
 /**
  * Asks for a 2FA code (or a recovery code) and hands back a short-lived
@@ -29,7 +29,8 @@ export function StepUpDialog({
   const user = useUser()
   const { base } = useWorkspace()
   const [code, setCode] = useState('')
-  const [useRecovery, setUseRecovery] = useState(false)
+  const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>('totp')
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -40,7 +41,8 @@ export function StepUpDialog({
   const close = () => {
     setCode('')
     setError(null)
-    setUseRecovery(false)
+    setNotice(null)
+    setMethod('totp')
     onClose()
   }
 
@@ -49,7 +51,10 @@ export function StepUpDialog({
     setBusy(true)
     setError(null)
     try {
-      const token = await stepUp(useRecovery ? { recovery_code: code.trim() } : { code: code.replace(/\s/g, '') })
+      const digits = code.replace(/\s/g, '')
+      const token = await stepUp(
+        method === 'recovery' ? { recovery_code: code.trim() } : method === 'email' ? { email_code: digits } : { code: digits },
+      )
       await onVerified(token)
       close()
     } catch (err) {
@@ -83,22 +88,54 @@ export function StepUpDialog({
     <Dialog open={open} title={title} description={description} onClose={close} size="sm">
       <form className="form" onSubmit={submit}>
         {error && <Alert>{error}</Alert>}
+        {notice && <Alert tone="success">{notice}</Alert>}
         <Field
-          label={useRecovery ? 'Recovery code' : 'Authentication code'}
-          hint={useRecovery ? 'Each recovery code works once.' : 'The 6-digit code from your authenticator app.'}
+          label={method === 'recovery' ? 'Recovery code' : method === 'email' ? 'Email code' : 'Authentication code'}
+          hint={
+            method === 'recovery'
+              ? 'Each recovery code works once.'
+              : method === 'email'
+                ? 'The 6-digit code we just emailed you.'
+                : 'The 6-digit code from your authenticator app.'
+          }
         >
           <TextInput
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            inputMode={useRecovery ? 'text' : 'numeric'}
+            inputMode={method === 'recovery' ? 'text' : 'numeric'}
             autoComplete="one-time-code"
             autoFocus
-            maxLength={useRecovery ? 32 : 8}
+            maxLength={method === 'recovery' ? 32 : 8}
           />
         </Field>
-        <button type="button" className="link-button" onClick={() => setUseRecovery((v) => !v)}>
-          {useRecovery ? 'Use an authenticator code instead' : 'Use a recovery code instead'}
-        </button>
+        <div className="stack stack--sm">
+          {method !== 'totp' && (
+            <button type="button" className="link-button" onClick={() => { setMethod('totp'); setCode(''); setNotice(null) }}>
+              Use an authenticator code instead
+            </button>
+          )}
+          <button
+            type="button"
+            className="link-button"
+            onClick={async () => {
+              setError(null)
+              try {
+                setNotice(await sendEmailCode())
+                setMethod('email')
+                setCode('')
+              } catch (err) {
+                setError(errorMessage(err))
+              }
+            }}
+          >
+            {method === 'email' ? 'Send a new email code' : 'Email me a code instead'}
+          </button>
+          {method !== 'recovery' && (
+            <button type="button" className="link-button" onClick={() => { setMethod('recovery'); setCode(''); setNotice(null) }}>
+              Use a recovery code instead
+            </button>
+          )}
+        </div>
         <div className="form__actions">
           <Button onClick={close}>Cancel</Button>
           <Button type="submit" variant="danger" loading={busy} disabled={code.trim().length < 6}>

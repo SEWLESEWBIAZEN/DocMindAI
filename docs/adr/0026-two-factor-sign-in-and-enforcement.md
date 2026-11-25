@@ -89,6 +89,8 @@ after the upgrade, so nobody is locked out by the deploy itself.
   gives people time to get set up.
 - **Lost authenticator and recovery codes:** a support-assisted reset is still not implemented. An
   operator has to clear 2FA in the database. This is a known gap.
+- **Update:** ADR 0027 adds one-time codes by email. They are a fallback for this case, and they
+  let users recover a lost authenticator themselves.
 - **Extra query:** each workspace request now also reads the workspace's plan, with one primary-key
   lookup.
 

@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/mfa/email-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** During sign-in: email a one-time code instead of using the authenticator */
+        post: operations["login_mfa_email_code_api_v1_auth_login_mfa_email_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -66,6 +83,23 @@ export interface paths {
         put?: never;
         /** Sign out on every device */
         post: operations["logout_all_api_v1_auth_logout_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/email-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email a one-time code for step-up or for turning 2FA off (lost authenticator) */
+        post: operations["mfa_email_code_api_v1_auth_mfa_email_code_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2324,6 +2358,11 @@ export interface components {
              */
             mfa_required: true;
         };
+        /** MfaChallengeTokenRequest */
+        MfaChallengeTokenRequest: {
+            /** Challenge Token */
+            challenge_token: string;
+        };
         /** MfaCodeRequest */
         MfaCodeRequest: {
             /**
@@ -2336,6 +2375,11 @@ export interface components {
         MfaDisableRequest: {
             /** Code */
             code?: string | null;
+            /**
+             * Email Code
+             * @description 6-digit code sent by email
+             */
+            email_code?: string | null;
             /** Password */
             password: string;
             /** Recovery Code */
@@ -2347,6 +2391,11 @@ export interface components {
             challenge_token: string;
             /** Code */
             code?: string | null;
+            /**
+             * Email Code
+             * @description 6-digit code sent by email
+             */
+            email_code?: string | null;
             /** Recovery Code */
             recovery_code?: string | null;
         };
@@ -2359,6 +2408,11 @@ export interface components {
         MfaSecondFactorRequest: {
             /** Code */
             code?: string | null;
+            /**
+             * Email Code
+             * @description 6-digit code sent by email
+             */
+            email_code?: string | null;
             /** Recovery Code */
             recovery_code?: string | null;
         };
@@ -3319,6 +3373,39 @@ export interface operations {
             };
         };
     };
+    login_mfa_email_code_api_v1_auth_login_mfa_email_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaChallengeTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout_api_v1_auth_logout_post: {
         parameters: {
             query?: never;
@@ -3363,6 +3450,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    mfa_email_code_api_v1_auth_mfa_email_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
             };
         };
     };

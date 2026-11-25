@@ -87,9 +87,17 @@ class MfaChallenge:
 
 
 class SecondFactor(Protocol):
-    async def verify(self, user: User, code: str | None, recovery_code: str | None) -> datetime:
-        """Check a TOTP or recovery code; returns when it was verified."""
+    async def verify(
+        self,
+        user: User,
+        code: str | None,
+        recovery_code: str | None,
+        email_code: str | None = None,
+    ) -> datetime:
+        """Check a TOTP, recovery or email code; returns when it was verified."""
         ...
+
+    async def send_email_code(self, user: User) -> None: ...
 
 
 class AuthService:
@@ -338,12 +346,41 @@ class AuthService:
         await self._session.commit()
         return self._result(user, refresh, raw)
 
+    async def _challenge_user(self, digest: str) -> User:
+        expired = AuthenticationError(
+            "This sign-in attempt has expired. Enter your email and password again.",
+            code="mfa_challenge_expired",
+        )
+        record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
+        if record is None or record.used_at is not None or record.expires_at <= utcnow():
+            raise expired
+        user = await self._users.get(record.user_id)
+        if user is None or not user.is_active or not user.mfa_enabled:
+            raise expired
+        return user
+
+    async def send_login_email_code(
+        self, challenge_token: str, second_factor: SecondFactor
+    ) -> None:
+        """During sign-in: email a one-time code instead of using the authenticator (ADR 0027)."""
+        s = self._settings
+        await self._limiter.hit(
+            "login:ip",
+            self._meta.client_key,
+            s.rate_limit_login_per_ip,
+            s.rate_limit_login_window_seconds,
+        )
+        user = await self._challenge_user(hash_token(challenge_token))
+        await self._session.commit()
+        await second_factor.send_email_code(user)
+
     async def complete_mfa_login(
         self,
         challenge_token: str,
         code: str | None,
         recovery_code: str | None,
         second_factor: SecondFactor,
+        email_code: str | None = None,
     ) -> AuthResult:
         """Second sign-in step: exchange the challenge and a valid code for a session."""
         s = self._settings
@@ -358,15 +395,10 @@ class AuthService:
             code="mfa_challenge_expired",
         )
         digest = hash_token(challenge_token)
-        record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
-        if record is None or record.used_at is not None or record.expires_at <= utcnow():
-            raise expired
-        user = await self._users.get(record.user_id)
-        if user is None or not user.is_active or not user.mfa_enabled:
-            raise expired
+        user = await self._challenge_user(digest)
         await self._session.commit()  # release the row lock while the code is checked
         # Rate-limited per user, audited, and replay-safe (TOTP steps, single-use recovery codes).
-        verified_at = await second_factor.verify(user, code, recovery_code)
+        verified_at = await second_factor.verify(user, code, recovery_code, email_code)
 
         record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
         now = utcnow()

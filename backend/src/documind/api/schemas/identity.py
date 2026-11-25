@@ -186,15 +186,22 @@ class MfaCodeRequest(_In):
     code: str = MfaCode
 
 
+_EMAIL_CODE = Field(
+    default=None, min_length=6, max_length=8, description="6-digit code sent by email"
+)
+
+
 class MfaSecondFactorRequest(_In):
     code: str | None = Field(default=None, min_length=6, max_length=10)
     recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
+    email_code: str | None = _EMAIL_CODE
 
 
 class MfaDisableRequest(_In):
     password: str = Password
     code: str | None = Field(default=None, min_length=6, max_length=10)
     recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
+    email_code: str | None = _EMAIL_CODE
 
 
 class RecoveryCodesResponse(BaseModel):
@@ -213,6 +220,11 @@ class MfaLoginRequest(_In):
     challenge_token: str = Field(min_length=20, max_length=128)
     code: str | None = Field(default=None, min_length=6, max_length=10)
     recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
+    email_code: str | None = _EMAIL_CODE
+
+
+class MfaChallengeTokenRequest(_In):
+    challenge_token: str = Field(min_length=20, max_length=128)
 
 
 class StepUpResponse(BaseModel):

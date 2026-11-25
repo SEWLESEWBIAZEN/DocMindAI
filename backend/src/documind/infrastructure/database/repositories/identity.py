@@ -236,6 +236,31 @@ class AccountTokenRepository:
         )
         return (await self._s.execute(stmt)).scalar_one_or_none()
 
+    async def latest_active(
+        self, user_id: uuid.UUID, purpose: str, now: datetime
+    ) -> AccountToken | None:
+        stmt = (
+            select(AccountToken)
+            .where(
+                AccountToken.user_id == user_id,
+                AccountToken.purpose == purpose,
+                AccountToken.used_at.is_(None),
+                AccountToken.expires_at > now,
+            )
+            .order_by(AccountToken.created_at.desc())
+            .limit(1)
+            .with_for_update()
+        )
+        return (await self._s.execute(stmt)).scalar_one_or_none()
+
+    async def used_since(self, user_id: uuid.UUID, purpose: str, since: datetime) -> bool:
+        stmt = select(AccountToken.id).where(
+            AccountToken.user_id == user_id,
+            AccountToken.purpose == purpose,
+            AccountToken.used_at >= since,
+        )
+        return (await self._s.execute(stmt.limit(1))).first() is not None
+
     async def invalidate_unused(self, user_id: uuid.UUID, purpose: str, now: datetime) -> None:
         await self._s.execute(
             update(AccountToken)

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
-import { PASSWORD, linkFromEmail, local, registerAndSignIn, totp, uniqueEmail } from './support.ts'
+import { PASSWORD, codeFromEmail, linkFromEmail, local, registerAndSignIn, totp, uniqueEmail } from './support.ts'
 
 const SHOTS = process.env.E2E_SCREENSHOTS
 
@@ -179,9 +179,10 @@ test('complete journey: sign up, upload, ask with citations, team, 2FA', async (
   await page.getByLabel('Authentication code').fill('000000')
   await page.getByRole('button', { name: 'Verify and sign in' }).click()
   await expect(page.locator('.alert--error')).toContainText("isn't valid")
-  // The step-up code above used the current window: take the next one.
-  await page.waitForTimeout(31_000 - (Date.now() % 30_000))
-  await page.getByLabel('Authentication code').fill(totp(secret))
+  // Without the phone: a one-time code by email (ADR 0027).
+  await page.getByRole('button', { name: 'Email me a code instead' }).click()
+  await expect(page.getByText('We sent a one-time code to your email address')).toBeVisible()
+  await page.getByLabel('Email code').fill(await codeFromEmail(owner))
   await page.getByRole('button', { name: 'Verify and sign in' }).click()
   await page.waitForURL(/\/w\/.+\/dashboard/)
 })

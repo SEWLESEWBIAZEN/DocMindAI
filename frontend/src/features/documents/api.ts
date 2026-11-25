@@ -153,7 +153,13 @@ export async function removeFromCollection(ws: string, collectionId: string, doc
 }
 
 /** 2FA step-up: a short-lived elevated token for one sensitive action. */
-export async function stepUp(body: { code?: string; recovery_code?: string }): Promise<string> {
+export async function stepUp(body: { code?: string; recovery_code?: string; email_code?: string }): Promise<string> {
   const { data } = await apiClient.post<Schemas['StepUpResponse']>('/auth/mfa/verify', body)
   return data.access_token
+}
+
+/** Email a one-time code to the signed-in user (fallback second factor, ADR 0027). */
+export async function sendEmailCode(): Promise<string> {
+  const { data } = await apiClient.post<{ detail: string }>('/auth/mfa/email-code')
+  return data.detail
 }

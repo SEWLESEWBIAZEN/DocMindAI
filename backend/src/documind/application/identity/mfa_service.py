@@ -6,11 +6,19 @@
   issues a short-lived access token carrying the verification time, which
   sensitive actions such as deleting documents require (ADR 0013).
 * Every attempt is rate limited per user; failures are audited.
+* One-time codes by email (ADR 0027) are a fallback for people with 2FA who
+  don't have their authenticator at hand, including when it was lost. They
+  are refused for 24 hours after a password reset by email, because both
+  factors would then depend on the same mailbox; every use sends a notice.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -28,13 +36,18 @@ from documind.domain.errors import (
     ValidationFailedError,
 )
 from documind.domain.identity import totp
-from documind.infrastructure.database.models import User
+from documind.infrastructure.database.models import AccountToken, User
 from documind.infrastructure.database.repositories.identity import (
+    AccountTokenRepository,
     AuditLogRepository,
     MfaRecoveryCodeRepository,
     UserRepository,
 )
 from documind.infrastructure.security.secret_box import SecretBox
+
+MFA_EMAIL = "mfa_email"
+# A password reset proves control of the mailbox only; don't let the mailbox be both factors.
+EMAIL_CODE_BLOCK_AFTER_RESET = timedelta(hours=24)
 
 
 def _totp_clock() -> float:
@@ -76,6 +89,7 @@ class MfaService:
         self._pepper = mfa_key_bytes(settings.mfa_encryption_key)
         self._users = UserRepository(session)
         self._codes = MfaRecoveryCodeRepository(session)
+        self._tokens = AccountTokenRepository(session)
         self._audit = AuditRecorder(AuditLogRepository(session), meta)
 
     # ----------------------------------------------------------------- helpers
@@ -105,12 +119,28 @@ class MfaService:
         )
         return codes
 
+    def _email_code_hash(self, row_id: uuid.UUID, code: str) -> str:
+        return hmac.new(self._pepper, f"{row_id}:{code}".encode(), hashlib.sha256).hexdigest()
+
+    async def _email_codes_blocked(self, user: User) -> bool:
+        since = utcnow() - EMAIL_CODE_BLOCK_AFTER_RESET
+        return await self._tokens.used_since(user.id, "password_reset", since)
+
     async def _check_second_factor(
-        self, user: User, code: str | None, recovery_code: str | None
+        self,
+        user: User,
+        code: str | None,
+        recovery_code: str | None,
+        email_code: str | None = None,
     ) -> str:
-        """Verify a TOTP code or a recovery code; returns the method used. Caller commits."""
-        if (code is None) == (recovery_code is None):
-            raise ValidationFailedError("Provide either an authenticator code or a recovery code.")
+        """Verify one factor: TOTP, a recovery code or an email code; returns the method used.
+
+        Caller commits.
+        """
+        if sum(f is not None for f in (code, recovery_code, email_code)) != 1:
+            raise ValidationFailedError(
+                "Provide one of: an authenticator code, a recovery code or an email code."
+            )
         if code is not None and user.totp_secret_encrypted:
             secret = self._box.decrypt(user.totp_secret_encrypted, context=self._context(user))
             step = totp.verify(secret, code, _totp_clock(), last_used_step=user.totp_last_used_step)
@@ -121,10 +151,72 @@ class MfaService:
             digest = totp.hash_recovery_code(recovery_code, self._pepper)
             if await self._codes.consume(user.id, digest, utcnow()):
                 return "recovery_code"
+        elif email_code is not None and not await self._email_codes_blocked(user):
+            now = utcnow()
+            row = await self._tokens.latest_active(user.id, MFA_EMAIL, now)
+            candidate = "".join(email_code.split())
+            if row is not None and hmac.compare_digest(
+                row.token_hash, self._email_code_hash(row.id, candidate)
+            ):
+                row.used_at = now  # single use
+                return "email_code"
         self._audit.record("auth.mfa_failed", actor_user_id=user.id, details={"reason": "code"})
         await self._session.commit()
         raise AuthenticationError(
             "That code isn't valid. Try the latest code from your app.", code="invalid_mfa_code"
+        )
+
+    async def _notify(self, user: User, method: str) -> None:
+        if method == "recovery_code":
+            remaining = await self._codes.remaining(user.id)
+            await self._email.send(
+                emails.recovery_code_used_email(user.email, user.display_name, remaining)
+            )
+        elif method == "email_code":
+            await self._email.send(emails.mfa_email_code_used_email(user.email, user.display_name))
+
+    async def send_email_code(self, user: User) -> None:
+        """Email a 6-digit one-time code to a user with 2FA (works once, expires quickly)."""
+        s = self._settings
+        await self._limiter.hit(
+            "mfa_email:user",
+            str(user.id),
+            s.rate_limit_mfa_email_per_user,
+            s.rate_limit_mfa_email_window_seconds,
+        )
+        locked = await self._users.require(user.id, for_update=True)
+        if not locked.mfa_enabled:
+            raise PermissionDeniedError(
+                "Set up two-factor authentication first.", code="mfa_enrollment_required"
+            )
+        if await self._email_codes_blocked(locked):
+            raise PermissionDeniedError(
+                "For your security, email codes can't be used for 24 hours after a password "
+                "reset. Use your authenticator app or a recovery code.",
+                code="email_code_unavailable",
+            )
+        now = utcnow()
+        await self._tokens.invalidate_unused(locked.id, MFA_EMAIL, now)
+        code = f"{secrets.randbelow(10**6):06d}"
+        row = AccountToken(
+            id=uuid.uuid4(),
+            user_id=locked.id,
+            purpose=MFA_EMAIL,
+            expires_at=now + timedelta(minutes=s.mfa_email_code_minutes),
+        )
+        row.token_hash = self._email_code_hash(row.id, code)
+        self._tokens.add(row)
+        self._audit.record(
+            "auth.mfa_email_code_sent",
+            actor_user_id=locked.id,
+            target_type="user",
+            target_id=locked.id,
+        )
+        await self._session.commit()
+        await self._email.send(
+            emails.mfa_email_code_email(
+                locked.email, locked.display_name, code, s.mfa_email_code_minutes
+            )
         )
 
     # ----------------------------------------------------------------- queries
@@ -210,20 +302,30 @@ class MfaService:
         return codes
 
     async def disable(
-        self, user: User, password: str, code: str | None, recovery_code: str | None
+        self,
+        user: User,
+        password: str,
+        code: str | None,
+        recovery_code: str | None,
+        email_code: str | None = None,
     ) -> None:
+        """Turn 2FA off. With a lost authenticator: password plus a recovery or email code."""
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
         await self._require_password(locked, password)
         if not locked.mfa_enabled:
             raise ConflictError("Two-factor authentication is not on.", code="mfa_not_enabled")
-        await self._check_second_factor(locked, code, recovery_code)
+        method = await self._check_second_factor(locked, code, recovery_code, email_code)
         locked.totp_secret_encrypted = None
         locked.totp_enabled_at = None
         locked.totp_last_used_step = None
         await self._codes.delete_all(locked.id)
         self._audit.record(
-            "user.mfa_disabled", actor_user_id=locked.id, target_type="user", target_id=locked.id
+            "user.mfa_disabled",
+            actor_user_id=locked.id,
+            target_type="user",
+            target_id=locked.id,
+            details={"method": method},
         )
         await self._session.commit()
         await self._email.send(emails.mfa_disabled_email(locked.email, locked.display_name))
@@ -246,7 +348,13 @@ class MfaService:
 
     # ----------------------------------------------------------------- step-up
 
-    async def verify(self, user: User, code: str | None, recovery_code: str | None) -> datetime:
+    async def verify(
+        self,
+        user: User,
+        code: str | None,
+        recovery_code: str | None,
+        email_code: str | None = None,
+    ) -> datetime:
         """Check the second factor; returns the verification time for the step-up token."""
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
@@ -254,13 +362,9 @@ class MfaService:
             raise PermissionDeniedError(
                 "Set up two-factor authentication first.", code="mfa_enrollment_required"
             )
-        method = await self._check_second_factor(locked, code, recovery_code)
+        method = await self._check_second_factor(locked, code, recovery_code, email_code)
         now = utcnow()
         self._audit.record("auth.mfa_verified", actor_user_id=locked.id, details={"method": method})
         await self._session.commit()
-        if method == "recovery_code":
-            remaining = await self._codes.remaining(locked.id)
-            await self._email.send(
-                emails.recovery_code_used_email(locked.email, locked.display_name, remaining)
-            )
+        await self._notify(locked, method)
         return now

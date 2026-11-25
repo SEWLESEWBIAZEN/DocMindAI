@@ -25,6 +25,22 @@ export async function linkFromEmail(to: string, path: string, timeoutMs = 30_000
   throw new Error(`No email with ${path} for ${to}`)
 }
 
+/** The newest one-time code emailed to `to` (ADR 0027); mailpit lists newest first. */
+export async function codeFromEmail(to: string, timeoutMs = 30_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const search = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`)
+    const { messages } = (await search.json()) as { messages: MailSummary[] }
+    for (const message of messages) {
+      const body = (await (await fetch(`${MAILPIT}/api/v1/message/${message.ID}`)).json()) as { Text: string }
+      const match = body.Text.match(/one-time code is (\d{3}) (\d{3})/)
+      if (match) return `${match[1]}${match[2]}`
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400))
+  }
+  throw new Error(`No one-time code emailed to ${to}`)
+}
+
 /** Make an email link point at the app under test (emails use PUBLIC_APP_URL). */
 export function local(link: string, baseURL: string): string {
   const url = new URL(link)

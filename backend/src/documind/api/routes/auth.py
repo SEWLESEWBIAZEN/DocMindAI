@@ -21,6 +21,7 @@ from documind.api.schemas.identity import (
     LoginRequest,
     MessageResponse,
     MfaChallengeResponse,
+    MfaChallengeTokenRequest,
     MfaLoginRequest,
     MfaSecondFactorRequest,
     RegisterRequest,
@@ -99,8 +100,39 @@ async def login_mfa(
     mfa: MfaServiceDep,
     settings: SettingsDep,
 ) -> TokenResponse:
-    result = await auth.complete_mfa_login(body.challenge_token, body.code, body.recovery_code, mfa)
+    result = await auth.complete_mfa_login(
+        body.challenge_token, body.code, body.recovery_code, mfa, email_code=body.email_code
+    )
     return token_response(response, settings, result)
+
+
+_EMAIL_SENT = "We sent a one-time code to your email address. It expires in a few minutes."
+
+
+@router.post(
+    "/login/mfa/email-code",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=MessageResponse,
+    tags=["mfa"],
+    summary="During sign-in: email a one-time code instead of using the authenticator",
+)
+async def login_mfa_email_code(
+    body: MfaChallengeTokenRequest, auth: AuthServiceDep, mfa: MfaServiceDep
+) -> MessageResponse:
+    await auth.send_login_email_code(body.challenge_token, mfa)
+    return MessageResponse(detail=_EMAIL_SENT)
+
+
+@router.post(
+    "/mfa/email-code",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=MessageResponse,
+    tags=["mfa"],
+    summary="Email a one-time code for step-up or for turning 2FA off (lost authenticator)",
+)
+async def mfa_email_code(user: CurrentUser, mfa: MfaServiceDep) -> MessageResponse:
+    await mfa.send_email_code(user)
+    return MessageResponse(detail=_EMAIL_SENT)
 
 
 @router.post(
@@ -184,7 +216,7 @@ async def mfa_verify(
     mfa: MfaServiceDep,
     container: ContainerDep,
 ) -> StepUpResponse:
-    verified_at = await mfa.verify(user, body.code, body.recovery_code)
+    verified_at = await mfa.verify(user, body.code, body.recovery_code, body.email_code)
     issued = container.access_tokens.issue(user.id, user.auth_version, mfa_verified_at=verified_at)
     response.headers["Cache-Control"] = "no-store"
     return StepUpResponse(

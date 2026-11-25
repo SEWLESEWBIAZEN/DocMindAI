@@ -93,6 +93,9 @@ Required variables have no default; the backend refuses to start without them.
 | `RATE_LIMIT_MFA_WINDOW_SECONDS`   |          | `300`      | Window for the above.                                                    |
 | `MFA_LOGIN_CHALLENGE_SECONDS`     |          | `300`      | How long the password step stays valid while a 2FA user enters their code (ADR 0026). |
 | `MFA_ENFORCEMENT_GRACE_DAYS`      |          | `14`       | Time members get to set up 2FA once a workspace requires it (paid plan or organization setting). |
+| `MFA_EMAIL_CODE_MINUTES`          |          | `10`       | Lifetime of a one-time code sent by email, the fallback second factor (ADR 0027). |
+| `RATE_LIMIT_MFA_EMAIL_PER_USER`   |          | `3`        | Email codes a user can request per window. |
+| `RATE_LIMIT_MFA_EMAIL_WINDOW_SECONDS` |      | `900`      | Window for the above. |
 
 ## Document processing
 

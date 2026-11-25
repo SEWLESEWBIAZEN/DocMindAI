@@ -2342,6 +2342,22 @@
         "title": "MfaChallengeResponse",
         "type": "object"
       },
+      "MfaChallengeTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge_token": {
+            "maxLength": 128,
+            "minLength": 20,
+            "title": "Challenge Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_token"
+        ],
+        "title": "MfaChallengeTokenRequest",
+        "type": "object"
+      },
       "MfaCodeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2374,6 +2390,20 @@
               }
             ],
             "title": "Code"
+          },
+          "email_code": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 6,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "6-digit code sent by email",
+            "title": "Email Code"
           },
           "password": {
             "maxLength": 1000,
@@ -2422,6 +2452,20 @@
               }
             ],
             "title": "Code"
+          },
+          "email_code": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 6,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "6-digit code sent by email",
+            "title": "Email Code"
           },
           "recovery_code": {
             "anyOf": [
@@ -2472,6 +2516,20 @@
               }
             ],
             "title": "Code"
+          },
+          "email_code": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 6,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "6-digit code sent by email",
+            "title": "Email Code"
           },
           "recovery_code": {
             "anyOf": [
@@ -4905,6 +4963,48 @@
         ]
       }
     },
+    "/api/v1/auth/login/mfa/email-code": {
+      "post": {
+        "operationId": "login_mfa_email_code_api_v1_auth_login_mfa_email_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaChallengeTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__identity__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "During sign-in: email a one-time code instead of using the authenticator",
+        "tags": [
+          "auth",
+          "mfa"
+        ]
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "logout_api_v1_auth_logout_post",
@@ -4963,6 +5063,33 @@
         "summary": "Sign out on every device",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/email-code": {
+      "post": {
+        "operationId": "mfa_email_code_api_v1_auth_mfa_email_code_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__identity__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Email a one-time code for step-up or for turning 2FA off (lost authenticator)",
+        "tags": [
+          "auth",
+          "mfa"
         ]
       }
     },

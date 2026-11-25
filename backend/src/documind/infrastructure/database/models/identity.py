@@ -211,12 +211,12 @@ class RefreshToken(Base):
 
 
 class AccountToken(Base):
-    """Single-use tokens: email verification, password reset, 2FA sign-in (hash only)."""
+    """Single-use tokens: email links, the 2FA sign-in challenge and email codes (hash only)."""
 
     __tablename__ = "account_tokens"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('email_verification', 'password_reset', 'mfa_login')",
+            "purpose IN ('email_verification', 'password_reset', 'mfa_login', 'mfa_email')",
             name="purpose_valid",
         ),
         Index("ix_account_tokens_user_id_purpose", "user_id", "purpose"),

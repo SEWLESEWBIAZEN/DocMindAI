@@ -251,6 +251,10 @@ class Settings(BaseSettings):
     mfa_setup_ttl_minutes: int = Field(default=15, ge=1, le=60)
     rate_limit_mfa_per_user: int = Field(default=5, ge=1)
     rate_limit_mfa_window_seconds: int = Field(default=300, ge=1)
+    # One-time codes by email, a fallback second factor (ADR 0027).
+    mfa_email_code_minutes: int = Field(default=10, ge=2, le=30)
+    rate_limit_mfa_email_per_user: int = Field(default=3, ge=1)
+    rate_limit_mfa_email_window_seconds: int = Field(default=900, ge=1)
 
     # --- Rate limits (requests per window, per client IP unless noted) ------
     rate_limit_enabled: bool = True

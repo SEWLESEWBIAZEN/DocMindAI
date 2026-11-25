@@ -152,7 +152,7 @@ async def mfa_confirm(
 
 @router.post("/mfa/disable", status_code=status.HTTP_204_NO_CONTENT, tags=["mfa"])
 async def mfa_disable(body: MfaDisableRequest, user: CurrentUser, mfa: MfaServiceDep) -> Response:
-    await mfa.disable(user, body.password, body.code, body.recovery_code)
+    await mfa.disable(user, body.password, body.code, body.recovery_code, body.email_code)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

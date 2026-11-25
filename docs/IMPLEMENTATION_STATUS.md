@@ -161,8 +161,12 @@ Follow-ups:
 - [x] Require 2FA at sign-in for users who enabled it; required 2FA on paid plans and for
       organizations that turn it on, with a grace period (ADR 0026, `test_mfa_sign_in.py`,
       `test_mfa_enforcement.py`, Playwright journey)
-- [ ] Support-assisted 2FA reset for users who lose both authenticator and recovery codes
-- [ ] Passkeys (WebAuthn) as an additional factor; email OTP as an accessible fallback (ADR 0011)
+- [x] Self-service recovery of a lost authenticator: sign in and turn 2FA off with one-time codes by
+      email (ADR 0027, `test_mfa_email_codes.py`, Playwright journey)
+- [ ] Support-assisted 2FA reset for users who lose their authenticator, their recovery codes
+      **and** access to their email
+- [x] Email one-time codes as a fallback factor (ADR 0027); 24-hour block after a password reset
+- [ ] Passkeys (WebAuthn), and email-only 2FA for people who can't use an authenticator app
 - [x] Frontend 2FA screens (QR code, manual secret, recovery codes): built in Phase 7
       (`features/admin/pages.tsx`, Security section); covered by the Playwright journey
 

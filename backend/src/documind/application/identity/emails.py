@@ -166,6 +166,40 @@ def recovery_code_used_email(to: str, name: str, remaining: int) -> EmailMessage
     )
 
 
+def mfa_email_code_email(to: str, name: str, code: str, minutes: int) -> EmailMessage:
+    spaced = f"{code[:3]} {code[3:]}"
+    return EmailMessage(
+        to=to,
+        subject=f"Your DocuMind sign-in code: {spaced}",
+        text=f"Hi {name},\n\nYour one-time code is {spaced}. It works once and expires in "
+        f"{minutes} minutes.\n\nIf you didn't ask for it, someone may know your password: "
+        "change it now. Never share this code; DocuMind will never ask you for it.",
+        html=_html(
+            "Your one-time code",
+            f"<p>Hi {escape(name)},</p><p>Your one-time code is</p>"
+            f'<p style="font-size:28px;font-weight:700;letter-spacing:4px">{spaced}</p>'
+            f"<p>It works once and expires in {minutes} minutes. If you didn't ask for it, "
+            "someone may know your password: change it now. Never share this code.</p>",
+        ),
+    )
+
+
+def mfa_email_code_used_email(to: str, name: str) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject="An email code was used on your account",
+        text=f"Hi {name},\n\nA one-time code sent to this address was just used instead of "
+        "your authenticator app. If this wasn't you, change your password and your email "
+        "password now.",
+        html=_html(
+            "An email code was used",
+            f"<p>Hi {escape(name)},</p><p>A one-time code sent to this address was just used "
+            "instead of your authenticator app. If this was not you, change your password and "
+            "your email password now.</p>",
+        ),
+    )
+
+
 def provider_key_rejected_email(
     to: str, name: str, base_url: str, workspace_id: str, workspace_name: str, provider: str
 ) -> EmailMessage:
