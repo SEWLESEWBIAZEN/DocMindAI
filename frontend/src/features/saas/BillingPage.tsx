@@ -180,7 +180,14 @@ export function BillingPage() {
       )
     }
     const higher = RANK[plan.key] > RANK[o.plan_key]
-    const label = !live ? `Upgrade to ${plan.name}` : plan.key === o.plan_key ? `Switch to ${interval === 'year' ? 'yearly' : 'monthly'}` : `Switch to ${plan.name}`
+    const trial = !live && plan.key === 'pro' && o.trial_days_available > 0
+    const label = trial
+      ? `Start ${o.trial_days_available}-day free trial`
+      : !live
+        ? `Upgrade to ${plan.name}`
+        : plan.key === o.plan_key
+          ? `Switch to ${interval === 'year' ? 'yearly' : 'monthly'}`
+          : `Switch to ${plan.name}`
     return (
       <>
         <Button
@@ -192,6 +199,7 @@ export function BillingPage() {
         >
           {label}
         </Button>
+        {trial && <p className="billing-plan__hint muted">No card needed. Add one any time to keep Pro afterwards.</p>}
         {blocked && (
           <p id={`blocked-${plan.key}`} className="billing-plan__hint billing-plan__hint--warn">
             {blocked}
@@ -248,6 +256,19 @@ export function BillingPage() {
             <button type="button" className="link-button" onClick={() => portal.mutate()}>
               Update payment method
             </button>
+          </Alert>
+        )}
+        {o.status === 'trialing' && o.trial_ends_at && (
+          <Alert tone="info">
+            Your free {o.plan_name} trial ends on {formatDate(o.trial_ends_at)}.{' '}
+            {o.can_manage_payment && (
+              <>
+                <button type="button" className="link-button" onClick={() => portal.mutate()}>
+                  Add a payment method
+                </button>{' '}
+                to keep {o.plan_name}; otherwise the workspace moves back to Free and nothing is deleted.
+              </>
+            )}
           </Alert>
         )}
         {o.cancel_at_period_end && o.current_period_end && (

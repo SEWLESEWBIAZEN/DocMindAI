@@ -166,5 +166,6 @@ export function planAction(plan: CatalogPlan, catalog: PlanCatalog, interval: In
       ? { href: `mailto:${catalog.sales_email}?subject=${encodeURIComponent(`DocuMind ${plan.name}`)}`, label: 'Contact sales' }
       : { href: '/register', label: 'Get started' }
   }
-  return { href: `/app/billing?plan=${plan.key}&interval=${interval}`, label: `Choose ${plan.name}` }
+  const label = plan.trial_days > 0 ? `Start ${plan.trial_days}-day free trial` : `Choose ${plan.name}`
+  return { href: `/app/billing?plan=${plan.key}&interval=${interval}`, label }
 }

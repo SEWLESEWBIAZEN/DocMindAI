@@ -54,12 +54,15 @@ def subscription_state(sub: Any) -> SubscriptionState:
         status=str(_get(sub, "status")),
         price_id=str(_get(price, "id")) if price is not None else None,
         seats=int(_get(item, "quantity", 0) or 0),
-        current_period_end=(
-            datetime.fromtimestamp(int(period_end), tz=UTC) if period_end else None
-        ),
+        current_period_end=_timestamp(period_end),
         cancel_at_period_end=bool(_get(sub, "cancel_at_period_end", False)),
         workspace_id=workspace_id,
+        trial_end=_timestamp(_get(sub, "trial_end")),
     )
+
+
+def _timestamp(value: Any) -> datetime | None:
+    return datetime.fromtimestamp(int(value), tz=UTC) if value else None
 
 
 class StripeGateway:
@@ -100,25 +103,33 @@ class StripeGateway:
         workspace_id: uuid.UUID,
         success_url: str,
         cancel_url: str,
+        trial_days: int | None = None,
     ) -> str:
         meta = {"workspace_id": str(workspace_id)}
+        subscription: dict[str, Any] = {"metadata": meta}
+        extra: dict[str, Any] = {}
+        if trial_days:
+            # No card needed for the trial; without one, the trial simply ends.
+            subscription["trial_period_days"] = trial_days
+            subscription["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
+            extra["payment_method_collection"] = "if_required"
         try:
-            session = await self._client.v1.checkout.sessions.create_async(
-                {
-                    "mode": "subscription",
-                    "customer": customer_id,
-                    "client_reference_id": str(workspace_id),
-                    "line_items": [{"price": price_id, "quantity": seats}],
-                    "subscription_data": {"metadata": meta},
-                    "metadata": meta,
-                    "allow_promotion_codes": True,
-                    "billing_address_collection": "auto",
-                    "tax_id_collection": {"enabled": True},
-                    "customer_update": {"name": "auto", "address": "auto"},
-                    "success_url": success_url,
-                    "cancel_url": cancel_url,
-                }
-            )
+            params: Any = {
+                "mode": "subscription",
+                "customer": customer_id,
+                "client_reference_id": str(workspace_id),
+                "line_items": [{"price": price_id, "quantity": seats}],
+                "subscription_data": subscription,
+                "metadata": meta,
+                "allow_promotion_codes": True,
+                "billing_address_collection": "auto",
+                "tax_id_collection": {"enabled": True},
+                "customer_update": {"name": "auto", "address": "auto"},
+                "success_url": success_url,
+                "cancel_url": cancel_url,
+                **extra,
+            }
+            session = await self._client.v1.checkout.sessions.create_async(params)
         except stripe.StripeError as exc:
             raise _error(exc) from exc
         if not session.url:  # pragma: no cover - hosted mode always returns a URL

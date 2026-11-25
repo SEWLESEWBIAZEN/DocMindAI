@@ -28,6 +28,7 @@ class SubscriptionState:
     current_period_end: datetime | None
     cancel_at_period_end: bool
     workspace_id: uuid.UUID | None
+    trial_end: datetime | None = None
 
 
 class BillingGateway(Protocol):
@@ -42,6 +43,7 @@ class BillingGateway(Protocol):
         workspace_id: uuid.UUID,
         success_url: str,
         cancel_url: str,
+        trial_days: int | None = None,
     ) -> str: ...
 
     async def portal_url(self, *, customer_id: str, return_url: str) -> str: ...

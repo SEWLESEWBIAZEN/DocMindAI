@@ -47,7 +47,9 @@ function PlanCards({ catalog, interval }: { catalog: PlanCatalog; interval: Inte
               <p className="lp-plan__price">
                 <strong>{price.amount}</strong> <span>{price.unit}</span>
               </p>
-              <p className="lp-plan__note">{price.note ?? ' '}</p>
+              <p className="lp-plan__note">
+                {plan.trial_days > 0 ? `${plan.trial_days} days free, no card needed` : (price.note ?? '\u00a0')}
+              </p>
               <a
                 href={action.href}
                 className={`lp-btn ${featured ? 'lp-btn--primary' : 'lp-btn--ghost'}`}

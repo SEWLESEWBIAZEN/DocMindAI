@@ -22,6 +22,8 @@ import {
 import { ApiError, errorMessage } from '../../lib/api/errors'
 import type { ChatMessage, Collection, ConversationDetail, DocumentItem } from '../../lib/api/types'
 import { useWorkspace } from '../../lib/workspace/WorkspaceContext'
+import { LoadSamplesButton } from '../onboarding/samples'
+import { useSamples } from '../onboarding/useSamples'
 import { useUser } from '../auth/AuthProvider'
 import { documentKeys, getDocument, listDocuments } from '../documents/api'
 import { formatRelative } from '../documents/format'
@@ -533,6 +535,7 @@ function Welcome({ onPick, hasSources }: { onPick: (question: string) => void; h
     queryFn: () => listDocuments(workspace.id, { status: 'ready', limit: 1 }),
   })
   const { base, can } = useWorkspace()
+  const samples = useSamples()
   const noDocs = docs.data?.total === 0 && !hasSources
   return (
     <div className="chat__welcome">
@@ -548,16 +551,28 @@ function Welcome({ onPick, hasSources }: { onPick: (question: string) => void; h
       {noDocs ? (
         <Alert tone="info">
           There are no processed documents yet.{' '}
-          {can('documents.write') ? <Link to={`${base}/upload`}>Upload some first</Link> : 'Ask an admin to upload some.'}
+          {can('documents.write') ? (
+            <>
+              <Link to={`${base}/upload`}>Upload some</Link>, or try DocuMind with sample documents.
+              <span className="row" style={{ marginTop: 8 }}>
+                <LoadSamplesButton />
+              </span>
+            </>
+          ) : (
+            'Ask an admin to upload some.'
+          )}
         </Alert>
       ) : (
         <div className="suggestions">
-          {[
-            'Summarize the key points of these documents.',
-            'What are the main obligations and deadlines?',
-            'Are there any risks or open issues mentioned?',
-            'What changed compared to the previous version?',
-          ].map((q) => (
+          {(samples.data?.loaded && !hasSources
+            ? samples.data.questions.slice(0, 4)
+            : [
+                'Summarize the key points of these documents.',
+                'What are the main obligations and deadlines?',
+                'Are there any risks or open issues mentioned?',
+                'What changed compared to the previous version?',
+              ]
+          ).map((q) => (
             <button key={q} type="button" className="suggestion" onClick={() => onPick(q)}>
               {q}
             </button>

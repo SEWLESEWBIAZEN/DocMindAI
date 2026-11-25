@@ -31,6 +31,7 @@ function plan(key: string, name: string, monthly: number | null, extra: Partial<
     annual_cents_per_member: monthly === null ? null : monthly * 10,
     self_serve: monthly !== null && monthly > 0,
     contact_sales: monthly === null,
+    trial_days: key === 'pro' ? 14 : 0,
     entitlements: { ...base, ...extra } as unknown as CatalogPlan['entitlements'],
   }
 }
@@ -88,9 +89,13 @@ describe('pricing helpers', () => {
   })
 
   it('sends paid plans to billing and Enterprise to sales', () => {
-    const [free, pro, , enterprise] = CATALOG.plans
+    const [free, pro, business, enterprise] = CATALOG.plans
     expect(planAction(free, CATALOG, 'year').href).toBe('/register')
-    expect(planAction(pro, CATALOG, 'year')).toEqual({ href: '/app/billing?plan=pro&interval=year', label: 'Choose Pro' })
+    expect(planAction(pro, CATALOG, 'year')).toEqual({
+      href: '/app/billing?plan=pro&interval=year',
+      label: 'Start 14-day free trial',
+    })
+    expect(planAction(business, CATALOG, 'year').label).toBe('Choose Business')
     expect(planAction(enterprise, CATALOG, 'month').href).toMatch(/^mailto:sales@example\.com/)
     const offline = { ...CATALOG, sales_email: null, plans: CATALOG.plans.map((p) => ({ ...p, self_serve: false })) }
     expect(planAction(offline.plans[1], offline, 'month').href).toBe('/register')
@@ -107,7 +112,8 @@ describe('Pricing section', () => {
     expect(within(pro).getByText('$15.83')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: 'Monthly' }))
     expect(within(pro).getByText('$19')).toBeInTheDocument()
-    expect(within(pro).getByRole('link', { name: 'Choose Pro' })).toHaveAttribute('href', '/app/billing?plan=pro&interval=month')
+    expect(within(pro).getByText('14 days free, no card needed')).toBeInTheDocument()
+    expect(within(pro).getByRole('link', { name: 'Start 14-day free trial' })).toHaveAttribute('href', '/app/billing?plan=pro&interval=month')
     const table = screen.getByRole('table', { name: 'Compare plans' })
     const row = within(table).getByRole('row', { name: /Your own PostgreSQL database/ })
     expect(within(row).getAllByText('Included')).toHaveLength(2)

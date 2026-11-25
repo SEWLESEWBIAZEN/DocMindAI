@@ -11,6 +11,8 @@ import { documentKeys, listDocuments } from '../documents/api'
 import { formatBytes, formatRelative } from '../documents/format'
 import { useCollections } from '../documents/hooks'
 import { StatusBadge } from '../documents/pages'
+import { GettingStarted, LoadSamplesButton } from '../onboarding/samples'
+import { apiClient } from '../../lib/api/client'
 
 const MFA_OFFER_KEY = 'documind.mfa-offer-dismissed'
 
@@ -83,6 +85,11 @@ export function DashboardPage() {
     enabled: can('conversations.use'),
   })
   const collections = useCollections()
+  const members = useQuery({
+    queryKey: ['ws', ws, 'members', 'count'],
+    queryFn: async () => (await apiClient.get<unknown[]>(`/workspaces/${ws}/members`)).data.length,
+    enabled: workspace.kind === 'organization' && can('members.read'),
+  })
 
   const stats = [
     { label: 'Documents', value: recent.data?.total, hint: 'in this workspace', to: `${base}/documents` },
@@ -117,6 +124,12 @@ export function DashboardPage() {
       />
       <MfaOffer />
       <div className="stack" style={{ gap: 24 }}>
+        <GettingStarted
+          documents={recent.data?.total}
+          conversations={conversations.data?.total}
+          members={members.data}
+          mfaEnabled={user.mfa_enabled}
+        />
         {!user.mfa_enabled && (workspace.role === 'owner' || workspace.role === 'admin') && (
           <Alert tone="warning">
             Protect this workspace: turn on two-factor authentication. It's required for sensitive actions such as
@@ -165,8 +178,17 @@ export function DashboardPage() {
                 <EmptyState
                   icon="upload"
                   title="No documents yet"
-                  description="Upload a contract, policy or report to get started."
-                  action={can('documents.write') && <Link className="btn btn--primary btn--md" to={`${base}/upload`}>Upload</Link>}
+                  description="Upload a contract, policy or report, or try DocuMind with our sample documents."
+                  action={
+                    can('documents.write') && (
+                      <span className="row">
+                        <Link className="btn btn--primary btn--md" to={`${base}/upload`}>
+                          Upload
+                        </Link>
+                        <LoadSamplesButton />
+                      </span>
+                    )
+                  }
                 />
               </div>
             ) : (

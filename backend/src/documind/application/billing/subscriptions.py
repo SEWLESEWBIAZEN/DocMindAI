@@ -71,6 +71,8 @@ LIVE = frozenset({"active", "trialing", "past_due"})
 ENDED = frozenset({"canceled", "unpaid", "incomplete_expired"})
 #: The ``assigned_by`` used for plans set from Stripe.
 STRIPE = "stripe"
+#: The plan with a free trial (ADR 0033).
+TRIAL_PLAN = PlanKey.PRO
 
 ManagedBy = Literal["free", "stripe", "contract"]
 
@@ -99,6 +101,9 @@ class BillingOverview:
     can_manage_payment: bool
     #: Plans the workspace could switch to, with the reason when it can't.
     blocked_plans: dict[str, str] = field(default_factory=dict)
+    #: Days of free Pro this workspace can still start (0: none).
+    trial_days_available: int = 0
+    trial_ends_at: datetime | None = None
 
 
 def price_table(settings: Settings) -> dict[str, PlanPrice]:
@@ -130,6 +135,11 @@ def catalog(settings: Settings) -> list[dict[str, Any]]:
             "monthly_cents_per_member": plan.pricing.monthly_cents_per_member,
             "annual_cents_per_member": plan.pricing.annual_cents_per_member,
             "self_serve": plan.pricing.self_serve and settings.billing_enabled,
+            "trial_days": (
+                settings.billing_trial_days
+                if plan.key is TRIAL_PLAN and settings.billing_enabled
+                else 0
+            ),
             "contact_sales": plan.pricing.monthly_cents_per_member is None,
             "entitlements": plan.entitlements.to_dict(),
         }
@@ -241,6 +251,25 @@ class SubscriptionService:
             )
         return seats
 
+    async def _trial_days(self, ctx: WorkspaceContext, row: BillingSubscription | None) -> int:
+        """A trial is offered once per workspace and once per person, on a first subscription."""
+        days = self._settings.billing_trial_days
+        if not days or self._gateway is None:
+            return 0
+        if row is not None and (row.trial_ends_at is not None or row.subscription_id is not None):
+            return 0
+        used_elsewhere = (
+            await self._s.execute(
+                select(func.count())
+                .select_from(BillingSubscription)
+                .where(
+                    BillingSubscription.trial_user_id == ctx.user_id,
+                    BillingSubscription.trial_ends_at.is_not(None),
+                )
+            )
+        ).scalar_one()
+        return 0 if used_elsewhere else days
+
     def _urls(self, workspace_id: uuid.UUID) -> str:
         return f"{self._settings.public_app_url.rstrip('/')}/w/{workspace_id}/billing"
 
@@ -272,6 +301,10 @@ class SubscriptionService:
             sales_email=self._settings.sales_email,
             can_manage_payment=self._gateway is not None and row is not None,
             blocked_plans=blocked,
+            trial_days_available=(
+                await self._trial_days(ctx, row) if plan.key is PlanKey.FREE else 0
+            ),
+            trial_ends_at=row.trial_ends_at if row else None,
         )
 
     # --------------------------------------------------------------- writes
@@ -299,6 +332,7 @@ class SubscriptionService:
         price = price_id_for(self._settings, plan.key, period)
         if price is None:  # pragma: no cover - settings validation requires all prices
             raise ServiceUnavailableError("This price isn't configured.", code="billing_disabled")
+        trial_days = await self._trial_days(ctx, row) if plan.key is TRIAL_PLAN else 0
         try:
             if row is None:
                 user = await self._s.get(User, ctx.user_id)
@@ -318,16 +352,24 @@ class SubscriptionService:
                 workspace_id=ws,
                 success_url=f"{self._urls(ws)}?checkout=success",
                 cancel_url=f"{self._urls(ws)}?checkout=cancelled",
+                trial_days=trial_days or None,
             )
         except BillingGatewayError as exc:
             raise _unavailable() from exc
+        if trial_days:
+            row.trial_user_id = ctx.user_id
         self._audit.record(
             "billing.checkout_started",
             actor_user_id=ctx.user_id,
             workspace_id=ws,
             target_type="workspace",
             target_id=ws,
-            details={"plan": plan.key.value, "interval": period.value, "seats": seats},
+            details={
+                "plan": plan.key.value,
+                "interval": period.value,
+                "seats": seats,
+                "trial_days": trial_days,
+            },
         )
         await self._s.commit()
         return url
@@ -428,6 +470,8 @@ class SubscriptionService:
             else:
                 await self._apply(row, state)
                 workspace_id, outcome = row.workspace_id, "applied"
+                if kind == "customer.subscription.trial_will_end" and state.status == "trialing":
+                    await self._notify(row.workspace_id, _trial_ending_email, [])
         self._s.add(BillingEvent(id=event_id[:255], type=kind[:64], workspace_id=workspace_id))
         try:
             await self._s.commit()
@@ -458,6 +502,8 @@ class SubscriptionService:
         row.seats = state.seats
         row.current_period_end = state.current_period_end
         row.cancel_at_period_end = state.cancel_at_period_end
+        if state.trial_end is not None:
+            row.trial_ends_at = state.trial_end
         if mapped is not None:
             row.plan_key, row.interval = mapped.plan.key.value, mapped.interval.value
 
@@ -607,6 +653,24 @@ def _payment_failed_email(
             f"Hi {name},",
             f"The latest payment for {workspace} didn't go through. Stripe will try again over "
             "the next few days. Update the payment method to keep your plan.",
+        ],
+        url,
+    )
+
+
+def _trial_ending_email(
+    to: str, name: str, workspace: str, url: str, features: list[str]
+) -> EmailMessage:
+    del features
+    return _mail(
+        to,
+        f"{workspace}: your Pro trial ends soon",
+        "Your free trial ends in a few days",
+        [
+            f"Hi {name},",
+            f"The free Pro trial for {workspace} ends in a few days. To keep Pro, add a payment "
+            "method on the Billing page. If you don't, the workspace moves back to Free; "
+            "nothing is deleted.",
         ],
         url,
     )

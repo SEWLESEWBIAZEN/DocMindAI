@@ -124,6 +124,9 @@ class BillingSubscription(Base):
     seats: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     current_period_end: Mapped[datetime | None] = mapped_column(TZ)
     cancel_at_period_end: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    #: Who started the free trial checkout, and when the trial ends(ed) (ADR 0033).
+    trial_user_id: Mapped[uuid.UUID | None] = mapped_column()
+    trial_ends_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now(), onupdate=func.now())
 

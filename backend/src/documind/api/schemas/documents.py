@@ -33,6 +33,9 @@ class DocumentResponse(BaseModel):
     archived_by_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    is_sample: bool = Field(
+        default=False, description="An unchanged sample document from DocuMind (removable)."
+    )
     needs_reindex: bool = Field(
         default=False,
         description=(

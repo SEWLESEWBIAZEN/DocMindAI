@@ -101,8 +101,10 @@ class FakeStripe:
 
     # --- test helpers -------------------------------------------------------
 
-    def complete(self, n: int = -1, status: str = "active") -> SubscriptionState:
+    def complete(self, n: int = -1, status: str | None = None) -> SubscriptionState:
         checkout = self.checkouts[n]
+        trial = checkout.get("trial_days")
+        status = status or ("trialing" if trial else "active")
         sid = f"sub_{uuid.uuid4().hex[:10]}"
         state = SubscriptionState(
             id=sid,
@@ -113,6 +115,7 @@ class FakeStripe:
             current_period_end=datetime(2026, 12, 25, tzinfo=UTC),
             cancel_at_period_end=False,
             workspace_id=checkout["workspace_id"],
+            trial_end=datetime(2026, 12, 9, tzinfo=UTC) if trial else None,
         )
         self.subscriptions[sid] = state
         return state
@@ -245,7 +248,7 @@ def test_checkout_webhook_assigns_plan_and_is_idempotent(bapi: Api, fake: FakeSt
     overview = bapi.client.get(billing(w), headers=h).json()
     assert overview["plan_key"] == "pro"
     assert overview["managed_by"] == "stripe"
-    assert overview["status"] == "active"
+    assert overview["status"] == "trialing"  # a first Pro subscription starts with the trial
     assert overview["interval"] == "year"
     assert overview["seats"] == 1
     assert overview["can_manage_payment"] is True
@@ -425,3 +428,52 @@ def test_access_contract_plans_and_disabled_billing(
     overview = plain.client.get(billing(w), headers=h).json()
     assert overview["enabled"] is False
     assert overview["plan_key"] == "free"
+
+
+def test_free_pro_trial_once_per_workspace_and_person(bapi: Api, fake: FakeStripe) -> None:
+    catalog = {p["key"]: p for p in bapi.client.get("/api/v1/plans").json()["plans"]}
+    assert catalog["pro"]["trial_days"] == 14
+    assert catalog["business"]["trial_days"] == 0
+
+    h = bapi.signup("owner@example.com")
+    w = ws(bapi, h)
+    assert bapi.client.get(billing(w), headers=h).json()["trial_days_available"] == 14
+    # Business has no trial.
+    bapi.client.post(billing(w, "/checkout"), json={"plan": "business"}, headers=h)
+    assert fake.checkouts[-1]["trial_days"] is None
+    # Pro starts a 14-day trial (no card needed: see the Stripe adapter).
+    bapi.client.post(billing(w, "/checkout"), json={"plan": "pro"}, headers=h)
+    assert fake.checkouts[-1]["trial_days"] == 14
+    state = fake.complete()
+    assert state.status == "trialing"
+    webhook(bapi, "checkout.session.completed", {"subscription": state.id})
+    assert plan_of(bapi, w) == ("pro", "stripe")
+    overview = bapi.client.get(billing(w), headers=h).json()
+    assert overview["status"] == "trialing"
+    assert overview["trial_ends_at"].startswith("2026-12-09")
+    assert overview["trial_days_available"] == 0
+
+    # Three days before the end, Stripe warns; owners get an email.
+    bapi.mail.sent.clear()
+    webhook(bapi, "customer.subscription.trial_will_end", {"id": state.id, "customer": "x"})
+    assert [m.subject for m in bapi.mail.to("owner@example.com")] == [
+        "Personal: your Pro trial ends soon"
+    ]
+    # No card added: the trial ends and the workspace is back on Free.
+    fake.set(state.id, status="canceled")
+    webhook(bapi, "customer.subscription.deleted", {"id": state.id, "customer": "x"})
+    assert plan_of(bapi, w)[0] == "free"
+    overview = bapi.client.get(billing(w), headers=h).json()
+    assert overview["trial_days_available"] == 0  # this workspace had its trial
+
+    # The same person gets no second trial in a new organization...
+    org = str(bapi.create_org(h, "Acme")["id"])
+    assert bapi.client.get(billing(org), headers=h).json()["trial_days_available"] == 0
+    bapi.client.post(billing(org, "/checkout"), json={"plan": "pro"}, headers=h)
+    assert fake.checkouts[-1]["trial_days"] is None
+    # ...but someone else does.
+    other = bapi.signup("other@example.com")
+    assert (
+        bapi.client.get(billing(ws(bapi, other)), headers=other).json()["trial_days_available"]
+        == 14
+    )

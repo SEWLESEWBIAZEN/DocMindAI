@@ -580,18 +580,53 @@ class DocumentService:
         ctx.require(Permission.DOCUMENTS_DELETE)
         ensure_recent_mfa(ctx, utcnow(), self._settings.mfa_step_up_ttl_seconds)
         doc = await self._require(ctx, document_id, for_update=True)
+        await self._delete(ctx, doc, "document.deleted", {"mfa_verified": True})
+
+    async def ids_by_checksum(
+        self, ctx: WorkspaceContext, checksums: frozenset[str]
+    ) -> list[uuid.UUID]:
+        ctx.require(Permission.DOCUMENTS_READ)
+        return [d.id for d in await self._documents.by_checksums(ctx.workspace_id, checksums)]
+
+    async def checksums_present(
+        self, ctx: WorkspaceContext, checksums: frozenset[str]
+    ) -> list[str]:
+        ctx.require(Permission.DOCUMENTS_READ)
+        docs = await self._documents.by_checksums(ctx.workspace_id, checksums)
+        return [d.checksum_sha256 for d in docs]
+
+    async def delete_sample(self, ctx: WorkspaceContext, document_id: uuid.UUID) -> bool:
+        """Remove an unchanged sample document (ADR 0033). No 2FA: it holds no user data.
+
+        Returns False (and keeps the document) if it was changed, e.g. a version was added.
+        """
+        from documind.application.onboarding.samples import is_sample
+
+        ctx.require(Permission.DOCUMENTS_WRITE)
+        doc = await self._require(ctx, document_id, for_update=True)
+        versions = await self._documents.versions(ctx.workspace_id, document_id)
+        if not is_sample(doc.checksum_sha256, len(versions)):
+            await self._session.rollback()
+            return False
+        await self._delete(ctx, doc, "document.sample_removed", {})
+        return True
+
+    async def _delete(
+        self, ctx: WorkspaceContext, doc: Document, action: str, extra: dict[str, object]
+    ) -> None:
+        document_id = doc.id
         keys = [
             v.storage_key for v in await self._documents.versions(ctx.workspace_id, document_id)
         ]
         title = doc.title
         await self._documents.delete(doc)
         self._audit.record(
-            "document.deleted",
+            action,
             actor_user_id=ctx.user_id,
             workspace_id=ctx.workspace_id,
             target_type="document",
             target_id=document_id,
-            details={"title": title, "versions": len(keys), "mfa_verified": True},
+            details={"title": title, "versions": len(keys), **extra},
         )
         await self._session.commit()
         # After commit: a failed object delete leaves an orphan in a private

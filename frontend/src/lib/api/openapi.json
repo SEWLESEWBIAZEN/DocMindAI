@@ -480,6 +480,23 @@
               }
             ],
             "title": "Status"
+          },
+          "trial_days_available": {
+            "description": "Days of free Pro this workspace can still start; no card needed.",
+            "title": "Trial Days Available",
+            "type": "integer"
+          },
+          "trial_ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Ends At"
           }
         },
         "required": [
@@ -497,7 +514,9 @@
           "over_plan",
           "blocked_plans",
           "sales_email",
-          "can_manage_payment"
+          "can_manage_payment",
+          "trial_days_available",
+          "trial_ends_at"
         ],
         "title": "BillingOverviewResponse",
         "type": "object"
@@ -1499,6 +1518,12 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_sample": {
+            "default": false,
+            "description": "An unchanged sample document from DocuMind (removable).",
+            "title": "Is Sample",
+            "type": "boolean"
           },
           "media_type": {
             "title": "Media Type",
@@ -3209,6 +3234,11 @@
             "description": "Can be bought online on this server.",
             "title": "Self Serve",
             "type": "boolean"
+          },
+          "trial_days": {
+            "description": "Free trial length for a first subscription (0: none).",
+            "title": "Trial Days",
+            "type": "integer"
           }
         },
         "required": [
@@ -3218,6 +3248,7 @@
           "monthly_cents_per_member",
           "annual_cents_per_member",
           "self_serve",
+          "trial_days",
           "contact_sales",
           "entitlements"
         ],
@@ -4089,6 +4120,62 @@
         ],
         "title": "RoleKey",
         "type": "string"
+      },
+      "SampleRemovalResponse": {
+        "properties": {
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "SampleRemovalResponse",
+        "type": "object"
+      },
+      "SampleStatusResponse": {
+        "properties": {
+          "collection_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id"
+          },
+          "document_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Document Ids",
+            "type": "array"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "loaded",
+          "document_ids",
+          "collection_id",
+          "questions"
+        ],
+        "title": "SampleStatusResponse",
+        "type": "object"
       },
       "SearchHitResponse": {
         "properties": {
@@ -11340,6 +11427,146 @@
         "summary": "Re-index documents embedded with another model",
         "tags": [
           "ai providers"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/samples": {
+      "delete": {
+        "operationId": "remove_samples_api_v1_workspaces__workspace_id__samples_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleRemovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove unchanged sample documents (no 2FA needed; they hold no user data)",
+        "tags": [
+          "onboarding"
+        ]
+      },
+      "get": {
+        "operationId": "sample_status_api_v1_workspaces__workspace_id__samples_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Whether the samples are loaded",
+        "tags": [
+          "onboarding"
+        ]
+      },
+      "post": {
+        "operationId": "load_samples_api_v1_workspaces__workspace_id__samples_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add DocuMind's sample documents (idempotent; counts towards quotas)",
+        "tags": [
+          "onboarding"
         ]
       }
     },

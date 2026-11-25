@@ -34,6 +34,7 @@ class PlanCatalogEntry(BaseModel):
         description="Price per member per year when billed annually (two months free)."
     )
     self_serve: bool = Field(description="Can be bought online on this server.")
+    trial_days: int = Field(description="Free trial length for a first subscription (0: none).")
     contact_sales: bool
     entitlements: dict[str, Any]
 
@@ -67,6 +68,10 @@ class BillingOverviewResponse(BaseModel):
     )
     sales_email: str | None
     can_manage_payment: bool
+    trial_days_available: int = Field(
+        description="Days of free Pro this workspace can still start; no card needed."
+    )
+    trial_ends_at: datetime | None
 
 
 class PlanRequest(BaseModel):
@@ -101,6 +106,8 @@ def _overview(o: BillingOverview) -> BillingOverviewResponse:
         blocked_plans=o.blocked_plans,
         sales_email=o.sales_email,
         can_manage_payment=o.can_manage_payment,
+        trial_days_available=o.trial_days_available,
+        trial_ends_at=o.trial_ends_at,
     )
 
 

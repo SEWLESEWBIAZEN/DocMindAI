@@ -1580,6 +1580,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the samples are loaded */
+        get: operations["sample_status_api_v1_workspaces__workspace_id__samples_get"];
+        put?: never;
+        /** Add DocuMind's sample documents (idempotent; counts towards quotas) */
+        post: operations["load_samples_api_v1_workspaces__workspace_id__samples_post"];
+        /** Remove unchanged sample documents (no 2FA needed; they hold no user data) */
+        delete: operations["remove_samples_api_v1_workspaces__workspace_id__samples_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/search": {
         parameters: {
             query?: never;
@@ -1851,6 +1870,13 @@ export interface components {
             seats: number;
             /** Status */
             status: string | null;
+            /**
+             * Trial Days Available
+             * @description Days of free Pro this workspace can still start; no card needed.
+             */
+            trial_days_available: number;
+            /** Trial Ends At */
+            trial_ends_at: string | null;
         };
         /** Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post */
         Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post: {
@@ -2230,6 +2256,12 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Sample
+             * @description An unchanged sample document from DocuMind (removable).
+             * @default false
+             */
+            is_sample: boolean;
             /** Media Type */
             media_type: string;
             /**
@@ -2916,6 +2948,11 @@ export interface components {
              * @description Can be bought online on this server.
              */
             self_serve: boolean;
+            /**
+             * Trial Days
+             * @description Free trial length for a first subscription (0: none).
+             */
+            trial_days: number;
         };
         /** PlanCatalogResponse */
         PlanCatalogResponse: {
@@ -3256,6 +3293,22 @@ export interface components {
          * @enum {string}
          */
         RoleKey: "owner" | "admin" | "member" | "viewer";
+        /** SampleRemovalResponse */
+        SampleRemovalResponse: {
+            /** Removed */
+            removed: number;
+        };
+        /** SampleStatusResponse */
+        SampleStatusResponse: {
+            /** Collection Id */
+            collection_id: string | null;
+            /** Document Ids */
+            document_ids: string[];
+            /** Loaded */
+            loaded: boolean;
+            /** Questions */
+            questions: string[];
+        };
         /** SearchHitResponse */
         SearchHitResponse: {
             /**
@@ -7234,6 +7287,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReindexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sample_status_api_v1_workspaces__workspace_id__samples_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    load_samples_api_v1_workspaces__workspace_id__samples_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_samples_api_v1_workspaces__workspace_id__samples_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleRemovalResponse"];
                 };
             };
             /** @description Validation Error */

@@ -226,6 +226,7 @@ Prices live in `domain/billing/plans.py` next to the limits, and are shown by th
 | `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL` | *(unset)* | Recurring per-unit prices for Pro ($19 a month, $190 a year). |
 | `STRIPE_PRICE_BUSINESS_MONTHLY`, `STRIPE_PRICE_BUSINESS_ANNUAL` | *(unset)* | Recurring per-unit prices for Business ($99 a month, $990 a year). |
 | `STRIPE_TIMEOUT_SECONDS` | `20` | Per-request timeout for Stripe calls. |
+| `BILLING_TRIAL_DAYS` | `14` | Free Pro trial for a workspace's first subscription, without a card; once per workspace and per person. `0` turns trials off. |
 | `SALES_EMAIL` | *(unset)* | Where "Contact sales" points (Enterprise, contract plans). |
 | `BILLING_SEAT_SYNC_INTERVAL_SECONDS` | `3600` | How often the worker sets each subscription's quantity to the member count. |
 

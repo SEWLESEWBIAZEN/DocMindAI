@@ -21,6 +21,7 @@ Use test mode first (`sk_test_…`); switch to live keys only when everything be
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
+   - `customer.subscription.trial_will_end` (the "trial ends soon" email)
 
    Copy its signing secret (`whsec_…`).
 3. **Customer portal.** In the portal settings, allow updating payment methods, viewing invoices and
@@ -48,6 +49,10 @@ Restart `api`, `worker` and `beat`. For local testing, forward events with the S
 
 ## 3. How it behaves
 
+- **Free trial (ADR 0033):** a workspace's first Pro subscription starts with a
+  `BILLING_TRIAL_DAYS` (14) day trial, without a card. It is offered once per workspace and once
+  per person. Stripe sends `trial_will_end` three days before the end, and owners are emailed. If
+  no card was added, the subscription is cancelled at the end and the workspace returns to Free.
 - **Upgrading:** an owner chooses a plan on *Billing*; Stripe Checkout takes the payment; the
   webhook assigns the plan. Paid plans turn on required two-factor sign-in, with the usual grace
   period for members.

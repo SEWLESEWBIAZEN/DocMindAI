@@ -2623,3 +2623,51 @@ mark.reading-highlight {
   margin-top: 2px;
   color: var(--color-accent);
 }
+
+/* ------------------------------------------------------- getting started */
+
+.checklist {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  list-style: none;
+}
+
+.checklist__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  min-height: 40px;
+}
+
+.checklist__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-strong, var(--color-border));
+  flex: none;
+}
+
+.checklist__item--done .checklist__mark {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+}
+
+.checklist__item--done .checklist__label {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.checklist__label {
+  flex: 1 1 220px;
+  font-weight: 500;
+}
+
+.getting-started__samples {
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}

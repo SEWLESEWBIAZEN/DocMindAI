@@ -65,6 +65,16 @@ class DocumentRepository:
         )
         return (await self._s.execute(stmt)).scalar_one_or_none()
 
+    async def by_checksums(
+        self, workspace_id: uuid.UUID, checksums: frozenset[str]
+    ) -> list[Document]:
+        stmt = (
+            select(Document)
+            .where(Document.workspace_id == workspace_id, Document.checksum_sha256.in_(checksums))
+            .order_by(Document.created_at)
+        )
+        return list((await self._s.execute(stmt)).scalars())
+
     def _filtered(self, workspace_id: uuid.UUID, f: DocumentFilter) -> Select[Document]:
         stmt = select(Document).where(Document.workspace_id == workspace_id)
         if f.archived == "exclude":

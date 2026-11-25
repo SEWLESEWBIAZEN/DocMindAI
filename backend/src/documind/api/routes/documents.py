@@ -34,6 +34,7 @@ from documind.api.schemas.documents import (
 )
 from documind.application.documents.collection_service import CollectionInfo
 from documind.application.documents.document_service import DocumentInfo
+from documind.application.onboarding.samples import is_sample
 from documind.domain.documents.files import SUPPORTED_EXTENSIONS, DocumentFormat
 from documind.domain.documents.status import DocumentStatus
 from documind.domain.identity.permissions import Permission
@@ -42,12 +43,16 @@ from documind.infrastructure.database.repositories.documents import DocumentFilt
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["documents"])
 
 
-_COMPUTED = frozenset({"needs_reindex"})
+_COMPUTED = frozenset({"needs_reindex", "is_sample"})
 
 
 def _doc(d: DocumentInfo, *, needs_reindex: bool = False) -> DocumentResponse:
     fields = {f: getattr(d, f) for f in DocumentResponse.model_fields if f not in _COMPUTED}
-    return DocumentResponse(**fields, needs_reindex=needs_reindex)
+    return DocumentResponse(
+        **fields,
+        needs_reindex=needs_reindex,
+        is_sample=is_sample(d.checksum_sha256, d.version_count),
+    )
 
 
 async def _checked(

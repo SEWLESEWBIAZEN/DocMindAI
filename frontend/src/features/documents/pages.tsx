@@ -57,6 +57,7 @@ import { ReadingControls, type ReadingPosition } from '../voice/ReadingMode'
 import { useCollections } from './hooks'
 import { StepUpDialog } from './StepUpDialog'
 import { useUploads } from './UploadManager'
+import { LoadSamplesButton } from '../onboarding/samples'
 import { startReindex } from '../saas/api'
 
 const POLL_MS = 3000
@@ -456,12 +457,15 @@ export function DocumentLibraryPage() {
           <EmptyState
             icon="upload"
             title="No documents yet"
-            description={`Upload PDFs, Word files, text or Markdown (${SUPPORTED_EXTENSIONS.join(', ')}). DocuMind indexes them so you can ask questions with cited answers.`}
+            description={`Upload PDFs, Word files, text or Markdown (${SUPPORTED_EXTENSIONS.join(', ')}). DocuMind indexes them so you can ask questions with cited answers. Or start with our sample documents.`}
             action={
               can('documents.write') && (
-                <Link className="btn btn--primary btn--md" to={`${base}/upload`}>
-                  Upload documents
-                </Link>
+                <span className="row">
+                  <Link className="btn btn--primary btn--md" to={`${base}/upload`}>
+                    Upload documents
+                  </Link>
+                  <LoadSamplesButton />
+                </span>
               )
             }
           />
@@ -509,6 +513,7 @@ export function DocumentLibraryPage() {
                         <div className="row">
                           <StatusBadge status={doc.status} />
                           {doc.needs_reindex && <ReindexBadge />}
+                          {doc.is_sample && <Badge tone="accent">Sample</Badge>}
                           {doc.archived_at && <Badge tone="warning">Archived</Badge>}
                         </div>
                       </td>

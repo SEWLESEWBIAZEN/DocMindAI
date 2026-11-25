@@ -211,6 +211,8 @@ class Settings(BaseSettings):
     stripe_price_business_monthly: str | None = None
     stripe_price_business_annual: str | None = None
     stripe_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    # Free trial of Pro for a workspace's first subscription; no card needed. 0: no trial.
+    billing_trial_days: int = Field(default=14, ge=0, le=90)
     # Where "Contact sales" points (Enterprise).
     sales_email: str | None = None
     # Seats are kept in step with members by a periodic task.
