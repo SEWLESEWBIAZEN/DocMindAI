@@ -161,3 +161,30 @@ def test_broker_defaults_to_redis(make_settings: SettingsFactory) -> None:
     assert make_settings().broker_url == "redis://127.0.0.1:1/0"
     custom = make_settings(celery_broker_url="redis://broker:6379/2")
     assert custom.broker_url == "redis://broker:6379/2"
+
+
+def test_claude_for_answers_needs_its_key(make_settings: SettingsFactory) -> None:
+    from pydantic import SecretStr
+
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY"):
+        make_settings(llm_provider="anthropic", anthropic_api_key=None)
+    s = make_settings(
+        llm_provider="anthropic",
+        llm_model="claude-opus-5-5",
+        anthropic_api_key=SecretStr("sk-test"),
+        anthropic_base_url="",  # Compose passes unset variables as empty strings
+    )
+    assert s.anthropic_base_url is None
+    assert "sk-test" not in repr(s)
+
+
+def test_claude_with_figures_needs_an_openai_vision_model(make_settings: SettingsFactory) -> None:
+    from pydantic import SecretStr
+
+    with pytest.raises(ValidationError, match="VISION_MODEL"):
+        make_settings(
+            llm_provider="anthropic",
+            anthropic_api_key=SecretStr("sk-test"),
+            figure_descriptions_enabled=True,
+            openai_api_key=SecretStr("sk-openai"),
+        )

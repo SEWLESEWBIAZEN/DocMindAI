@@ -136,12 +136,25 @@ Required variables have no default; the backend refuses to start without them.
 
 | Variable                  | Default         | Description                                                   |
 | ------------------------- | --------------- | ------------------------------------------------------------- |
-| `LLM_PROVIDER`            | `openai`        | `openai`, or `local` (offline extractive stand-in; development and tests only; rejected in production). Uses `OPENAI_API_KEY` / `OPENAI_BASE_URL`. |
-| `LLM_MODEL`               | `gpt-5.4-mini`  | Chat model for answers.                                       |
-| `LLM_TEMPERATURE`         | *(unset)*       | Sent only when set (reasoning models reject custom values).   |
+| `LLM_PROVIDER`            | `openai`        | `openai`, `anthropic` (Claude), or `local` (offline extractive stand-in; development and tests only; rejected in production). |
+| `LLM_MODEL`               | `gpt-5.4-mini`  | Chat model for answers, e.g. `claude-opus-5-5` with `anthropic`. |
+| `LLM_TEMPERATURE`         | *(unset)*       | OpenAI only, sent only when set. Current Claude models don't accept sampling parameters, so it's ignored with `anthropic`. |
 | `LLM_MAX_OUTPUT_TOKENS`   | `1200`          | Upper bound for an answer (`max_completion_tokens`).          |
 | `LLM_TIMEOUT_SECONDS`     | `60`            | Per-request timeout.                                          |
 | `LLM_MAX_RETRIES`         | `2`             | SDK retries for 429/5xx/connection errors.                    |
+
+**Claude** (`LLM_PROVIDER=anthropic`) uses the official Anthropic SDK. Embeddings, figure descriptions
+and voice stay on OpenAI, because Anthropic has no embeddings or speech API. Set
+`EMBEDDING_PROVIDER=openai`, and when figure descriptions are on, set `VISION_MODEL` to an OpenAI
+model.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | *(required)* | Sent as `Authorization: Bearer`, with `anthropic-version: 2026-10-21` (SDK 2.x). |
+| `ANTHROPIC_BASE_URL` | *(Anthropic)* | Only for a compatible gateway. Given with or without a trailing `/v1`. A gateway sees every question and source passage. |
+| `ANTHROPIC_EFFORT` | `medium` | `low` to `max`. Thinking is always on with current models, and effort sets its depth. |
+| `ANTHROPIC_THINKING_HEADROOM_TOKENS` | `4096` | Added to each request's `max_tokens`, because thinking tokens count towards it. |
+| `ANTHROPIC_REFUSAL_FALLBACK` | `true` | Server-side fallbacks (beta). On a safety decline, the API re-runs the request on a fallback model. Set to `false` if a gateway rejects the `anthropic-beta` header. |
 
 ## Retrieval
 

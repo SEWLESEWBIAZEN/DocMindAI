@@ -52,6 +52,7 @@ from documind.infrastructure.database.repositories.processing import SessionEmbe
 from documind.infrastructure.email.smtp import SmtpEmailSender
 from documind.infrastructure.embeddings.local_provider import LocalHashingEmbeddingProvider
 from documind.infrastructure.embeddings.openai_provider import OpenAIEmbeddingProvider
+from documind.infrastructure.llm.anthropic_provider import AnthropicChatProvider
 from documind.infrastructure.llm.local_provider import LocalExtractiveLLM
 from documind.infrastructure.llm.openai_provider import OpenAIChatProvider
 from documind.infrastructure.llm.vision import LocalImageDescriber, OpenAIImageDescriber
@@ -268,7 +269,9 @@ def platform_ai(c: Container) -> PlatformAI:
     }
     if c.image_describer is not None:
         adapters[Capability.VISION] = CapabilityAdapter(
-            s.llm_provider, c.image_describer, c.image_describer.model
+            "local" if s.llm_provider == "local" else "openai",
+            c.image_describer,
+            c.image_describer.model,
         )
     if c.speech_to_text is not None:
         adapters[Capability.SPEECH_TO_TEXT] = CapabilityAdapter(
@@ -299,6 +302,19 @@ def _build_embedding_provider(settings: Settings) -> EmbeddingProvider:
 def _build_llm_provider(settings: Settings) -> LLMProvider:
     if settings.llm_provider == "local":
         return LocalExtractiveLLM()
+    if settings.llm_provider == "anthropic":
+        if settings.anthropic_api_key is None:  # also enforced by settings validation
+            raise ValueError("ANTHROPIC_API_KEY is required for LLM_PROVIDER=anthropic")
+        return AnthropicChatProvider(
+            api_key=settings.anthropic_api_key.get_secret_value(),
+            model=settings.llm_model,
+            base_url=settings.anthropic_base_url,
+            effort=settings.anthropic_effort,
+            thinking_headroom_tokens=settings.anthropic_thinking_headroom_tokens,
+            refusal_fallback=settings.anthropic_refusal_fallback,
+            timeout_seconds=settings.llm_timeout_seconds,
+            max_retries=settings.llm_max_retries,
+        )
     if settings.openai_api_key is None:  # also enforced by settings validation
         raise ValueError("OPENAI_API_KEY is required for LLM_PROVIDER=openai")
     return OpenAIChatProvider(
@@ -319,6 +335,7 @@ def _build_image_describer(settings: Settings) -> ImageDescriber | None:
         raise ValueError("OPENAI_API_KEY is required for figure descriptions")
     return OpenAIImageDescriber(
         api_key=settings.openai_api_key.get_secret_value(),
+        # With Claude for answers, VISION_MODEL names the OpenAI model (validated).
         model=settings.vision_model or settings.llm_model,
         base_url=settings.openai_base_url,
         timeout_seconds=settings.llm_timeout_seconds,

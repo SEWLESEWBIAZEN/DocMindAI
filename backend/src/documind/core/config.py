@@ -116,6 +116,15 @@ class Settings(BaseSettings):
     embedding_provider: Literal["openai", "local"] = "openai"
     openai_api_key: SecretStr | None = None
     openai_base_url: str | None = None
+    # Claude for answers (LLM_PROVIDER=anthropic). Embeddings stay on OpenAI: Anthropic
+    # has no embeddings API. ANTHROPIC_BASE_URL points at a compatible gateway if used.
+    anthropic_api_key: SecretStr | None = None
+    anthropic_base_url: str | None = None
+    anthropic_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # Thinking can't be turned off on current models and counts towards max_tokens.
+    anthropic_thinking_headroom_tokens: int = Field(default=4096, ge=0, le=64000)
+    # Server-side refusal fallbacks (beta); turn off if a gateway rejects the beta header.
+    anthropic_refusal_fallback: bool = True
     embedding_model: str = "text-embedding-3-small"
     # Must match the vector column created by the migrations.
     embedding_dimensions: int = 1536
@@ -126,7 +135,7 @@ class Settings(BaseSettings):
     # --- Answer generation (LLM) --------------------------------------------
     # "local" is an offline extractive stand-in for development and tests; it
     # is rejected in production. The OpenAI provider shares OPENAI_API_KEY.
-    llm_provider: Literal["openai", "local"] = "openai"
+    llm_provider: Literal["openai", "anthropic", "local"] = "openai"
     llm_model: str = Field(default="gpt-5.4-mini", min_length=1, max_length=100)
     # None = provider default. Reasoning models reject custom temperatures.
     llm_temperature: float | None = Field(default=None, ge=0, le=2)
@@ -331,6 +340,8 @@ class Settings(BaseSettings):
 
     @field_validator(
         "openai_api_key",
+        "anthropic_api_key",
+        "anthropic_base_url",
         "celery_broker_url",
         "smtp_password",
         "credential_encryption_keys",
@@ -359,6 +370,17 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
         if self.llm_provider == "openai" and self.openai_api_key is None:
             raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
+        if self.llm_provider == "anthropic" and self.anthropic_api_key is None:
+            raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic")
+        if (
+            self.llm_provider == "anthropic"
+            and self.figure_descriptions_enabled
+            and not self.vision_model
+        ):
+            raise ValueError(
+                "Figure descriptions use OpenAI: set VISION_MODEL (an OpenAI model) "
+                "when LLM_PROVIDER=anthropic"
+            )
         if self.speech_provider == "openai" and self.openai_api_key is None:
             raise ValueError("OPENAI_API_KEY is required when SPEECH_PROVIDER=openai")
         if self.chunk_overlap_tokens >= self.chunk_max_tokens // 2:
@@ -414,7 +436,7 @@ class Settings(BaseSettings):
             raise ValueError("SMTP must use STARTTLS or SSL in production")
         if self.embedding_provider != "openai":
             raise ValueError("EMBEDDING_PROVIDER=local is for development only")
-        if self.llm_provider != "openai":
+        if self.llm_provider == "local":
             raise ValueError("LLM_PROVIDER=local is for development only")
         return self
 
