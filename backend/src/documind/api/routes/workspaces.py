@@ -12,6 +12,7 @@ from documind.api.dependencies import (
     InvitationServiceDep,
     QuotasDep,
     WorkspaceCtx,
+    WorkspaceCtxWithoutMfaPolicy,
     WorkspaceServiceDep,
 )
 from documind.api.schemas.identity import (
@@ -22,6 +23,7 @@ from documind.api.schemas.identity import (
     InvitationResponse,
     InviteRequest,
     MemberResponse,
+    MfaRequirementRequest,
     RenameWorkspaceRequest,
     TokenRequest,
     WorkspaceResponse,
@@ -44,6 +46,9 @@ def workspace_response(w: WorkspaceSummary) -> WorkspaceResponse:
         organization_id=w.organization_id,
         organization_slug=w.organization_slug,
         is_default=w.is_default,
+        mfa_required_by=w.mfa_required_by,
+        organization_requires_mfa=w.organization_requires_mfa,
+        mfa_enrollment_deadline=w.mfa_enrollment_deadline,
     )
 
 
@@ -77,9 +82,28 @@ async def create_organization(
 
 @router.get("", response_model=WorkspaceResponse)
 async def get_workspace(
-    ctx: WorkspaceCtx, user: CurrentUser, workspaces: WorkspaceServiceDep
+    ctx: WorkspaceCtxWithoutMfaPolicy, user: CurrentUser, workspaces: WorkspaceServiceDep
 ) -> WorkspaceResponse:
     return workspace_response(await workspaces.get(ctx, user))
+
+
+@router.put(
+    "/mfa-requirement",
+    response_model=WorkspaceResponse,
+    summary="Require 2FA for every member (organizations; admins with a fresh 2FA code)",
+    description=(
+        "Paid plans always require 2FA; this setting also requires it on the Free plan. "
+        "Members without 2FA keep access for MFA_ENFORCEMENT_GRACE_DAYS, then get 403 "
+        "`workspace_requires_mfa` until they set it up."
+    ),
+)
+async def set_mfa_requirement(
+    body: MfaRequirementRequest,
+    ctx: WorkspaceCtx,
+    user: CurrentUser,
+    workspaces: WorkspaceServiceDep,
+) -> WorkspaceResponse:
+    return workspace_response(await workspaces.set_mfa_required(ctx, user, body.required))
 
 
 @router.patch("", response_model=WorkspaceResponse)
@@ -93,7 +117,9 @@ async def rename_workspace(
 
 
 @router.post("/leave", status_code=status.HTTP_204_NO_CONTENT)
-async def leave_workspace(ctx: WorkspaceCtx, workspaces: WorkspaceServiceDep) -> Response:
+async def leave_workspace(
+    ctx: WorkspaceCtxWithoutMfaPolicy, workspaces: WorkspaceServiceDep
+) -> Response:
     await workspaces.leave(ctx)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -111,6 +137,7 @@ async def list_members(ctx: WorkspaceCtx, workspaces: WorkspaceServiceDep) -> li
             display_name=m.display_name,
             role=m.role,
             joined_at=m.joined_at,
+            mfa_enabled=m.mfa_enabled,
         )
         for m in await workspaces.list_members(ctx)
     ]

@@ -66,7 +66,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // ------------------------------------------------------------------- login
 
 export function LoginPage() {
-  const { signIn, expired } = useAuth()
+  const { signIn, completeSignIn, expired } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [email, setEmail] = useState('')
@@ -74,6 +74,12 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [unverified, setUnverified] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Second step for accounts with 2FA (ADR 0026).
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const [useRecovery, setUseRecovery] = useState(false)
+
+  const finish = () => navigate(safeNext(params.get('next')), { replace: true })
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -81,14 +87,92 @@ export function LoginPage() {
     setUnverified(false)
     setBusy(true)
     try {
-      await signIn(email.trim(), password)
-      navigate(safeNext(params.get('next')), { replace: true })
+      const result = await signIn(email.trim(), password)
+      if ('challenge' in result) {
+        setChallenge(result.challenge)
+        setPassword('')
+        setCode('')
+      } else finish()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'email_not_verified') setUnverified(true)
       setError(errorMessage(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  const submitCode = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!challenge) return
+    setError(null)
+    setBusy(true)
+    try {
+      const value = code.trim()
+      await completeSignIn(challenge, useRecovery ? { recovery_code: value } : { code: value.replace(/\s/g, '') })
+      finish()
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'mfa_challenge_expired') {
+        setChallenge(null)
+        setUseRecovery(false)
+      }
+      setError(errorMessage(err))
+      setCode('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (challenge) {
+    return (
+      <AuthLayout
+        title="Two-factor authentication"
+        subtitle={
+          useRecovery
+            ? 'Enter one of the recovery codes you saved when you set up two-factor authentication.'
+            : 'Enter the 6-digit code from your authenticator app.'
+        }
+      >
+        {error && <Alert>{error}</Alert>}
+        <form className="form" onSubmit={submitCode} noValidate>
+          <Field label={useRecovery ? 'Recovery code' : 'Authentication code'}>
+            <TextInput
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="one-time-code"
+              inputMode={useRecovery ? 'text' : 'numeric'}
+              autoFocus
+              required
+            />
+          </Field>
+          <Button type="submit" variant="primary" loading={busy} disabled={!code.trim()}>
+            Verify and sign in
+          </Button>
+          <div className="row row--between">
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setUseRecovery(!useRecovery)
+                setCode('')
+                setError(null)
+              }}
+            >
+              {useRecovery ? 'Use your authenticator app instead' : 'Use a recovery code instead'}
+            </button>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setChallenge(null)
+                setError(null)
+              }}
+            >
+              Back
+            </button>
+          </div>
+        </form>
+      </AuthLayout>
+    )
   }
 
   return (

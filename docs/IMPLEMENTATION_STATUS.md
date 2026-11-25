@@ -158,11 +158,13 @@ Admins can delete any document, with 2FA.* See ADR 0013.
 
 Follow-ups:
 
-- [ ] Require 2FA at sign-in for users who enabled it (recommended), and optionally enforce
-      enrollment for Admins/Owners per organization
+- [x] Require 2FA at sign-in for users who enabled it; required 2FA on paid plans and for
+      organizations that turn it on, with a grace period (ADR 0026, `test_mfa_sign_in.py`,
+      `test_mfa_enforcement.py`, Playwright journey)
 - [ ] Support-assisted 2FA reset for users who lose both authenticator and recovery codes
 - [ ] Passkeys (WebAuthn) as an additional factor; email OTP as an accessible fallback (ADR 0011)
-- [ ] Frontend 2FA screens (QR code, manual secret, recovery codes) in Phase 7
+- [x] Frontend 2FA screens (QR code, manual secret, recovery codes): built in Phase 7
+      (`features/admin/pages.tsx`, Security section); covered by the Playwright journey
 
 ## Phase 4: Document processing engine ✅
 

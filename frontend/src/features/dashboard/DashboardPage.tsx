@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { Alert, Button, EmptyState, ErrorState, Icon, Loading, PageHeader } from '../../components/ui'
@@ -11,6 +11,42 @@ import { documentKeys, listDocuments } from '../documents/api'
 import { formatBytes, formatRelative } from '../documents/format'
 import { useCollections } from '../documents/hooks'
 import { StatusBadge } from '../documents/pages'
+
+const MFA_OFFER_KEY = 'documind.mfa-offer-dismissed'
+
+/** Offered to everyone without 2FA; optional unless the workspace requires it (ADR 0026). */
+function MfaOffer() {
+  const user = useUser()
+  const { workspace, base } = useWorkspace()
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return window.localStorage.getItem(MFA_OFFER_KEY) === user.id
+    } catch {
+      return false
+    }
+  })
+  // A workspace that requires 2FA shows its own reminder instead.
+  if (user.mfa_enabled || dismissed || workspace.mfa_enrollment_deadline) return null
+  const dismiss = () => {
+    try {
+      window.localStorage.setItem(MFA_OFFER_KEY, user.id)
+    } catch {
+      // Not remembered in private windows; it just shows again next time.
+    }
+    setDismissed(true)
+  }
+  return (
+    <div className="mfa-banner">
+      <Alert tone="info">
+        Protect your account with two-factor authentication: you'll enter a code from an authenticator app when you
+        sign in. <Link to={`${base}/profile`}>Set it up</Link>{' '}
+        <button type="button" className="link-button" onClick={dismiss}>
+          Not now
+        </button>
+      </Alert>
+    </div>
+  )
+}
 
 function greeting(now = new Date()): string {
   const hour = now.getHours()
@@ -79,6 +115,7 @@ export function DashboardPage() {
           </>
         }
       />
+      <MfaOffer />
       <div className="stack" style={{ gap: 24 }}>
         {!user.mfa_enabled && (workspace.role === 'owner' || workspace.role === 'admin') && (
           <Alert tone="warning">

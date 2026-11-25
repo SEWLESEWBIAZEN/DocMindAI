@@ -31,5 +31,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0023](0023-production-object-storage.md) | Production object storage (closes 0006) | Accepted |
 | [0024](0024-customer-hosted-processing.md) | Customer-hosted processing (MI-7) | Accepted |
 | [0025](0025-approved-infrastructure-migrations.md) | Approved infrastructure migrations and Azure Blob Storage (MI-8, MI-6) | Accepted |
+| [0026](0026-two-factor-sign-in-and-enforcement.md) | Two-factor authentication at sign-in, and required 2FA | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

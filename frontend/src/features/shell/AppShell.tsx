@@ -17,6 +17,7 @@ import { UploadProvider, useUploads } from '../documents/UploadManager'
 import { UploadTray } from '../documents/UploadTray'
 import { Logo } from '../landing/components/Logo'
 import { VoiceProvider } from '../voice/VoiceContext'
+import { MfaGate } from './MfaGate'
 
 /** `/app`: send the user to their default workspace. */
 export function AppHome() {
@@ -92,7 +93,9 @@ function Shell() {
         <Topbar onOpenNav={() => setNavOpen(true)} navOpen={navOpen} />
         <main id="main" className="shell__main" ref={main}>
           <ErrorBoundary resetKey={location.pathname}>
-            <Outlet />
+            <MfaGate>
+              <Outlet />
+            </MfaGate>
           </ErrorBoundary>
         </main>
       </div>

@@ -91,6 +91,8 @@ Required variables have no default; the backend refuses to start without them.
 | `MFA_SETUP_TTL_MINUTES`           |          | `15`       | Time allowed to confirm a started setup.                                 |
 | `RATE_LIMIT_MFA_PER_USER`         |          | `5`        | 2FA attempts (setup, confirm, verify, disable, regenerate) per user per window. |
 | `RATE_LIMIT_MFA_WINDOW_SECONDS`   |          | `300`      | Window for the above.                                                    |
+| `MFA_LOGIN_CHALLENGE_SECONDS`     |          | `300`      | How long the password step stays valid while a 2FA user enters their code (ADR 0026). |
+| `MFA_ENFORCEMENT_GRACE_DAYS`      |          | `14`       | Time members get to set up 2FA once a workspace requires it (paid plan or organization setting). |
 
 ## Document processing
 

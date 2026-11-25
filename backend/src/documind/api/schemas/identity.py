@@ -86,6 +86,16 @@ class WorkspaceResponse(BaseModel):
     organization_id: uuid.UUID | None
     organization_slug: str | None
     is_default: bool
+    mfa_required_by: Literal["plan", "organization"] | None = Field(
+        default=None, description="Why 2FA is required here; null when it's optional"
+    )
+    organization_requires_mfa: bool = Field(
+        default=False, description="The organization's own setting (paid plans require 2FA anyway)"
+    )
+    mfa_enrollment_deadline: datetime | None = Field(
+        default=None,
+        description="Only for callers without 2FA: when they lose access to this workspace",
+    )
 
 
 class ActiveWorkspaceRequest(_In):
@@ -107,6 +117,13 @@ class MemberResponse(BaseModel):
     display_name: str
     role: RoleKey
     joined_at: datetime
+    mfa_enabled: bool | None = Field(
+        default=None, description="Shown only to members who can manage members"
+    )
+
+
+class MfaRequirementRequest(_In):
+    required: bool
 
 
 class ChangeRoleRequest(_In):
@@ -182,6 +199,20 @@ class MfaDisableRequest(_In):
 
 class RecoveryCodesResponse(BaseModel):
     recovery_codes: list[str] = Field(description="Shown once. Store them somewhere safe.")
+
+
+class MfaChallengeResponse(BaseModel):
+    """The password was correct; finish signing in with ``POST /auth/login/mfa``."""
+
+    mfa_required: Literal[True] = True
+    challenge_token: str = Field(description="Single use; send it with the code")
+    expires_in: int = Field(description="Seconds until the password step must be repeated")
+
+
+class MfaLoginRequest(_In):
+    challenge_token: str = Field(min_length=20, max_length=128)
+    code: str | None = Field(default=None, min_length=6, max_length=10)
+    recovery_code: str | None = Field(default=None, min_length=12, max_length=32)
 
 
 class StepUpResponse(BaseModel):

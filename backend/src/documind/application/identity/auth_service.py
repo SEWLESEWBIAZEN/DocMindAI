@@ -10,6 +10,9 @@ Security properties (see ADR 0008):
   session family, because it indicates the token was stolen.
 * Password changes and "sign out everywhere" bump ``users.auth_version``,
   which immediately invalidates outstanding access tokens.
+* Users with 2FA sign in in two steps (ADR 0026): a correct password yields a
+  short-lived, single-use challenge, and only a valid code for that challenge
+  starts a session.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Protocol
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,6 +63,7 @@ logger = logging.getLogger(__name__)
 
 EMAIL_VERIFICATION = "email_verification"
 PASSWORD_RESET = "password_reset"  # noqa: S105 - token purpose label, not a secret
+MFA_LOGIN = "mfa_login"
 # Concurrent refreshes from two tabs can present the same token twice; within
 # this window the second is rejected without treating it as theft.
 ROTATION_GRACE = timedelta(seconds=10)
@@ -71,6 +76,20 @@ class AuthResult:
     access_expires_in: int
     refresh_token: str
     refresh_expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class MfaChallenge:
+    """The password was right; a second factor is needed to finish signing in."""
+
+    challenge_token: str
+    expires_in: int
+
+
+class SecondFactor(Protocol):
+    async def verify(self, user: User, code: str | None, recovery_code: str | None) -> datetime:
+        """Check a TOTP or recovery code; returns when it was verified."""
+        ...
 
 
 class AuthService:
@@ -141,8 +160,15 @@ class AuthService:
         self._refresh.add(token)
         return token, raw
 
-    def _result(self, user: User, refresh: RefreshToken, raw_refresh: str) -> AuthResult:
-        access = self._tokens.issue(user.id, user.auth_version)
+    def _result(
+        self,
+        user: User,
+        refresh: RefreshToken,
+        raw_refresh: str,
+        *,
+        mfa_verified_at: datetime | None = None,
+    ) -> AuthResult:
+        access = self._tokens.issue(user.id, user.auth_version, mfa_verified_at=mfa_verified_at)
         return AuthResult(
             user=user,
             access_token=access.token,
@@ -261,7 +287,7 @@ class AuthService:
 
     # ---------------------------------------------------------------- sessions
 
-    async def login(self, email: str, password: str) -> AuthResult:
+    async def login(self, email: str, password: str) -> AuthResult | MfaChallenge:
         s = self._settings
         email = normalize_email(email)
         await self._limiter.hit(
@@ -291,6 +317,19 @@ class AuthService:
 
         if self._hasher.needs_rehash(user.password_hash):
             user.password_hash = await self._hasher.hash(password)
+        if user.mfa_enabled:
+            # Second step required: no session yet, only a short-lived challenge.
+            await self._account_tokens.invalidate_unused(user.id, MFA_LOGIN, utcnow())
+            ttl = s.mfa_login_challenge_seconds
+            raw = self._new_account_token(user, MFA_LOGIN, timedelta(seconds=ttl))
+            self._audit.record(
+                "auth.login_mfa_required",
+                actor_user_id=user.id,
+                target_type="user",
+                target_id=user.id,
+            )
+            await self._session.commit()
+            return MfaChallenge(challenge_token=raw, expires_in=ttl)
         user.last_login_at = utcnow()
         refresh, raw = self._start_session(user)
         self._audit.record(
@@ -298,6 +337,54 @@ class AuthService:
         )
         await self._session.commit()
         return self._result(user, refresh, raw)
+
+    async def complete_mfa_login(
+        self,
+        challenge_token: str,
+        code: str | None,
+        recovery_code: str | None,
+        second_factor: SecondFactor,
+    ) -> AuthResult:
+        """Second sign-in step: exchange the challenge and a valid code for a session."""
+        s = self._settings
+        await self._limiter.hit(
+            "login:ip",
+            self._meta.client_key,
+            s.rate_limit_login_per_ip,
+            s.rate_limit_login_window_seconds,
+        )
+        expired = AuthenticationError(
+            "This sign-in attempt has expired. Enter your email and password again.",
+            code="mfa_challenge_expired",
+        )
+        digest = hash_token(challenge_token)
+        record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
+        if record is None or record.used_at is not None or record.expires_at <= utcnow():
+            raise expired
+        user = await self._users.get(record.user_id)
+        if user is None or not user.is_active or not user.mfa_enabled:
+            raise expired
+        await self._session.commit()  # release the row lock while the code is checked
+        # Rate-limited per user, audited, and replay-safe (TOTP steps, single-use recovery codes).
+        verified_at = await second_factor.verify(user, code, recovery_code)
+
+        record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
+        now = utcnow()
+        if record is None or record.used_at is not None or record.expires_at <= now:
+            raise expired  # used concurrently by another request
+        record.used_at = now
+        user = await self._users.require(record.user_id, for_update=True)
+        user.last_login_at = now
+        refresh, raw = self._start_session(user)
+        self._audit.record(
+            "auth.login_succeeded",
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            details={"mfa": True},
+        )
+        await self._session.commit()
+        return self._result(user, refresh, raw, mfa_verified_at=verified_at)
 
     async def refresh(self, raw_token: str | None) -> AuthResult:
         s = self._settings

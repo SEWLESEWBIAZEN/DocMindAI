@@ -2492,3 +2492,8 @@ mark.reading-highlight {
   word-break: break-all;
   user-select: all;
 }
+
+/* Required 2FA grace-period notice (ADR 0026) */
+.mfa-banner {
+  margin-bottom: 16px;
+}

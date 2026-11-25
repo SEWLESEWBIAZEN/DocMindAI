@@ -13,8 +13,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /** Sign in (users with 2FA get a challenge to finish with /auth/login/mfa) */
         post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish signing in with an authenticator or recovery code */
+        post: operations["login_mfa_api_v1_auth_login_mfa_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1249,6 +1266,26 @@ export interface paths {
         patch: operations["change_member_role_api_v1_workspaces__workspace_id__members__member_id__patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/mfa-requirement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Require 2FA for every member (organizations; admins with a fresh 2FA code)
+         * @description Paid plans always require 2FA; this setting also requires it on the Free plan. Members without 2FA keep access for MFA_ENFORCEMENT_GRACE_DAYS, then get 403 `workspace_requires_mfa` until they set it up.
+         */
+        put: operations["set_mfa_requirement_api_v1_workspaces__workspace_id__mfa_requirement_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/plan": {
         parameters: {
             query?: never;
@@ -2156,6 +2193,11 @@ export interface components {
              * Format: date-time
              */
             joined_at: string;
+            /**
+             * Mfa Enabled
+             * @description Shown only to members who can manage members
+             */
+            mfa_enabled?: boolean | null;
             role: components["schemas"]["RoleKey"];
             /**
              * User Id
@@ -2260,6 +2302,28 @@ export interface components {
             /** Units */
             units: number;
         };
+        /**
+         * MfaChallengeResponse
+         * @description The password was correct; finish signing in with ``POST /auth/login/mfa``.
+         */
+        MfaChallengeResponse: {
+            /**
+             * Challenge Token
+             * @description Single use; send it with the code
+             */
+            challenge_token: string;
+            /**
+             * Expires In
+             * @description Seconds until the password step must be repeated
+             */
+            expires_in: number;
+            /**
+             * Mfa Required
+             * @default true
+             * @constant
+             */
+            mfa_required: true;
+        };
         /** MfaCodeRequest */
         MfaCodeRequest: {
             /**
@@ -2276,6 +2340,20 @@ export interface components {
             password: string;
             /** Recovery Code */
             recovery_code?: string | null;
+        };
+        /** MfaLoginRequest */
+        MfaLoginRequest: {
+            /** Challenge Token */
+            challenge_token: string;
+            /** Code */
+            code?: string | null;
+            /** Recovery Code */
+            recovery_code?: string | null;
+        };
+        /** MfaRequirementRequest */
+        MfaRequirementRequest: {
+            /** Required */
+            required: boolean;
         };
         /** MfaSecondFactorRequest */
         MfaSecondFactorRequest: {
@@ -3080,10 +3158,26 @@ export interface components {
             /** Is Default */
             is_default: boolean;
             kind: components["schemas"]["WorkspaceKind"];
+            /**
+             * Mfa Enrollment Deadline
+             * @description Only for callers without 2FA: when they lose access to this workspace
+             */
+            mfa_enrollment_deadline?: string | null;
+            /**
+             * Mfa Required By
+             * @description Why 2FA is required here; null when it's optional
+             */
+            mfa_required_by?: ("plan" | "organization") | null;
             /** Name */
             name: string;
             /** Organization Id */
             organization_id: string | null;
+            /**
+             * Organization Requires Mfa
+             * @description The organization's own setting (paid plans require 2FA anyway)
+             * @default false
+             */
+            organization_requires_mfa: boolean;
             /** Organization Slug */
             organization_slug: string | null;
             role: components["schemas"]["RoleKey"];
@@ -3169,6 +3263,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"] | components["schemas"]["MfaChallengeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_mfa_api_v1_auth_login_mfa_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaLoginRequest"];
             };
         };
         responses: {
@@ -5954,6 +6081,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_mfa_requirement_api_v1_workspaces__workspace_id__mfa_requirement_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaRequirementRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

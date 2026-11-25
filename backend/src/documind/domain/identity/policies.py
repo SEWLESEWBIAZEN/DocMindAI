@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
 from documind.domain.errors import ConflictError, PermissionDeniedError
@@ -34,6 +35,10 @@ class WorkspaceContext:
     # last completed a 2FA check (from the access token's step-up claim).
     mfa_enabled: bool = False
     mfa_verified_at: datetime | None = None
+    # ADR 0026: whether this workspace requires 2FA, and (for callers without it)
+    # when their grace period ends.
+    mfa_required: bool = False
+    mfa_enrollment_deadline: datetime | None = None
 
     def can(self, permission: Permission) -> bool:
         return permission in self.permissions
@@ -115,4 +120,42 @@ def ensure_recent_mfa(ctx: WorkspaceContext, now: datetime, max_age_seconds: int
     if age is None or age > max_age_seconds or age < -_MFA_CLOCK_SKEW_SECONDS:
         raise PermissionDeniedError(
             "Confirm it's you with your two-factor code to continue.", code="mfa_step_up_required"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Required 2FA (ADR 0026)
+# --------------------------------------------------------------------------- #
+
+MfaRequiredBy = Literal["plan", "organization"]
+
+
+def mfa_required_by(plan_key: str | None, organization_requires: bool) -> MfaRequiredBy | None:
+    """Paid plans always require 2FA; any organization may require it on any plan."""
+    if plan_key not in (None, "free"):
+        return "plan"
+    if organization_requires:
+        return "organization"
+    return None
+
+
+def mfa_enrollment_deadline(
+    required_since: datetime | None, now: datetime, grace_days: int
+) -> datetime:
+    """When members without 2FA lose access (grace counted from when it became required)."""
+    return (required_since or now) + timedelta(days=grace_days)
+
+
+def ensure_mfa_policy_met(ctx: WorkspaceContext, now: datetime) -> None:
+    """Members without 2FA are refused once the workspace's grace period has ended."""
+    if (
+        ctx.mfa_required
+        and not ctx.mfa_enabled
+        and ctx.mfa_enrollment_deadline is not None
+        and now >= ctx.mfa_enrollment_deadline
+    ):
+        raise PermissionDeniedError(
+            "This workspace requires two-factor authentication. Set it up under "
+            "Profile, then try again.",
+            code="workspace_requires_mfa",
         )

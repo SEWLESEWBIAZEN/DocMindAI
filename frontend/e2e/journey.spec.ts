@@ -169,6 +169,21 @@ test('complete journey: sign up, upload, ask with citations, team, 2FA', async (
   await page.waitForURL('**/login')
   await page.goto('/app')
   await page.waitForURL(/\/login\?next=/)
+
+  // --- sign in again: 2FA is on, so a code is needed after the password (ADR 0026) ---
+  await page.getByLabel('Email').fill(owner)
+  await page.getByLabel('Password').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('heading', { name: 'Two-factor authentication' })).toBeVisible()
+  await expectAccessible(page, 'sign-in code')
+  await page.getByLabel('Authentication code').fill('000000')
+  await page.getByRole('button', { name: 'Verify and sign in' }).click()
+  await expect(page.getByRole('alert')).toContainText("isn't valid")
+  // The step-up code above used the current window: take the next one.
+  await page.waitForTimeout(31_000 - (Date.now() % 30_000))
+  await page.getByLabel('Authentication code').fill(totp(secret))
+  await page.getByRole('button', { name: 'Verify and sign in' }).click()
+  await page.waitForURL(/\/w\/.+\/dashboard/)
 })
 
 test('protected routes redirect to sign-in and back', async ({ page }) => {

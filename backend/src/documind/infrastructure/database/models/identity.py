@@ -128,6 +128,11 @@ class Workspace(Base):
     personal_owner_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), unique=True
     )
+    # ADR 0026: an organization can require 2FA on any plan; paid plans always do.
+    mfa_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # When 2FA became required here (start of the members' grace period). Set on
+    # first use while required, cleared when it no longer is.
+    mfa_enforced_since: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
@@ -206,12 +211,13 @@ class RefreshToken(Base):
 
 
 class AccountToken(Base):
-    """Single-use tokens for email verification and password reset (hash only)."""
+    """Single-use tokens: email verification, password reset, 2FA sign-in (hash only)."""
 
     __tablename__ = "account_tokens"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('email_verification', 'password_reset')", name="purpose_valid"
+            "purpose IN ('email_verification', 'password_reset', 'mfa_login')",
+            name="purpose_valid",
         ),
         Index("ix_account_tokens_user_id_purpose", "user_id", "purpose"),
     )

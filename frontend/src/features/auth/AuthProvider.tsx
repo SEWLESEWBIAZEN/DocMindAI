@@ -7,12 +7,17 @@ import type { Schemas, User } from '../../lib/api/types'
 
 type Status = 'loading' | 'authenticated' | 'anonymous'
 
+/** Signing in either finishes, or (for accounts with 2FA) needs a code next (ADR 0026). */
+export type SignInResult = { user: User } | { challenge: string; expiresIn: number }
+export type SecondFactor = { code: string } | { recovery_code: string }
+
 interface AuthContextValue {
   status: Status
   user: User | null
   /** True when the session ended on its own (expired or revoked). */
   expired: boolean
-  signIn: (email: string, password: string) => Promise<User>
+  signIn: (email: string, password: string) => Promise<SignInResult>
+  completeSignIn: (challenge: string, factor: SecondFactor) => Promise<User>
   signOut: (options?: { everywhere?: boolean }) => Promise<void>
   setUser: (user: User) => void
   refreshUser: () => Promise<void>
@@ -52,18 +57,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient])
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { data } = await apiClient.post<Schemas['TokenResponse']>(
-      '/auth/login',
-      { email, password },
-      { skipAuth: true, withCredentials: true },
-    )
+  const start = useCallback((data: Schemas['TokenResponse']) => {
     setSession(data)
     setUserState(data.user)
     setExpired(false)
     setStatus('authenticated')
     return data.user
   }, [])
+
+  const signIn = useCallback(
+    async (email: string, password: string): Promise<SignInResult> => {
+      const { data } = await apiClient.post<Schemas['TokenResponse'] | Schemas['MfaChallengeResponse']>(
+        '/auth/login',
+        { email, password },
+        { skipAuth: true, withCredentials: true },
+      )
+      if ('challenge_token' in data) return { challenge: data.challenge_token, expiresIn: data.expires_in }
+      return { user: start(data) }
+    },
+    [start],
+  )
+
+  const completeSignIn = useCallback(
+    async (challenge: string, factor: SecondFactor) => {
+      const { data } = await apiClient.post<Schemas['TokenResponse']>(
+        '/auth/login/mfa',
+        { challenge_token: challenge, ...factor },
+        { skipAuth: true, withCredentials: true },
+      )
+      return start(data)
+    },
+    [start],
+  )
 
   const signOut = useCallback(
     async (options?: { everywhere?: boolean }) => {
@@ -89,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, expired, signIn, signOut, setUser: setUserState, refreshUser }),
-    [status, user, expired, signIn, signOut, refreshUser],
+    () => ({ status, user, expired, signIn, completeSignIn, signOut, setUser: setUserState, refreshUser }),
+    [status, user, expired, signIn, completeSignIn, signOut, refreshUser],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

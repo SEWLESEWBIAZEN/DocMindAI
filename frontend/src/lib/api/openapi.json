@@ -2047,6 +2047,18 @@
             "title": "Joined At",
             "type": "string"
           },
+          "mfa_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown only to members who can manage members",
+            "title": "Mfa Enabled"
+          },
           "role": {
             "$ref": "#/components/schemas/RoleKey"
           },
@@ -2303,6 +2315,33 @@
         "title": "MeteredUsageResponse",
         "type": "object"
       },
+      "MfaChallengeResponse": {
+        "description": "The password was correct; finish signing in with ``POST /auth/login/mfa``.",
+        "properties": {
+          "challenge_token": {
+            "description": "Single use; send it with the code",
+            "title": "Challenge Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "description": "Seconds until the password step must be repeated",
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "mfa_required": {
+            "const": true,
+            "default": true,
+            "title": "Mfa Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "challenge_token",
+          "expires_in"
+        ],
+        "title": "MfaChallengeResponse",
+        "type": "object"
+      },
       "MfaCodeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2360,6 +2399,62 @@
           "password"
         ],
         "title": "MfaDisableRequest",
+        "type": "object"
+      },
+      "MfaLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge_token": {
+            "maxLength": 128,
+            "minLength": 20,
+            "title": "Challenge Token",
+            "type": "string"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 6,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "recovery_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Code"
+          }
+        },
+        "required": [
+          "challenge_token"
+        ],
+        "title": "MfaLoginRequest",
+        "type": "object"
+      },
+      "MfaRequirementRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "required"
+        ],
+        "title": "MfaRequirementRequest",
         "type": "object"
       },
       "MfaSecondFactorRequest": {
@@ -4429,6 +4524,35 @@
           "kind": {
             "$ref": "#/components/schemas/WorkspaceKind"
           },
+          "mfa_enrollment_deadline": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for callers without 2FA: when they lose access to this workspace",
+            "title": "Mfa Enrollment Deadline"
+          },
+          "mfa_required_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "plan",
+                  "organization"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why 2FA is required here; null when it's optional",
+            "title": "Mfa Required By"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -4444,6 +4568,12 @@
               }
             ],
             "title": "Organization Id"
+          },
+          "organization_requires_mfa": {
+            "default": false,
+            "description": "The organization's own setting (paid plans require 2FA anyway)",
+            "title": "Organization Requires Mfa",
+            "type": "boolean"
           },
           "organization_slug": {
             "anyOf": [
@@ -4702,6 +4832,55 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Login Api V1 Auth Login Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign in (users with 2FA get a challenge to finish with /auth/login/mfa)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/login/mfa": {
+      "post": {
+        "operationId": "login_mfa_api_v1_auth_login_mfa_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
                   "$ref": "#/components/schemas/TokenResponse"
                 }
               }
@@ -4719,9 +4898,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Login",
+        "summary": "Finish signing in with an authenticator or recovery code",
         "tags": [
-          "auth"
+          "auth",
+          "mfa"
         ]
       }
     },
@@ -9563,6 +9743,65 @@
           }
         ],
         "summary": "Change Member Role",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/mfa-requirement": {
+      "put": {
+        "description": "Paid plans always require 2FA; this setting also requires it on the Free plan. Members without 2FA keep access for MFA_ENFORCEMENT_GRACE_DAYS, then get 403 `workspace_requires_mfa` until they set it up.",
+        "operationId": "set_mfa_requirement_api_v1_workspaces__workspace_id__mfa_requirement_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaRequirementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Require 2FA for every member (organizations; admins with a fresh 2FA code)",
         "tags": [
           "workspaces"
         ]

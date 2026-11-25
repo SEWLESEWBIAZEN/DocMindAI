@@ -28,6 +28,7 @@ import { useAuth, useUser } from '../auth/AuthProvider'
 import { PasswordMeter } from '../auth/pages'
 import { validatePassword } from '../auth/password'
 import { formatBytes, formatDate, formatDateTime, formatNumber, formatRelative } from '../documents/format'
+import { StepUpDialog } from '../documents/StepUpDialog'
 import { PlanPanel } from '../saas/PlanPanel'
 import { VoiceSettingsPanel, WorkspaceVoicePolicy } from '../voice/VoiceSettingsPanel'
 
@@ -109,6 +110,8 @@ export function MembersPage() {
 
   const assignable = ROLE_ORDER.filter((r) => RANK[r] <= RANK[workspace.role])
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['ws', ws, 'members'] })
+  // 2FA status is only sent to members who manage members (ADR 0026).
+  const showMfa = members.data?.some((m) => m.mfa_enabled != null) ?? false
 
   const changeRole = async (member: Member, next: Role) => {
     try {
@@ -207,6 +210,7 @@ export function MembersPage() {
                     <th scope="col">Name</th>
                     <th scope="col">Role</th>
                     <th scope="col">Joined</th>
+                    {showMfa && <th scope="col">Two-factor</th>}
                     <th scope="col">
                       <span className="sr-only">Actions</span>
                     </th>
@@ -245,6 +249,9 @@ export function MembersPage() {
                           )}
                         </td>
                         <td>{formatDate(m.joined_at)}</td>
+                        {showMfa && (
+                          <td>{m.mfa_enabled ? <Badge tone="success">On</Badge> : <Badge tone="warning">Off</Badge>}</td>
+                        )}
                         <td className="table__actions">
                           {editable && (
                             <Button size="sm" variant="ghost" icon="trash" label={`Remove ${m.display_name}`} onClick={() => void remove(m)} />
@@ -452,6 +459,7 @@ export function SettingsPage() {
             </dl>
           )}
         </Panel>
+        {workspace.kind === 'organization' && can('workspace.update') && <MfaRequirementPanel />}
         <WorkspaceVoicePolicy />
         {can('audit.read') && <AuditLogPanel />}
         {workspace.kind === 'organization' && (
@@ -466,6 +474,63 @@ export function SettingsPage() {
   )
 }
 
+/** Require 2FA for every member (ADR 0026). Paid plans always do; this adds it on Free. */
+function MfaRequirementPanel() {
+  const { workspace } = useWorkspace()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [pending, setPending] = useState<boolean | null>(null)
+  const byPlan = workspace.mfa_required_by === 'plan'
+  const on = byPlan || workspace.organization_requires_mfa
+
+  const apply = async (token: string) => {
+    if (pending === null) return
+    try {
+      await apiClient.put(
+        `/workspaces/${workspace.id}/mfa-requirement`,
+        { required: pending },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      await queryClient.invalidateQueries({ queryKey: workspacesKey })
+      toast.success(
+        pending
+          ? 'Two-factor authentication is now required. Members without it are reminded and have a grace period.'
+          : 'Two-factor authentication is no longer required by this organization.',
+      )
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  return (
+    <Panel
+      title="Two-factor authentication"
+      description="Require every member to protect their account with an authenticator app. Members who haven't set it up get a reminder and a grace period, then must set it up to keep access."
+    >
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={byPlan}
+          onChange={(e) => setPending(e.target.checked)}
+        />
+        Require two-factor authentication for every member
+      </label>
+      {byPlan && <p className="field__hint">Your plan requires two-factor authentication for every member.</p>}
+      <StepUpDialog
+        open={pending !== null}
+        title={pending ? 'Require two-factor authentication?' : 'Stop requiring two-factor authentication?'}
+        description="Changing a security setting needs your two-factor code."
+        actionLabel={pending ? 'Require it' : 'Stop requiring it'}
+        onClose={() => setPending(null)}
+        onVerified={apply}
+      />
+    </Panel>
+  )
+}
+
 const ACTION_LABELS: Record<string, string> = {
   'document.uploaded': 'Uploaded a document',
   'document.deleted': 'Deleted a document',
@@ -477,6 +542,7 @@ const ACTION_LABELS: Record<string, string> = {
   'invitation.accepted': 'Accepted an invitation',
   'conversation.deleted': 'Deleted a conversation',
   'collection.created': 'Created a collection',
+  'workspace.mfa_requirement_changed': 'Changed the two-factor requirement',
 }
 
 function AuditLogPanel() {
@@ -742,6 +808,8 @@ function SecurityPanel() {
   }
   const done = async () => {
     await queryClient.invalidateQueries({ queryKey: ['me', 'mfa'] })
+    // Workspaces that require 2FA drop their deadline once it's on (ADR 0026).
+    await queryClient.invalidateQueries({ queryKey: workspacesKey })
     await refreshUser()
   }
   const call = async (action: () => Promise<void>) => {

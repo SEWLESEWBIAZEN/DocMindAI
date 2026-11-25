@@ -137,8 +137,16 @@ def get_auth_service(
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 
-def get_workspace_service(session: SessionDep, meta: MetaDep) -> WorkspaceService:
-    return WorkspaceService(session, meta)
+def get_workspace_service(
+    session: SessionDep, meta: MetaDep, container: ContainerDep
+) -> WorkspaceService:
+    settings = container.settings
+    return WorkspaceService(
+        session,
+        meta,
+        mfa_grace_days=settings.mfa_enforcement_grace_days,
+        mfa_step_up_seconds=settings.mfa_step_up_ttl_seconds,
+    )
 
 
 def get_invitation_service(
@@ -214,6 +222,26 @@ async def get_workspace_context(
 
 
 WorkspaceCtx = Annotated[WorkspaceContext, Depends(get_workspace_context)]
+
+
+async def get_workspace_context_without_mfa_policy(
+    workspace_id: uuid.UUID, principal: CurrentPrincipal, workspaces: WorkspaceServiceDep
+) -> WorkspaceContext:
+    """Like ``WorkspaceCtx``, but also for members locked out by required 2FA (ADR 0026).
+
+    Only for reading the workspace itself and for leaving it.
+    """
+    return await workspaces.resolve_context(
+        principal.user,
+        workspace_id,
+        mfa_verified_at=principal.mfa_verified_at,
+        enforce_mfa=False,
+    )
+
+
+WorkspaceCtxWithoutMfaPolicy = Annotated[
+    WorkspaceContext, Depends(get_workspace_context_without_mfa_policy)
+]
 
 
 def require_csrf_header(

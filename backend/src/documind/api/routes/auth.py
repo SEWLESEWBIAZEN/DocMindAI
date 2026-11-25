@@ -20,6 +20,8 @@ from documind.api.schemas.identity import (
     EmailRequest,
     LoginRequest,
     MessageResponse,
+    MfaChallengeResponse,
+    MfaLoginRequest,
     MfaSecondFactorRequest,
     RegisterRequest,
     ResetPasswordRequest,
@@ -27,6 +29,7 @@ from documind.api.schemas.identity import (
     TokenRequest,
     TokenResponse,
 )
+from documind.application.identity.auth_service import MfaChallenge
 from documind.domain.errors import AuthenticationError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -66,11 +69,37 @@ async def resend_verification(body: EmailRequest, auth: AuthServiceDep) -> Messa
     return MessageResponse(detail=_CHECK_EMAIL)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse | MfaChallengeResponse,
+    summary="Sign in (users with 2FA get a challenge to finish with /auth/login/mfa)",
+)
 async def login(
     body: LoginRequest, response: Response, auth: AuthServiceDep, settings: SettingsDep
-) -> TokenResponse:
+) -> TokenResponse | MfaChallengeResponse:
     result = await auth.login(str(body.email), body.password)
+    if isinstance(result, MfaChallenge):
+        response.headers["Cache-Control"] = "no-store"
+        return MfaChallengeResponse(
+            challenge_token=result.challenge_token, expires_in=result.expires_in
+        )
+    return token_response(response, settings, result)
+
+
+@router.post(
+    "/login/mfa",
+    response_model=TokenResponse,
+    tags=["mfa"],
+    summary="Finish signing in with an authenticator or recovery code",
+)
+async def login_mfa(
+    body: MfaLoginRequest,
+    response: Response,
+    auth: AuthServiceDep,
+    mfa: MfaServiceDep,
+    settings: SettingsDep,
+) -> TokenResponse:
+    result = await auth.complete_mfa_login(body.challenge_token, body.code, body.recovery_code, mfa)
     return token_response(response, settings, result)
 
 

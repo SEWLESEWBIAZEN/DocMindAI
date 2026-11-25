@@ -244,6 +244,10 @@ class Settings(BaseSettings):
     dataplane_max_open: int = Field(default=20, ge=1, le=500)
     # How long a successful 2FA check authorizes sensitive actions (e.g. delete).
     mfa_step_up_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    # Sign-in with 2FA (ADR 0026): how long the password step stays valid.
+    mfa_login_challenge_seconds: int = Field(default=300, ge=60, le=900)
+    # Members of a workspace that requires 2FA have this long to set it up.
+    mfa_enforcement_grace_days: int = Field(default=14, ge=0, le=90)
     mfa_setup_ttl_minutes: int = Field(default=15, ge=1, le=60)
     rate_limit_mfa_per_user: int = Field(default=5, ge=1)
     rate_limit_mfa_window_seconds: int = Field(default=300, ge=1)
