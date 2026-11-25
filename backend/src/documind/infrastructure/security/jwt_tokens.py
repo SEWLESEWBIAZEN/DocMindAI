@@ -22,7 +22,12 @@ class JwtAccessTokenService:
         self._ttl = ttl_seconds
 
     def issue(
-        self, user_id: uuid.UUID, auth_version: int, *, mfa_verified_at: datetime | None = None
+        self,
+        user_id: uuid.UUID,
+        auth_version: int,
+        *,
+        mfa_verified_at: datetime | None = None,
+        mfa_method: str | None = None,
     ) -> IssuedAccessToken:
         now = datetime.now(UTC)
         claims: dict[str, object] = {
@@ -38,6 +43,8 @@ class JwtAccessTokenService:
         }
         if mfa_verified_at is not None:
             claims["mfa"] = int(mfa_verified_at.timestamp())
+            if mfa_method is not None:
+                claims["mfm"] = mfa_method
         return IssuedAccessToken(
             token=jwt.encode(claims, self._secret, algorithm=_ALGORITHM), expires_in=self._ttl
         )
@@ -62,6 +69,7 @@ class JwtAccessTokenService:
                 mfa_verified_at=datetime.fromtimestamp(int(mfa), tz=UTC)
                 if mfa is not None
                 else None,
+                mfa_method=str(claims["mfm"]) if mfa is not None and "mfm" in claims else None,
             )
         except AuthenticationError:
             raise

@@ -60,6 +60,15 @@ class MfaStatus:
     enabled: bool
     enabled_at: datetime | None
     recovery_codes_remaining: int
+    method: str | None = None  # "authenticator", "email" or None
+
+
+@dataclass(frozen=True, slots=True)
+class Verified:
+    """A successful second-factor check: when, and with which method."""
+
+    at: datetime
+    method: str  # "totp", "recovery_code" or "email_code"
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,8 +184,7 @@ class MfaService:
         elif method == "email_code":
             await self._email.send(emails.mfa_email_code_used_email(user.email, user.display_name))
 
-    async def send_email_code(self, user: User) -> None:
-        """Email a 6-digit one-time code to a user with 2FA (works once, expires quickly)."""
+    async def _limit_email(self, user: User) -> None:
         s = self._settings
         await self._limiter.hit(
             "mfa_email:user",
@@ -184,12 +192,11 @@ class MfaService:
             s.rate_limit_mfa_email_per_user,
             s.rate_limit_mfa_email_window_seconds,
         )
-        locked = await self._users.require(user.id, for_update=True)
-        if not locked.mfa_enabled:
-            raise PermissionDeniedError(
-                "Set up two-factor authentication first.", code="mfa_enrollment_required"
-            )
-        if await self._email_codes_blocked(locked):
+
+    async def _issue_email_code(self, locked: User, *, setup: bool = False) -> None:
+        """Create a single-use code for ``locked`` and email it. Commits."""
+        s = self._settings
+        if not setup and await self._email_codes_blocked(locked):
             raise PermissionDeniedError(
                 "For your security, email codes can't be used for 24 hours after a password "
                 "reset. Use your authenticator app or a recovery code.",
@@ -211,6 +218,7 @@ class MfaService:
             actor_user_id=locked.id,
             target_type="user",
             target_id=locked.id,
+            details={"purpose": "setup" if setup else "verify"},
         )
         await self._session.commit()
         await self._email.send(
@@ -219,12 +227,73 @@ class MfaService:
             )
         )
 
+    async def send_email_code(self, user: User) -> None:
+        """Email a 6-digit one-time code to a user with 2FA (works once, expires quickly)."""
+        await self._limit_email(user)
+        locked = await self._users.require(user.id, for_update=True)
+        if not locked.mfa_enabled:
+            raise PermissionDeniedError(
+                "Set up two-factor authentication first.", code="mfa_enrollment_required"
+            )
+        await self._issue_email_code(locked)
+
+    # ------------------------------------------------------ email-only 2FA
+
+    async def begin_email_setup(self, user: User, password: str) -> None:
+        """Email-only 2FA (ADR 0028), for people without an authenticator app."""
+        await self._limit(user)
+        await self._limit_email(user)
+        locked = await self._users.require(user.id, for_update=True)
+        await self._require_password(locked, password)
+        if locked.mfa_enabled:
+            raise ConflictError(
+                "Two-factor authentication is already on.", code="mfa_already_enabled"
+            )
+        await self._issue_email_code(locked, setup=True)
+
+    async def confirm_email_setup(self, user: User, email_code: str) -> list[str]:
+        await self._limit(user)
+        locked = await self._users.require(user.id, for_update=True)
+        if locked.mfa_enabled:
+            raise ConflictError(
+                "Two-factor authentication is already on.", code="mfa_already_enabled"
+            )
+        now = utcnow()
+        row = await self._tokens.latest_active(locked.id, MFA_EMAIL, now)
+        candidate = "".join(email_code.split())
+        if row is None or not hmac.compare_digest(
+            row.token_hash, self._email_code_hash(row.id, candidate)
+        ):
+            self._audit.record(
+                "auth.mfa_failed", actor_user_id=locked.id, details={"reason": "setup_code"}
+            )
+            await self._session.commit()
+            raise AuthenticationError(
+                "That code isn't valid. Use the latest code we emailed you.",
+                code="invalid_mfa_code",
+            )
+        row.used_at = now
+        locked.mfa_email_enabled_at = now
+        # Recovery codes still matter: they work if the mailbox is ever lost.
+        codes = await self._new_recovery_codes(locked)
+        self._audit.record(
+            "user.mfa_enabled",
+            actor_user_id=locked.id,
+            target_type="user",
+            target_id=locked.id,
+            details={"method": "email"},
+        )
+        await self._session.commit()
+        await self._email.send(emails.mfa_enabled_email(locked.email, locked.display_name))
+        return codes
+
     # ----------------------------------------------------------------- queries
 
     async def status(self, user: User) -> MfaStatus:
         return MfaStatus(
             enabled=user.mfa_enabled,
-            enabled_at=user.totp_enabled_at,
+            method=user.mfa_method,
+            enabled_at=user.totp_enabled_at or user.mfa_email_enabled_at,
             recovery_codes_remaining=await self._codes.remaining(user.id)
             if user.mfa_enabled
             else 0,
@@ -236,7 +305,7 @@ class MfaService:
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
         await self._require_password(locked, password)
-        if locked.mfa_enabled:
+        if locked.totp_enabled_at is not None:  # email-only users may switch to an app
             raise ConflictError(
                 "Two-factor authentication is already on.", code="mfa_already_enabled"
             )
@@ -262,7 +331,7 @@ class MfaService:
     async def confirm_setup(self, user: User, code: str) -> list[str]:
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
-        if locked.mfa_enabled:
+        if locked.totp_enabled_at is not None:
             raise ConflictError(
                 "Two-factor authentication is already on.", code="mfa_already_enabled"
             )
@@ -293,6 +362,8 @@ class MfaService:
         locked.totp_last_used_step = step
         locked.totp_pending_secret_encrypted = None
         locked.totp_pending_expires_at = None
+        # The app becomes the primary factor; email codes remain a fallback (ADR 0027).
+        locked.mfa_email_enabled_at = None
         codes = await self._new_recovery_codes(locked)
         self._audit.record(
             "user.mfa_enabled", actor_user_id=locked.id, target_type="user", target_id=locked.id
@@ -319,6 +390,7 @@ class MfaService:
         locked.totp_secret_encrypted = None
         locked.totp_enabled_at = None
         locked.totp_last_used_step = None
+        locked.mfa_email_enabled_at = None
         await self._codes.delete_all(locked.id)
         self._audit.record(
             "user.mfa_disabled",
@@ -330,12 +402,15 @@ class MfaService:
         await self._session.commit()
         await self._email.send(emails.mfa_disabled_email(locked.email, locked.display_name))
 
-    async def regenerate_recovery_codes(self, user: User, code: str) -> list[str]:
+    async def regenerate_recovery_codes(
+        self, user: User, code: str | None, email_code: str | None = None
+    ) -> list[str]:
+        """New recovery codes, confirmed with the authenticator or an email code."""
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
         if not locked.mfa_enabled:
             raise ConflictError("Two-factor authentication is not on.", code="mfa_not_enabled")
-        await self._check_second_factor(locked, code, None)
+        await self._check_second_factor(locked, code, None, email_code)
         codes = await self._new_recovery_codes(locked)
         self._audit.record(
             "user.mfa_recovery_codes_regenerated",
@@ -354,8 +429,8 @@ class MfaService:
         code: str | None,
         recovery_code: str | None,
         email_code: str | None = None,
-    ) -> datetime:
-        """Check the second factor; returns the verification time for the step-up token."""
+    ) -> Verified:
+        """Check the second factor; returns when and how, for the step-up token."""
         await self._limit(user)
         locked = await self._users.require(user.id, for_update=True)
         if not locked.mfa_enabled:
@@ -367,4 +442,4 @@ class MfaService:
         self._audit.record("auth.mfa_verified", actor_user_id=locked.id, details={"method": method})
         await self._session.commit()
         await self._notify(locked, method)
-        return now
+        return Verified(at=now, method=method)

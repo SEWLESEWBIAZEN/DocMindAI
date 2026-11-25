@@ -67,6 +67,9 @@ class UserResponse(BaseModel):
     display_name: str
     email_verified: bool
     mfa_enabled: bool
+    mfa_method: Literal["authenticator", "email"] | None = Field(
+        default=None, description="Primary second factor; email codes also work as a fallback"
+    )
     default_workspace_id: uuid.UUID | None
     created_at: datetime
 
@@ -96,6 +99,9 @@ class WorkspaceResponse(BaseModel):
         default=None,
         description="Only for callers without 2FA: when they lose access to this workspace",
     )
+    allow_email_mfa: bool = Field(
+        default=True, description="Whether email codes count as 2FA in this workspace"
+    )
 
 
 class ActiveWorkspaceRequest(_In):
@@ -120,10 +126,15 @@ class MemberResponse(BaseModel):
     mfa_enabled: bool | None = Field(
         default=None, description="Shown only to members who can manage members"
     )
+    mfa_method: Literal["authenticator", "email"] | None = None
 
 
 class MfaRequirementRequest(_In):
-    required: bool
+    required: bool | None = Field(default=None, description="Require 2FA for every member")
+    allow_email_codes: bool | None = Field(
+        default=None,
+        description="Whether one-time codes by email count as 2FA here (else authenticator only)",
+    )
 
 
 class ChangeRoleRequest(_In):
@@ -168,8 +179,20 @@ MfaCode = Field(min_length=6, max_length=10, description="6-digit code from the 
 
 class MfaStatusResponse(BaseModel):
     enabled: bool
+    method: Literal["authenticator", "email"] | None = None
     enabled_at: datetime | None
     recovery_codes_remaining: int
+
+
+class MfaRegenerateRequest(_In):
+    """An authenticator code or an email code (no authenticator needed, ADR 0028)."""
+
+    code: str | None = Field(default=None, min_length=6, max_length=10)
+    email_code: str | None = Field(default=None, min_length=6, max_length=8)
+
+
+class MfaEmailConfirmRequest(_In):
+    email_code: str = Field(min_length=6, max_length=8)
 
 
 class MfaSetupRequest(_In):
@@ -214,6 +237,9 @@ class MfaChallengeResponse(BaseModel):
     mfa_required: Literal[True] = True
     challenge_token: str = Field(description="Single use; send it with the code")
     expires_in: int = Field(description="Seconds until the password step must be repeated")
+    methods: list[Literal["authenticator", "email", "recovery_code"]] = Field(
+        default_factory=list, description="Second factors this account can use"
+    )
 
 
 class MfaLoginRequest(_In):

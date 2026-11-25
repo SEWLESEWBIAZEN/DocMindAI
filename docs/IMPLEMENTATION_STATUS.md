@@ -166,7 +166,10 @@ Follow-ups:
 - [ ] Support-assisted 2FA reset for users who lose their authenticator, their recovery codes
       **and** access to their email
 - [x] Email one-time codes as a fallback factor (ADR 0027); 24-hour block after a password reset
-- [ ] Passkeys (WebAuthn), and email-only 2FA for people who can't use an authenticator app
+- [x] Email-only 2FA for people who can't use an authenticator app; organizations can accept or
+      refuse email codes; recovery codes can be regenerated with an email code (ADR 0028,
+      `test_mfa_email_method.py`, `e2e/mfa-email.spec.ts`)
+- [ ] Passkeys (WebAuthn)
 - [x] Frontend 2FA screens (QR code, manual secret, recovery codes): built in Phase 7
       (`features/admin/pages.tsx`, Security section); covered by the Playwright journey
 

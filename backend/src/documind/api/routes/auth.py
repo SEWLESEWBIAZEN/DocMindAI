@@ -82,7 +82,9 @@ async def login(
     if isinstance(result, MfaChallenge):
         response.headers["Cache-Control"] = "no-store"
         return MfaChallengeResponse(
-            challenge_token=result.challenge_token, expires_in=result.expires_in
+            challenge_token=result.challenge_token,
+            expires_in=result.expires_in,
+            methods=list(result.methods),
         )
     return token_response(response, settings, result)
 
@@ -216,9 +218,11 @@ async def mfa_verify(
     mfa: MfaServiceDep,
     container: ContainerDep,
 ) -> StepUpResponse:
-    verified_at = await mfa.verify(user, body.code, body.recovery_code, body.email_code)
-    issued = container.access_tokens.issue(user.id, user.auth_version, mfa_verified_at=verified_at)
+    verified = await mfa.verify(user, body.code, body.recovery_code, body.email_code)
+    issued = container.access_tokens.issue(
+        user.id, user.auth_version, mfa_verified_at=verified.at, mfa_method=verified.method
+    )
     response.headers["Cache-Control"] = "no-store"
     return StepUpResponse(
-        access_token=issued.token, expires_in=issued.expires_in, mfa_verified_at=verified_at
+        access_token=issued.token, expires_in=issued.expires_in, mfa_verified_at=verified.at
     )

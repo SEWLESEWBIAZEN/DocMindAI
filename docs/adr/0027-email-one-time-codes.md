@@ -43,7 +43,8 @@ Profile → Security has a "Lost your authenticator app?" button for this.
 - it goes through the same per-user attempt limit and audit as TOTP codes;
 - sending is limited separately: `RATE_LIMIT_MFA_EMAIL_PER_USER`, 3 per 15 minutes.
 
-**Not covered:** regenerating recovery codes still needs the authenticator.
+**Not covered:** regenerating recovery codes still needs the authenticator. ADR 0028 changes this:
+an email code now works too.
 
 ### Safeguards
 
@@ -62,7 +63,8 @@ Therefore:
 
 Email codes are a fallback for people who already have 2FA, not a way to enrol. "2FA on" still
 means an authenticator is registered. Email-only 2FA, for people who can't use an authenticator app
-at all, is a possible next step, together with passkeys.
+at all, is a possible next step, together with passkeys. ADR 0028 adds email-only 2FA and a
+per-organization switch.
 
 ## Database impact
 
@@ -74,8 +76,8 @@ constraint. No rows change.
 - An account whose mailbox is compromised, **and** whose password is also known, is no longer
   protected by 2FA alone; the reset safeguard only closes the "mailbox only" case. That is the
   usual trade-off of email fallback. The security notices make the compromise visible.
-  Organizations with stricter needs could later be allowed to turn email codes off; this is not
-  implemented.
+  Organizations with stricter needs could later be allowed to turn email codes off. This is now
+  implemented in ADR 0028.
 - Delivery depends on SMTP. When email is down, users fall back to the app or recovery codes.
 
 ## Verification

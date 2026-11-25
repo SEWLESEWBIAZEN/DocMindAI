@@ -8,7 +8,7 @@ import type { Schemas, User } from '../../lib/api/types'
 type Status = 'loading' | 'authenticated' | 'anonymous'
 
 /** Signing in either finishes, or (for accounts with 2FA) needs a code next (ADR 0026). */
-export type SignInResult = { user: User } | { challenge: string; expiresIn: number }
+export type SignInResult = { user: User } | { challenge: string; expiresIn: number; methods: string[] }
 export type SecondFactor = { code: string } | { recovery_code: string } | { email_code: string }
 
 interface AuthContextValue {
@@ -72,7 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { email, password },
         { skipAuth: true, withCredentials: true },
       )
-      if ('challenge_token' in data) return { challenge: data.challenge_token, expiresIn: data.expires_in }
+      if ('challenge_token' in data)
+        return { challenge: data.challenge_token, expiresIn: data.expires_in, methods: data.methods ?? [] }
       return { user: start(data) }
     },
     [start],

@@ -18,7 +18,10 @@ export function MfaGate({ children }: { children: ReactNode }) {
   // Evaluated once per mount; the server enforces the deadline on every request anyway.
   const [now] = useState(() => Date.now())
   const deadline = workspace.mfa_enrollment_deadline
-  if (!deadline || user.mfa_enabled) return <>{children}</>
+  // An authenticator always counts; email codes only where the workspace allows them.
+  if (!deadline || user.mfa_method === 'authenticator' || (user.mfa_method === 'email' && workspace.allow_email_mfa !== false))
+    return <>{children}</>
+  const appNeeded = user.mfa_method === 'email'
 
   const reason = workspace.mfa_required_by === 'plan' ? "This workspace's plan" : `${workspace.name}`
   const profile = `${base}/profile`
@@ -29,8 +32,12 @@ export function MfaGate({ children }: { children: ReactNode }) {
         <PageHeader title="Two-factor authentication required" />
         <EmptyState
           icon="shield"
-          title="Set up two-factor authentication to continue"
-          description={`${reason} requires two-factor authentication for every member. It takes about a minute with an authenticator app, and you'll get recovery codes in case you lose your phone.`}
+          title={appNeeded ? 'Set up an authenticator app to continue' : 'Set up two-factor authentication to continue'}
+          description={
+            appNeeded
+              ? `${reason} requires two-factor authentication with an authenticator app; codes by email don't count here.`
+              : `${reason} requires two-factor authentication for every member. It takes about a minute, and you'll get recovery codes in case you lose your phone.`
+          }
           action={
             <Link className="btn btn--primary btn--md" to={profile}>
               Set up two-factor authentication
@@ -45,8 +52,8 @@ export function MfaGate({ children }: { children: ReactNode }) {
       {!location.pathname.startsWith(profile) && (
         <div className="mfa-banner">
           <Alert tone="warning">
-            {reason} requires two-factor authentication. Set it up by <strong>{formatDate(deadline)}</strong> to keep
-            access. <Link to={profile}>Set it up now</Link>
+            {reason} requires two-factor authentication{appNeeded ? ' with an authenticator app (email codes don\'t count here)' : ''}.
+            Set it up by <strong>{formatDate(deadline)}</strong> to keep access. <Link to={profile}>Set it up now</Link>
           </Alert>
         </div>
       )}

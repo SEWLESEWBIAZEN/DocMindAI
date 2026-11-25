@@ -27,9 +27,12 @@ export function StepUpDialog({
   onVerified: (token: string) => Promise<void>
 }) {
   const user = useUser()
-  const { base } = useWorkspace()
+  const { base, workspace } = useWorkspace()
+  // ADR 0028: some organizations accept only an authenticator app.
+  const emailAllowed = workspace.allow_email_mfa !== false
+  const appOnlyButEmailUser = !emailAllowed && user.mfa_method === 'email'
   const [code, setCode] = useState('')
-  const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>('totp')
+  const [method, setMethod] = useState<'totp' | 'recovery' | 'email'>(user.mfa_method === 'email' ? 'email' : 'totp')
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -42,7 +45,7 @@ export function StepUpDialog({
     setCode('')
     setError(null)
     setNotice(null)
-    setMethod('totp')
+    setMethod(user.mfa_method === 'email' ? 'email' : 'totp')
     onClose()
   }
 
@@ -64,12 +67,16 @@ export function StepUpDialog({
     }
   }
 
-  if (!user.mfa_enabled) {
+  if (!user.mfa_enabled || appOnlyButEmailUser) {
     return (
       <Dialog
         open={open}
         title="Two-factor authentication required"
-        description="This action needs two-factor verification. Turn on 2FA in your profile first."
+        description={
+          appOnlyButEmailUser
+            ? `${workspace.name} accepts only an authenticator app, not codes by email. Set one up in your profile.`
+            : 'This action needs two-factor verification. Turn on 2FA in your profile first.'
+        }
         onClose={close}
         size="sm"
         footer={
@@ -109,11 +116,12 @@ export function StepUpDialog({
           />
         </Field>
         <div className="stack stack--sm">
-          {method !== 'totp' && (
+          {method !== 'totp' && user.mfa_method === 'authenticator' && (
             <button type="button" className="link-button" onClick={() => { setMethod('totp'); setCode(''); setNotice(null) }}>
               Use an authenticator code instead
             </button>
           )}
+          {emailAllowed && (
           <button
             type="button"
             className="link-button"
@@ -130,6 +138,7 @@ export function StepUpDialog({
           >
             {method === 'email' ? 'Send a new email code' : 'Email me a code instead'}
           </button>
+          )}
           {method !== 'recovery' && (
             <button type="button" className="link-button" onClick={() => { setMethod('recovery'); setCode(''); setNotice(null) }}>
               Use a recovery code instead

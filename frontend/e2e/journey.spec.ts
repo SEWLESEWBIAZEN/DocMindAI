@@ -143,7 +143,7 @@ test('complete journey: sign up, upload, ask with citations, team, 2FA', async (
   await page.getByRole('menuitem', { name: /\(personal\)/ }).click()
   await page.getByRole('button', { name: /Account menu/ }).click()
   await page.getByRole('menuitem', { name: 'Security & 2FA' }).click()
-  await page.getByRole('button', { name: 'Set up 2FA' }).click()
+  await page.getByRole('button', { name: 'Set up an authenticator app' }).click()
   await page.getByLabel('Confirm your password to continue').fill(PASSWORD)
   await page.getByRole('button', { name: 'Continue' }).click()
   const secret = (await page.getByLabel('Setup key').innerText()).replace(/\s/g, '')

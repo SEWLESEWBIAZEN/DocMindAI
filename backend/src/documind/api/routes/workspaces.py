@@ -49,6 +49,7 @@ def workspace_response(w: WorkspaceSummary) -> WorkspaceResponse:
         mfa_required_by=w.mfa_required_by,
         organization_requires_mfa=w.organization_requires_mfa,
         mfa_enrollment_deadline=w.mfa_enrollment_deadline,
+        allow_email_mfa=w.allow_email_mfa,
     )
 
 
@@ -103,7 +104,11 @@ async def set_mfa_requirement(
     user: CurrentUser,
     workspaces: WorkspaceServiceDep,
 ) -> WorkspaceResponse:
-    return workspace_response(await workspaces.set_mfa_required(ctx, user, body.required))
+    return workspace_response(
+        await workspaces.set_mfa_policy(
+            ctx, user, required=body.required, allow_email=body.allow_email_codes
+        )
+    )
 
 
 @router.patch("", response_model=WorkspaceResponse)
@@ -138,6 +143,7 @@ async def list_members(ctx: WorkspaceCtx, workspaces: WorkspaceServiceDep) -> li
             role=m.role,
             joined_at=m.joined_at,
             mfa_enabled=m.mfa_enabled,
+            mfa_method=m.mfa_method,
         )
         for m in await workspaces.list_members(ctx)
     ]

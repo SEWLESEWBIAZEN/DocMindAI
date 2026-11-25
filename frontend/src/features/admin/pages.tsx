@@ -251,7 +251,15 @@ export function MembersPage() {
                         </td>
                         <td>{formatDate(m.joined_at)}</td>
                         {showMfa && (
-                          <td>{m.mfa_enabled ? <Badge tone="success">On</Badge> : <Badge tone="warning">Off</Badge>}</td>
+                          <td>
+                            {m.mfa_enabled ? (
+                              <Badge tone="success">{m.mfa_method === 'email' ? 'Email codes' : 'Authenticator app'}</Badge>
+                            ) : m.mfa_method === 'email' ? (
+                              <Badge tone="warning">Email codes (not accepted here)</Badge>
+                            ) : (
+                              <Badge tone="warning">Off</Badge>
+                            )}
+                          </td>
                         )}
                         <td className="table__actions">
                           {editable && (
@@ -475,28 +483,33 @@ export function SettingsPage() {
   )
 }
 
-/** Require 2FA for every member (ADR 0026). Paid plans always do; this adds it on Free. */
+/** Organization 2FA settings: require it (ADR 0026), and whether email codes count (ADR 0028). */
 function MfaRequirementPanel() {
   const { workspace } = useWorkspace()
   const queryClient = useQueryClient()
   const toast = useToast()
-  const [pending, setPending] = useState<boolean | null>(null)
+  type Change = { required: boolean } | { allow_email_codes: boolean }
+  const [pending, setPending] = useState<Change | null>(null)
   const byPlan = workspace.mfa_required_by === 'plan'
   const on = byPlan || workspace.organization_requires_mfa
+  const emailAllowed = workspace.allow_email_mfa !== false
 
   const apply = async (token: string) => {
     if (pending === null) return
     try {
-      await apiClient.put(
-        `/workspaces/${workspace.id}/mfa-requirement`,
-        { required: pending },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+      await apiClient.put(`/workspaces/${workspace.id}/mfa-requirement`, pending, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       await queryClient.invalidateQueries({ queryKey: workspacesKey })
+      await queryClient.invalidateQueries({ queryKey: ['ws', workspace.id, 'members'] })
       toast.success(
-        pending
-          ? 'Two-factor authentication is now required. Members without it are reminded and have a grace period.'
-          : 'Two-factor authentication is no longer required by this organization.',
+        'required' in pending
+          ? pending.required
+            ? 'Two-factor authentication is now required. Members without it are reminded and have a grace period.'
+            : 'Two-factor authentication is no longer required by this organization.'
+          : pending.allow_email_codes
+            ? 'Codes by email now count as two-factor authentication here.'
+            : 'Only authenticator apps count here now. Members who use email codes are asked to add an app.',
       )
     } catch (err) {
       toast.error(errorMessage(err))
@@ -505,26 +518,46 @@ function MfaRequirementPanel() {
     }
   }
 
+  const title =
+    pending === null
+      ? ''
+      : 'required' in pending
+        ? pending.required
+          ? 'Require two-factor authentication?'
+          : 'Stop requiring two-factor authentication?'
+        : pending.allow_email_codes
+          ? 'Allow codes by email?'
+          : 'Accept only authenticator apps?'
+
   return (
     <Panel
       title="Two-factor authentication"
-      description="Require every member to protect their account with an authenticator app. Members who haven't set it up get a reminder and a grace period, then must set it up to keep access."
+      description="Require every member to protect their account. Members who haven't set it up get a reminder and a grace period, then must set it up to keep access."
     >
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={on}
-          disabled={byPlan}
-          onChange={(e) => setPending(e.target.checked)}
-        />
-        Require two-factor authentication for every member
-      </label>
-      {byPlan && <p className="field__hint">Your plan requires two-factor authentication for every member.</p>}
+      <div className="stack stack--sm">
+        <label className="checkbox">
+          <input type="checkbox" checked={on} disabled={byPlan} onChange={(e) => setPending({ required: e.target.checked })} />
+          Require two-factor authentication for every member
+        </label>
+        {byPlan && <p className="field__hint">Your plan requires two-factor authentication for every member.</p>}
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={emailAllowed}
+            onChange={(e) => setPending({ allow_email_codes: e.target.checked })}
+          />
+          Allow one-time codes by email as a second factor
+        </label>
+        <p className="field__hint">
+          Helpful for people who can't use an authenticator app. Turn it off to accept only authenticator apps: email codes
+          depend on the security of each member's mailbox.
+        </p>
+      </div>
       <StepUpDialog
         open={pending !== null}
-        title={pending ? 'Require two-factor authentication?' : 'Stop requiring two-factor authentication?'}
+        title={title}
         description="Changing a security setting needs your two-factor code."
-        actionLabel={pending ? 'Require it' : 'Stop requiring it'}
+        actionLabel="Confirm"
         onClose={() => setPending(null)}
         onVerified={apply}
       />
@@ -782,7 +815,7 @@ function SecurityPanel() {
     queryKey: ['me', 'mfa'],
     queryFn: async () => (await apiClient.get<MfaStatus>('/me/mfa')).data,
   })
-  const [mode, setMode] = useState<'idle' | 'setup' | 'disable' | 'codes'>('idle')
+  const [mode, setMode] = useState<'idle' | 'setup' | 'email-setup' | 'email-confirm' | 'disable' | 'codes'>('idle')
   const [password, setPassword] = useState('')
   const [setup, setSetup] = useState<MfaSetup | null>(null)
   const [qrImage, setQrImage] = useState<{ uri: string; data: string } | null>(null)
@@ -866,20 +899,46 @@ function SecurityPanel() {
     })
   const regenerateCodes = () =>
     call(async () => {
-      const { data } = await apiClient.post<Schemas['RecoveryCodesResponse']>('/me/mfa/recovery-codes', { code: code.replace(/\s/g, '') })
+      const digits = code.replace(/\s/g, '')
+      const { data } = await apiClient.post<Schemas['RecoveryCodesResponse']>(
+        '/me/mfa/recovery-codes',
+        viaEmail ? { email_code: digits } : { code: digits },
+      )
       setCodes(data.recovery_codes)
       setCode('')
       setMode('codes')
       await done()
     })
 
+  // Email-only 2FA (ADR 0028), for people without an authenticator app.
+  const startEmail = () =>
+    call(async () => {
+      await apiClient.post('/me/mfa/email/setup', { password })
+      setPassword('')
+      setCode('')
+      setMode('email-confirm')
+      toast.success('We sent a one-time code to your email address.')
+    })
+  const confirmEmail = () =>
+    call(async () => {
+      const { data } = await apiClient.post<Schemas['RecoveryCodesResponse']>('/me/mfa/email/confirm', {
+        email_code: code.replace(/\s/g, ''),
+      })
+      setCodes(data.recovery_codes)
+      setCode('')
+      setMode('codes')
+      await done()
+      toast.success('Two-factor authentication is on, with codes by email.')
+    })
+
   const enabled = status.data?.enabled ?? false
+  const byEmail = status.data?.method === 'email'
   return (
     <Panel
       id="security"
       title="Two-factor authentication"
-      description="A code from an authenticator app at sensitive moments, such as permanently deleting documents."
-      actions={status.data && <Badge tone={enabled ? 'success' : 'warning'}>{enabled ? 'On' : 'Off'}</Badge>}
+      description="A one-time code when you sign in and at sensitive moments, such as permanently deleting documents: from an authenticator app (recommended) or by email."
+      actions={status.data && <Badge tone={enabled ? 'success' : 'warning'}>{enabled ? (byEmail ? 'On · email codes' : 'On · authenticator app') : 'Off'}</Badge>}
     >
       <div className="stack">
         {error && <Alert>{error}</Alert>}
@@ -916,16 +975,59 @@ function SecurityPanel() {
                 <Button icon="key" onClick={() => { setMode('disable'); setCodes(null) }}>
                   Manage
                 </Button>
-                <Button variant="ghost" icon="mail" loading={busy} onClick={() => void emailMeACode()}>
-                  Lost your authenticator app?
-                </Button>
+                {byEmail ? (
+                  <Button variant="ghost" icon="shield" onClick={() => setMode('setup')}>
+                    Switch to an authenticator app
+                  </Button>
+                ) : (
+                  <Button variant="ghost" icon="mail" loading={busy} onClick={() => void emailMeACode()}>
+                    Lost your authenticator app?
+                  </Button>
+                )}
               </>
             ) : (
-              <Button variant="primary" icon="shield" onClick={() => setMode('setup')}>
-                Set up 2FA
-              </Button>
+              <>
+                <Button variant="primary" icon="shield" onClick={() => setMode('setup')}>
+                  Set up an authenticator app
+                </Button>
+                <Button icon="mail" onClick={() => setMode('email-setup')}>
+                  Use codes by email instead
+                </Button>
+              </>
             )}
           </div>
+        )}
+
+        {mode === 'email-setup' && (
+          <form className="form" onSubmit={(e) => { e.preventDefault(); void startEmail() }}>
+            <p className="muted">
+              We'll email you a one-time code each time you sign in. An authenticator app is safer, because it doesn't depend
+              on your email account; some organizations only accept an app.
+            </p>
+            <Field label="Confirm your password to continue">
+              <TextInput type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+            </Field>
+            <div className="form__actions">
+              <Button onClick={reset}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={busy} disabled={!password}>
+                Email me a code
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {mode === 'email-confirm' && (
+          <form className="form" onSubmit={(e) => { e.preventDefault(); void confirmEmail() }}>
+            <Field label="Email code" hint="The 6-digit code we just emailed you.">
+              <TextInput value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus />
+            </Field>
+            <div className="form__actions">
+              <Button onClick={reset}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={busy} disabled={code.replace(/\s/g, '').length < 6}>
+                Turn on two-factor authentication
+              </Button>
+            </div>
+          </form>
         )}
 
         {mode === 'setup' && !setup && (
@@ -978,7 +1080,7 @@ function SecurityPanel() {
           <form className="form" onSubmit={(e) => { e.preventDefault(); void disable() }}>
             <p className="muted">
               {viaEmail
-                ? 'Enter the code we emailed you and your password to turn 2FA off. Then set it up again on your new phone.'
+                ? 'Enter the code we emailed you to get new recovery codes, or with your password to turn 2FA off (then set it up again on your new phone).'
                 : 'Enter a code to get new recovery codes, or your password and a code to turn 2FA off.'}
             </p>
             <div className="grid-2">
@@ -989,13 +1091,16 @@ function SecurityPanel() {
                 <TextInput type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
             </div>
+            {!viaEmail && (
+              <button type="button" className="link-button" onClick={() => void emailMeACode()}>
+                {byEmail ? 'Email me a code' : 'No authenticator at hand? Email me a code'}
+              </button>
+            )}
             <div className="form__actions">
               <Button onClick={reset}>Cancel</Button>
-              {!viaEmail && (
-                <Button loading={busy} disabled={code.trim().length < 6} onClick={() => void regenerateCodes()}>
-                  New recovery codes
-                </Button>
-              )}
+              <Button loading={busy} disabled={code.trim().length < 6} onClick={() => void regenerateCodes()}>
+                New recovery codes
+              </Button>
               <Button type="submit" variant="danger" loading={busy} disabled={!password || code.trim().length < 6}>
                 Turn off 2FA
               </Button>

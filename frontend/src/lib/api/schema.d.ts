@@ -399,6 +399,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/mfa/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm with the emailed code; turns email 2FA on and returns recovery codes */
+        post: operations["mfa_email_confirm_api_v1_me_mfa_email_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/email/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start email-only 2FA, without an authenticator app (requires your password) */
+        post: operations["mfa_email_setup_api_v1_me_mfa_email_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/mfa/recovery-codes": {
         parameters: {
             query?: never;
@@ -408,7 +442,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mfa Regenerate Codes */
+        /** New recovery codes, confirmed with an authenticator code or an email code */
         post: operations["mfa_regenerate_codes_api_v1_me_mfa_recovery_codes_post"];
         delete?: never;
         options?: never;
@@ -2232,6 +2266,8 @@ export interface components {
              * @description Shown only to members who can manage members
              */
             mfa_enabled?: boolean | null;
+            /** Mfa Method */
+            mfa_method?: ("authenticator" | "email") | null;
             role: components["schemas"]["RoleKey"];
             /**
              * User Id
@@ -2352,6 +2388,11 @@ export interface components {
              */
             expires_in: number;
             /**
+             * Methods
+             * @description Second factors this account can use
+             */
+            methods?: ("authenticator" | "email" | "recovery_code")[];
+            /**
              * Mfa Required
              * @default true
              * @constant
@@ -2385,6 +2426,11 @@ export interface components {
             /** Recovery Code */
             recovery_code?: string | null;
         };
+        /** MfaEmailConfirmRequest */
+        MfaEmailConfirmRequest: {
+            /** Email Code */
+            email_code: string;
+        };
         /** MfaLoginRequest */
         MfaLoginRequest: {
             /** Challenge Token */
@@ -2399,10 +2445,28 @@ export interface components {
             /** Recovery Code */
             recovery_code?: string | null;
         };
+        /**
+         * MfaRegenerateRequest
+         * @description An authenticator code or an email code (no authenticator needed, ADR 0028).
+         */
+        MfaRegenerateRequest: {
+            /** Code */
+            code?: string | null;
+            /** Email Code */
+            email_code?: string | null;
+        };
         /** MfaRequirementRequest */
         MfaRequirementRequest: {
-            /** Required */
-            required: boolean;
+            /**
+             * Allow Email Codes
+             * @description Whether one-time codes by email count as 2FA here (else authenticator only)
+             */
+            allow_email_codes?: boolean | null;
+            /**
+             * Required
+             * @description Require 2FA for every member
+             */
+            required?: boolean | null;
         };
         /** MfaSecondFactorRequest */
         MfaSecondFactorRequest: {
@@ -2445,6 +2509,8 @@ export interface components {
             enabled: boolean;
             /** Enabled At */
             enabled_at: string | null;
+            /** Method */
+            method?: ("authenticator" | "email") | null;
             /** Recovery Codes Remaining */
             recovery_codes_remaining: number;
         };
@@ -3060,6 +3126,11 @@ export interface components {
             id: string;
             /** Mfa Enabled */
             mfa_enabled: boolean;
+            /**
+             * Mfa Method
+             * @description Primary second factor; email codes also work as a fallback
+             */
+            mfa_method?: ("authenticator" | "email") | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -3204,6 +3275,12 @@ export interface components {
         WorkspaceKind: "personal" | "organization";
         /** WorkspaceResponse */
         WorkspaceResponse: {
+            /**
+             * Allow Email Mfa
+             * @description Whether email codes count as 2FA in this workspace
+             * @default true
+             */
+            allow_email_mfa: boolean;
             /**
              * Id
              * Format: uuid
@@ -3997,6 +4074,72 @@ export interface operations {
             };
         };
     };
+    mfa_email_confirm_api_v1_me_mfa_email_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaEmailConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mfa_email_setup_api_v1_me_mfa_email_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     mfa_regenerate_codes_api_v1_me_mfa_recovery_codes_post: {
         parameters: {
             query?: never;
@@ -4006,7 +4149,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MfaCodeRequest"];
+                "application/json": components["schemas"]["MfaRegenerateRequest"];
             };
         };
         responses: {

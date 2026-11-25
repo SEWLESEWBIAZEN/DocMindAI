@@ -84,6 +84,15 @@ class MfaChallenge:
 
     challenge_token: str
     expires_in: int
+    # What the user can use: "authenticator", "email", "recovery_code" (ADR 0028).
+    methods: tuple[str, ...] = ()
+
+
+class VerifiedFactor(Protocol):
+    @property
+    def at(self) -> datetime: ...
+    @property
+    def method(self) -> str: ...
 
 
 class SecondFactor(Protocol):
@@ -93,8 +102,8 @@ class SecondFactor(Protocol):
         code: str | None,
         recovery_code: str | None,
         email_code: str | None = None,
-    ) -> datetime:
-        """Check a TOTP, recovery or email code; returns when it was verified."""
+    ) -> VerifiedFactor:
+        """Check a TOTP, recovery or email code; returns when and how."""
         ...
 
     async def send_email_code(self, user: User) -> None: ...
@@ -175,8 +184,11 @@ class AuthService:
         raw_refresh: str,
         *,
         mfa_verified_at: datetime | None = None,
+        mfa_method: str | None = None,
     ) -> AuthResult:
-        access = self._tokens.issue(user.id, user.auth_version, mfa_verified_at=mfa_verified_at)
+        access = self._tokens.issue(
+            user.id, user.auth_version, mfa_verified_at=mfa_verified_at, mfa_method=mfa_method
+        )
         return AuthResult(
             user=user,
             access_token=access.token,
@@ -337,7 +349,10 @@ class AuthService:
                 target_id=user.id,
             )
             await self._session.commit()
-            return MfaChallenge(challenge_token=raw, expires_in=ttl)
+            methods = ("authenticator",) if user.totp_enabled_at else ()
+            return MfaChallenge(
+                challenge_token=raw, expires_in=ttl, methods=(*methods, "email", "recovery_code")
+            )
         user.last_login_at = utcnow()
         refresh, raw = self._start_session(user)
         self._audit.record(
@@ -398,7 +413,7 @@ class AuthService:
         user = await self._challenge_user(digest)
         await self._session.commit()  # release the row lock while the code is checked
         # Rate-limited per user, audited, and replay-safe (TOTP steps, single-use recovery codes).
-        verified_at = await second_factor.verify(user, code, recovery_code, email_code)
+        verified = await second_factor.verify(user, code, recovery_code, email_code)
 
         record = await self._account_tokens.get_by_hash(digest, MFA_LOGIN)
         now = utcnow()
@@ -416,7 +431,9 @@ class AuthService:
             details={"mfa": True},
         )
         await self._session.commit()
-        return self._result(user, refresh, raw, mfa_verified_at=verified_at)
+        return self._result(
+            user, refresh, raw, mfa_verified_at=verified.at, mfa_method=verified.method
+        )
 
     async def refresh(self, raw_token: str | None) -> AuthResult:
         s = self._settings
@@ -499,7 +516,9 @@ class AuthService:
         user = await self._users.get(claims.user_id)
         if user is None or not user.is_active or user.auth_version != claims.auth_version:
             raise AuthenticationError("Your session is no longer valid. Please sign in again.")
-        return Principal(user=user, mfa_verified_at=claims.mfa_verified_at)
+        return Principal(
+            user=user, mfa_verified_at=claims.mfa_verified_at, mfa_method=claims.mfa_method
+        )
 
     # ----------------------------------------------------------- password flows
 

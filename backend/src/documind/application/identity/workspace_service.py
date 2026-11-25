@@ -69,6 +69,7 @@ class WorkspaceSummary:
     mfa_required_by: MfaRequiredBy | None = None
     organization_requires_mfa: bool = False
     mfa_enrollment_deadline: datetime | None = None
+    allow_email_mfa: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +81,7 @@ class MemberInfo:
     role: RoleKey
     joined_at: datetime
     mfa_enabled: bool | None = None  # only shown to members who manage members
+    mfa_method: str | None = None
 
 
 def _slugify(name: str) -> str:
@@ -113,6 +115,7 @@ class WorkspaceService:
         workspace_id: uuid.UUID,
         *,
         mfa_verified_at: datetime | None = None,
+        mfa_method: str | None = None,
         enforce_mfa: bool = True,
     ) -> WorkspaceContext:
         """Authorize entry into a workspace. Non-members get 'not found', never 'forbidden'.
@@ -123,7 +126,7 @@ class WorkspaceService:
         view = await self._workspaces.membership(workspace_id, user.id)
         if view is None:
             raise NotFoundError(WORKSPACE_NOT_FOUND)
-        ctx = await self._context(user, view, mfa_verified_at)
+        ctx = await self._context(user, view, mfa_verified_at, mfa_method)
         if enforce_mfa:
             ensure_mfa_policy_met(ctx, utcnow())
         return ctx
@@ -157,12 +160,16 @@ class WorkspaceService:
         await self._session.refresh(workspace, ["mfa_enforced_since"])
 
     def _deadline(self, workspace: Workspace, user: User, required: bool) -> datetime | None:
-        if not required or user.mfa_enabled:
+        if not required or user.mfa_allowed_in(workspace.allow_email_mfa):
             return None
         return mfa_enrollment_deadline(workspace.mfa_enforced_since, utcnow(), self._grace_days)
 
     async def _context(
-        self, user: User, view: MembershipView, mfa_verified_at: datetime | None
+        self,
+        user: User,
+        view: MembershipView,
+        mfa_verified_at: datetime | None,
+        mfa_method: str | None = None,
     ) -> WorkspaceContext:
         keys = await self._roles.permission_keys(view.role.id)
         known = {p.value for p in Permission}
@@ -182,8 +189,12 @@ class WorkspaceService:
             member_id=view.member.id,
             role=RoleKey(view.role.key),
             permissions=frozenset(Permission(k) for k in keys & known),
-            mfa_enabled=user.mfa_enabled,
-            mfa_verified_at=mfa_verified_at,
+            # ADR 0028: where email codes aren't allowed, only an authenticator counts,
+            # and a step-up done with an email code doesn't either.
+            mfa_enabled=user.mfa_allowed_in(workspace.allow_email_mfa),
+            mfa_verified_at=None
+            if mfa_method == "email_code" and not workspace.allow_email_mfa
+            else mfa_verified_at,
             mfa_required=required,
             mfa_enrollment_deadline=self._deadline(workspace, user, required),
         )
@@ -206,6 +217,7 @@ class WorkspaceService:
             mfa_required_by=by,
             organization_requires_mfa=workspace.mfa_required,
             mfa_enrollment_deadline=self._deadline(workspace, user, by is not None),
+            allow_email_mfa=workspace.allow_email_mfa,
         )
 
     async def list_for_user(self, user: User) -> list[WorkspaceSummary]:
@@ -308,6 +320,7 @@ class WorkspaceService:
         ctx.require(Permission.MEMBERS_READ)
         # Who still has to set up 2FA is for the people who manage members.
         show_mfa = ctx.can(Permission.MEMBERS_MANAGE)
+        allow_email = (await self._workspace(ctx.workspace_id)).allow_email_mfa
         return [
             MemberInfo(
                 id=m.id,
@@ -316,15 +329,30 @@ class WorkspaceService:
                 display_name=m.user.display_name,
                 role=RoleKey(m.role.key),
                 joined_at=m.created_at,
-                mfa_enabled=m.user.mfa_enabled if show_mfa else None,
+                # Counted as this workspace counts it (email may not be allowed here).
+                mfa_enabled=m.user.mfa_allowed_in(allow_email) if show_mfa else None,
+                mfa_method=m.user.mfa_method if show_mfa else None,
             )
             for m in await self._workspaces.list_members(ctx.workspace_id)
         ]
 
-    async def set_mfa_required(
-        self, ctx: WorkspaceContext, user: User, required: bool
+    async def _workspace(self, workspace_id: uuid.UUID) -> Workspace:
+        return (
+            await self._session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        ).scalar_one()
+
+    async def set_mfa_policy(
+        self,
+        ctx: WorkspaceContext,
+        user: User,
+        *,
+        required: bool | None = None,
+        allow_email: bool | None = None,
     ) -> WorkspaceSummary:
-        """Require 2FA for every member of an organization (any plan). Needs a fresh 2FA check."""
+        """Organization 2FA settings (ADR 0026, 0028): require it, and whether email counts.
+
+        Needs a fresh 2FA check by an admin.
+        """
         ctx.require(Permission.WORKSPACE_UPDATE)
         ensure_shared_workspace(ctx.workspace_kind)
         ensure_recent_mfa(ctx, utcnow(), self._step_up_seconds)
@@ -333,15 +361,21 @@ class WorkspaceService:
                 select(Workspace).where(Workspace.id == ctx.workspace_id).with_for_update()
             )
         ).scalar_one()
-        if workspace.mfa_required != required:
+        changes: dict[str, bool] = {}
+        if required is not None and workspace.mfa_required != required:
             workspace.mfa_required = required
+            changes["required"] = required
+        if allow_email is not None and workspace.allow_email_mfa != allow_email:
+            workspace.allow_email_mfa = allow_email
+            changes["allow_email_codes"] = allow_email
+        if changes:
             self._audit.record(
                 "workspace.mfa_requirement_changed",
                 actor_user_id=ctx.user_id,
                 workspace_id=ctx.workspace_id,
                 target_type="workspace",
                 target_id=ctx.workspace_id,
-                details={"required": required},
+                details=changes,
             )
             await self._session.commit()
             plan = (await self._plan_keys([workspace.id])).get(workspace.id)

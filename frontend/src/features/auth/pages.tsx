@@ -94,6 +94,8 @@ export function LoginPage() {
         setChallenge(result.challenge)
         setPassword('')
         setCode('')
+        // Email-only 2FA (ADR 0028): send the code straight away.
+        if (!result.methods.includes('authenticator')) await emailCode(result.challenge)
       } else finish()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'email_not_verified') setUnverified(true)
@@ -128,15 +130,15 @@ export function LoginPage() {
     }
   }
 
-  const emailCode = async () => {
-    if (!challenge) return
+  async function emailCode(current: string | null = challenge) {
+    if (!current) return
     setError(null)
     setNotice(null)
     setBusy(true)
     try {
       const { data } = await apiClient.post<{ detail: string }>(
         '/auth/login/mfa/email-code',
-        { challenge_token: challenge },
+        { challenge_token: current },
         { skipAuth: true },
       )
       setMethod('email')

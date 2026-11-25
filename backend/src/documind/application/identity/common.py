@@ -21,6 +21,7 @@ class Principal:
 
     user: User
     mfa_verified_at: datetime | None = None
+    mfa_method: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

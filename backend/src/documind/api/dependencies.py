@@ -217,7 +217,10 @@ async def get_workspace_context(
 ) -> WorkspaceContext:
     """Authorize the caller for the workspace in the path (404 for non-members)."""
     return await workspaces.resolve_context(
-        principal.user, workspace_id, mfa_verified_at=principal.mfa_verified_at
+        principal.user,
+        workspace_id,
+        mfa_verified_at=principal.mfa_verified_at,
+        mfa_method=principal.mfa_method,
     )
 
 
@@ -235,6 +238,7 @@ async def get_workspace_context_without_mfa_policy(
         principal.user,
         workspace_id,
         mfa_verified_at=principal.mfa_verified_at,
+        mfa_method=principal.mfa_method,
         enforce_mfa=False,
     )
 

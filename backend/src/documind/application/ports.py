@@ -33,11 +33,18 @@ class AccessTokenClaims:
     auth_version: int
     # When the user last completed a 2FA check, if this token was issued by step-up.
     mfa_verified_at: datetime | None = None
+    # How: "totp", "recovery_code" or "email_code" (ADR 0028: some workspaces refuse email).
+    mfa_method: str | None = None
 
 
 class AccessTokenService(Protocol):
     def issue(
-        self, user_id: UUID, auth_version: int, *, mfa_verified_at: datetime | None = None
+        self,
+        user_id: UUID,
+        auth_version: int,
+        *,
+        mfa_verified_at: datetime | None = None,
+        mfa_method: str | None = None,
     ) -> IssuedAccessToken: ...
 
     def decode(self, token: str) -> AccessTokenClaims:

@@ -62,12 +62,29 @@ class User(Base):
     totp_last_used_step: Mapped[int | None] = mapped_column(BigInteger)
     totp_pending_secret_encrypted: Mapped[str | None] = mapped_column(Text)
     totp_pending_expires_at: Mapped[datetime | None] = mapped_column(TZ)
+    # Email-only 2FA (ADR 0028): codes by email instead of an authenticator app.
+    mfa_email_enabled_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 
     @property
     def mfa_enabled(self) -> bool:
-        return self.totp_enabled_at is not None
+        return self.totp_enabled_at is not None or self.mfa_email_enabled_at is not None
+
+    @property
+    def mfa_method(self) -> str | None:
+        """The primary second factor: "authenticator", "email", or None (2FA off)."""
+        if self.totp_enabled_at is not None:
+            return "authenticator"
+        if self.mfa_email_enabled_at is not None:
+            return "email"
+        return None
+
+    def mfa_allowed_in(self, allow_email: bool) -> bool:
+        """Whether this user's 2FA counts where email codes may or may not be used."""
+        return self.totp_enabled_at is not None or (
+            allow_email and self.mfa_email_enabled_at is not None
+        )
 
 
 class MfaRecoveryCode(Base):
@@ -133,6 +150,10 @@ class Workspace(Base):
     # When 2FA became required here (start of the members' grace period). Set on
     # first use while required, cleared when it no longer is.
     mfa_enforced_since: Mapped[datetime | None] = mapped_column(TZ)
+    # ADR 0028: whether one-time codes by email count as 2FA here (else authenticator only).
+    allow_email_mfa: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true")
+    )
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _updated()
 

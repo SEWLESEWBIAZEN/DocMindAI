@@ -21,8 +21,11 @@ from documind.api.schemas.identity import (
     ActiveWorkspaceRequest,
     ChangePasswordRequest,
     InvitationResponse,
+    MessageResponse,
     MfaCodeRequest,
     MfaDisableRequest,
+    MfaEmailConfirmRequest,
+    MfaRegenerateRequest,
     MfaSetupRequest,
     MfaSetupResponse,
     MfaStatusResponse,
@@ -115,6 +118,7 @@ async def mfa_status(user: CurrentUser, mfa: MfaServiceDep) -> MfaStatusResponse
     status_ = await mfa.status(user)
     return MfaStatusResponse(
         enabled=status_.enabled,
+        method=status_.method,
         enabled_at=status_.enabled_at,
         recovery_codes_remaining=status_.recovery_codes_remaining,
     )
@@ -156,10 +160,43 @@ async def mfa_disable(body: MfaDisableRequest, user: CurrentUser, mfa: MfaServic
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/mfa/recovery-codes", response_model=RecoveryCodesResponse, tags=["mfa"])
-async def mfa_regenerate_codes(
-    body: MfaCodeRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
+@router.post(
+    "/mfa/email/setup",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=MessageResponse,
+    tags=["mfa"],
+    summary="Start email-only 2FA, without an authenticator app (requires your password)",
+)
+async def mfa_email_setup(
+    body: MfaSetupRequest, user: CurrentUser, mfa: MfaServiceDep
+) -> MessageResponse:
+    await mfa.begin_email_setup(user, body.password)
+    return MessageResponse(detail="We sent a one-time code to your email address.")
+
+
+@router.post(
+    "/mfa/email/confirm",
+    response_model=RecoveryCodesResponse,
+    tags=["mfa"],
+    summary="Confirm with the emailed code; turns email 2FA on and returns recovery codes",
+)
+async def mfa_email_confirm(
+    body: MfaEmailConfirmRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
 ) -> RecoveryCodesResponse:
-    codes = await mfa.regenerate_recovery_codes(user, body.code)
+    codes = await mfa.confirm_email_setup(user, body.email_code)
+    response.headers["Cache-Control"] = "no-store"
+    return RecoveryCodesResponse(recovery_codes=codes)
+
+
+@router.post(
+    "/mfa/recovery-codes",
+    response_model=RecoveryCodesResponse,
+    tags=["mfa"],
+    summary="New recovery codes, confirmed with an authenticator code or an email code",
+)
+async def mfa_regenerate_codes(
+    body: MfaRegenerateRequest, response: Response, user: CurrentUser, mfa: MfaServiceDep
+) -> RecoveryCodesResponse:
+    codes = await mfa.regenerate_recovery_codes(user, body.code, body.email_code)
     response.headers["Cache-Control"] = "no-store"
     return RecoveryCodesResponse(recovery_codes=codes)

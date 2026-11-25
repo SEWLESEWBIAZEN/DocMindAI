@@ -2059,6 +2059,21 @@
             "description": "Shown only to members who can manage members",
             "title": "Mfa Enabled"
           },
+          "mfa_method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "authenticator",
+                  "email"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mfa Method"
+          },
           "role": {
             "$ref": "#/components/schemas/RoleKey"
           },
@@ -2328,6 +2343,19 @@
             "title": "Expires In",
             "type": "integer"
           },
+          "methods": {
+            "description": "Second factors this account can use",
+            "items": {
+              "enum": [
+                "authenticator",
+                "email",
+                "recovery_code"
+              ],
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
           "mfa_required": {
             "const": true,
             "default": true,
@@ -2431,6 +2459,22 @@
         "title": "MfaDisableRequest",
         "type": "object"
       },
+      "MfaEmailConfirmRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email_code": {
+            "maxLength": 8,
+            "minLength": 6,
+            "title": "Email Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email_code"
+        ],
+        "title": "MfaEmailConfirmRequest",
+        "type": "object"
+      },
       "MfaLoginRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2487,17 +2531,68 @@
         "title": "MfaLoginRequest",
         "type": "object"
       },
+      "MfaRegenerateRequest": {
+        "additionalProperties": false,
+        "description": "An authenticator code or an email code (no authenticator needed, ADR 0028).",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 6,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "email_code": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 6,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Code"
+          }
+        },
+        "title": "MfaRegenerateRequest",
+        "type": "object"
+      },
       "MfaRequirementRequest": {
         "additionalProperties": false,
         "properties": {
+          "allow_email_codes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether one-time codes by email count as 2FA here (else authenticator only)",
+            "title": "Allow Email Codes"
+          },
           "required": {
-            "title": "Required",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Require 2FA for every member",
+            "title": "Required"
           }
         },
-        "required": [
-          "required"
-        ],
         "title": "MfaRequirementRequest",
         "type": "object"
       },
@@ -2607,6 +2702,21 @@
               }
             ],
             "title": "Enabled At"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "authenticator",
+                  "email"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
           },
           "recovery_codes_remaining": {
             "title": "Recovery Codes Remaining",
@@ -4225,6 +4335,22 @@
           "mfa_enabled": {
             "title": "Mfa Enabled",
             "type": "boolean"
+          },
+          "mfa_method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "authenticator",
+                  "email"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Primary second factor; email codes also work as a fallback",
+            "title": "Mfa Method"
           }
         },
         "required": [
@@ -4570,6 +4696,12 @@
       },
       "WorkspaceResponse": {
         "properties": {
+          "allow_email_mfa": {
+            "default": true,
+            "description": "Whether email codes count as 2FA in this workspace",
+            "title": "Allow Email Mfa",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5781,14 +5913,14 @@
         ]
       }
     },
-    "/api/v1/me/mfa/recovery-codes": {
+    "/api/v1/me/mfa/email/confirm": {
       "post": {
-        "operationId": "mfa_regenerate_codes_api_v1_me_mfa_recovery_codes_post",
+        "operationId": "mfa_email_confirm_api_v1_me_mfa_email_confirm_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MfaCodeRequest"
+                "$ref": "#/components/schemas/MfaEmailConfirmRequest"
               }
             }
           },
@@ -5821,7 +5953,101 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mfa Regenerate Codes",
+        "summary": "Confirm with the emailed code; turns email 2FA on and returns recovery codes",
+        "tags": [
+          "me",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/me/mfa/email/setup": {
+      "post": {
+        "operationId": "mfa_email_setup_api_v1_me_mfa_email_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__identity__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start email-only 2FA, without an authenticator app (requires your password)",
+        "tags": [
+          "me",
+          "mfa"
+        ]
+      }
+    },
+    "/api/v1/me/mfa/recovery-codes": {
+      "post": {
+        "operationId": "mfa_regenerate_codes_api_v1_me_mfa_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaRegenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "New recovery codes, confirmed with an authenticator code or an email code",
         "tags": [
           "me",
           "mfa"
