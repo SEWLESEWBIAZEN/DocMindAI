@@ -98,3 +98,42 @@ class UsageRecord(Base):
     details: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=text("'{}'::jsonb")
     )
+
+
+class BillingSubscription(Base):
+    """A workspace's Stripe customer and subscription (ADR 0032). Holds no card data.
+
+    The plan itself stays in ``workspace_plans``; this row mirrors Stripe's view so
+    the app can show status and seats, and map webhooks back to the workspace.
+    """
+
+    __tablename__ = "billing_subscriptions"
+    __table_args__ = (
+        CheckConstraint("interval IS NULL OR interval IN ('month', 'year')", name="interval_valid"),
+        CheckConstraint("seats >= 0", name="seats_non_negative"),
+    )
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    customer_id: Mapped[str] = mapped_column(String(64), unique=True)
+    subscription_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    plan_key: Mapped[str | None] = mapped_column(String(32))
+    interval: Mapped[str | None] = mapped_column(String(8))
+    status: Mapped[str] = mapped_column(String(32), default="none", server_default="none")
+    seats: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    current_period_end: Mapped[datetime | None] = mapped_column(TZ)
+    cancel_at_period_end: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now(), onupdate=func.now())
+
+
+class BillingEvent(Base):
+    """Stripe webhook events already handled: a redelivered event is a no-op."""
+
+    __tablename__ = "billing_events"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    type: Mapped[str] = mapped_column(String(64))
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column()
+    received_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())

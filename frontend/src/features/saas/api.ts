@@ -155,3 +155,25 @@ export function quotaPercent(q: Pick<Quota, 'limit' | 'used'>): number | null {
   if (q.limit === 0) return 100
   return Math.min(100, Math.round((q.used / q.limit) * 100))
 }
+
+// --- billing (ADR 0032) ------------------------------------------------------
+
+export type BillingOverview = Schemas['BillingOverviewResponse']
+export type PaidPlan = 'pro' | 'business'
+export const billingKey = (id: string) => ['ws', id, 'billing'] as const
+
+export async function getBilling(id: string): Promise<BillingOverview> {
+  return (await apiClient.get<BillingOverview>(`${ws(id)}/billing`)).data
+}
+
+export async function startCheckout(id: string, plan: PaidPlan, interval: 'month' | 'year'): Promise<string> {
+  return (await apiClient.post<{ url: string }>(`${ws(id)}/billing/checkout`, { plan, interval })).data.url
+}
+
+export async function changePlan(id: string, plan: PaidPlan, interval: 'month' | 'year'): Promise<BillingOverview> {
+  return (await apiClient.post<BillingOverview>(`${ws(id)}/billing/plan`, { plan, interval })).data
+}
+
+export async function openPortal(id: string): Promise<string> {
+  return (await apiClient.post<{ url: string }>(`${ws(id)}/billing/portal`)).data.url
+}

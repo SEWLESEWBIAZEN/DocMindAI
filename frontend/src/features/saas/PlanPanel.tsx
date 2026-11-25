@@ -67,11 +67,18 @@ export function PlanPanel() {
             AI key counts; usage on your own key is shown but never limited here.
           </p>
         </div>
-        {can('ai_providers.manage') && (
-          <Link className="btn btn--secondary btn--md" to={`${base}/ai-providers`}>
-            AI providers
-          </Link>
-        )}
+        <div className="row">
+          {can('billing.manage') && (
+            <Link className="btn btn--primary btn--md" to={`${base}/billing`}>
+              Change plan
+            </Link>
+          )}
+          {can('ai_providers.manage') && (
+            <Link className="btn btn--secondary btn--md" to={`${base}/ai-providers`}>
+              AI providers
+            </Link>
+          )}
+        </div>
       </header>
       <div className="panel__body plan-grid">
         <div>

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 
 import {
   Alert,
@@ -119,7 +120,7 @@ export function InfrastructurePage() {
   useEffect(() => {
     document.title = 'Infrastructure · DocuMind'
   }, [])
-  const { workspace, can } = useWorkspace()
+  const { workspace, can, base } = useWorkspace()
   const queryClient = useQueryClient()
   const toast = useToast()
   const query = useQuery({
@@ -302,7 +303,18 @@ export function InfrastructurePage() {
                     <label key={mode} className={`choice${dbMode === mode ? ' choice--selected' : ''}${allowed ? '' : ' choice--disabled'}`}>
                       <input type="radio" name="db-mode" value={mode} checked={dbMode === mode} disabled={!allowed} onChange={() => setDbMode(mode)} />
                       <span>{DB_LABEL[mode]}</span>
-                      {!allowed && <small>{mode === 'dedicated' && !data.dedicated_available ? 'Not offered on this server' : 'Not in your plan'}</small>}
+                      {!allowed && (
+                        <small>
+                          {mode === 'dedicated' && !data.dedicated_available ? (
+                            'Not offered on this server'
+                          ) : (
+                            <>
+                              Included from Business.{' '}
+                              {can('billing.manage') ? <Link to={`${base}/billing?plan=business#plans`}>Upgrade</Link> : 'Ask an owner to upgrade.'}
+                            </>
+                          )}
+                        </small>
+                      )}
                     </label>
                   )
                 })}
@@ -342,6 +354,12 @@ export function InfrastructurePage() {
                   ))}
                 </Select>
               </Field>
+              {!ents.custom_storage && (
+                <p className="muted">
+                  Your own S3, MinIO or Azure storage is included from the Pro plan.{' '}
+                  {can('billing.manage') ? <Link to={`${base}/billing?plan=pro#plans`}>Upgrade</Link> : 'Ask an owner to upgrade.'}
+                </p>
+              )}
               {provider !== 'documind' && (
                 <div className="form-grid">
                   <Field label={azure ? 'Container' : 'Bucket'}><TextInput value={st.bucket} onChange={(e) => setSt({ ...st, bucket: e.target.value })} /></Field>
@@ -477,7 +495,12 @@ export function InfrastructurePage() {
             </div>
           </header>
           <div className="panel__body stack">
-            {!ents.customer_workers && <Alert tone="info">Customer-hosted processing is part of the Enterprise plan.</Alert>}
+            {!ents.customer_workers && (
+              <Alert tone="info">
+                Customer-hosted processing is part of the Enterprise plan.{' '}
+                {can('billing.manage') && <Link to={`${base}/billing#plans`}>See plans</Link>}
+              </Alert>
+            )}
             {issuedToken && (
               <Alert tone="success">
                 Worker token (copy it now; it won't be shown again): <code className="token">{issuedToken}</code>

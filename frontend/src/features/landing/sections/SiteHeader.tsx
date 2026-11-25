@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 
 import { Logo } from '../components/Logo'
 
+// Absolute, so the links also work from /pricing.
 const NAV = [
-  { href: '#benefits', label: 'Benefits' },
-  { href: '#use-cases', label: 'Use cases' },
-  { href: '#how-it-works', label: 'How it works' },
-  { href: '#security', label: 'Security' },
+  { href: '/#benefits', label: 'Benefits' },
+  { href: '/#use-cases', label: 'Use cases' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#security', label: 'Security' },
+  { href: '/pricing', label: 'Pricing' },
 ]
 
 export function SiteHeader() {

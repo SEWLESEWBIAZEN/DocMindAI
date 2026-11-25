@@ -3,6 +3,7 @@ import { createBrowserRouter, Outlet, type RouteObject } from 'react-router'
 
 import { RedirectIfAuthenticated, RequireAuth } from '../features/auth/routeGuards'
 import { LandingPage } from '../features/landing/LandingPage'
+import { PricingPage } from '../features/landing/PricingPage'
 import { SystemStatusPage } from '../features/system-status/SystemStatusPage'
 import { ErrorBoundary } from './ErrorBoundary'
 import { FullPageLoading } from './FullPageLoading'
@@ -26,6 +27,7 @@ const admin = () => import('../features/admin/pages')
 const dashboard = () => import('../features/dashboard/DashboardPage')
 const aiProviders = () => import('../features/saas/AIProvidersPage')
 const infrastructure = () => import('../features/saas/InfrastructurePage')
+const billing = () => import('../features/saas/BillingPage')
 
 function Public({ children }: { children: ReactNode }) {
   return <RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
@@ -41,6 +43,7 @@ export const routes: RouteObject[] = [
     children: [
       { path: '/', element: <LandingPage /> },
       { path: '/status', element: <SystemStatusPage /> },
+      { path: '/pricing', element: <PricingPage /> },
       { path: '/login', element: <Public>{page(auth, 'LoginPage')}</Public> },
       { path: '/register', element: <Public>{page(auth, 'RegisterPage')}</Public> },
       { path: '/forgot-password', element: <Public>{page(auth, 'ForgotPasswordPage')}</Public> },
@@ -51,6 +54,8 @@ export const routes: RouteObject[] = [
         element: <RequireAuth>{page(auth, 'AcceptInvitationPage')}</RequireAuth>,
       },
       { path: '/app', element: <RequireAuth>{page(shell, 'AppHome')}</RequireAuth> },
+      // From the pricing page: the current workspace's billing, keeping ?plan=&interval=.
+      { path: '/app/billing', element: <RequireAuth>{page(shell, 'AppBilling')}</RequireAuth> },
       {
         path: '/w/:workspaceId',
         element: <RequireAuth>{page(shell, 'WorkspaceLayout')}</RequireAuth>,
@@ -72,6 +77,7 @@ export const routes: RouteObject[] = [
           { path: 'usage', element: page(admin, 'UsagePage') },
           { path: 'ai-providers', element: page(aiProviders, 'AIProvidersPage') },
           { path: 'infrastructure', element: page(infrastructure, 'InfrastructurePage') },
+          { path: 'billing', element: page(billing, 'BillingPage') },
           { path: '*', element: <NotFoundPage inApp /> },
         ],
       },

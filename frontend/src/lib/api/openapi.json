@@ -374,6 +374,134 @@
         "title": "AuditLogResponse",
         "type": "object"
       },
+      "BillingOverviewResponse": {
+        "properties": {
+          "blocked_plans": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Plans the workspace can't move to now, with the reason.",
+            "title": "Blocked Plans",
+            "type": "object"
+          },
+          "can_manage_payment": {
+            "title": "Can Manage Payment",
+            "type": "boolean"
+          },
+          "cancel_at_period_end": {
+            "title": "Cancel At Period End",
+            "type": "boolean"
+          },
+          "current_period_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Period End"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "features_in_use": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Features In Use",
+            "type": "array"
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval"
+          },
+          "managed_by": {
+            "enum": [
+              "free",
+              "stripe",
+              "contract"
+            ],
+            "title": "Managed By",
+            "type": "string"
+          },
+          "members": {
+            "title": "Members",
+            "type": "integer"
+          },
+          "over_plan": {
+            "description": "Infrastructure features in use that the current plan doesn't include.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Over Plan",
+            "type": "array"
+          },
+          "plan_key": {
+            "title": "Plan Key",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "sales_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sales Email"
+          },
+          "seats": {
+            "title": "Seats",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "enabled",
+          "plan_key",
+          "plan_name",
+          "managed_by",
+          "status",
+          "interval",
+          "seats",
+          "members",
+          "current_period_end",
+          "cancel_at_period_end",
+          "features_in_use",
+          "over_plan",
+          "blocked_plans",
+          "sales_email",
+          "can_manage_payment"
+        ],
+        "title": "BillingOverviewResponse",
+        "type": "object"
+      },
       "Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post": {
         "properties": {
           "audio": {
@@ -3030,6 +3158,151 @@
         "title": "PasskeyResponse",
         "type": "object"
       },
+      "PlanCatalogEntry": {
+        "properties": {
+          "annual_cents_per_member": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Price per member per year when billed annually (two months free).",
+            "title": "Annual Cents Per Member"
+          },
+          "contact_sales": {
+            "title": "Contact Sales",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "entitlements": {
+            "additionalProperties": true,
+            "title": "Entitlements",
+            "type": "object"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "monthly_cents_per_member": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "List price per member per month, in US cents. Null: by quote.",
+            "title": "Monthly Cents Per Member"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "self_serve": {
+            "description": "Can be bought online on this server.",
+            "title": "Self Serve",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "description",
+          "monthly_cents_per_member",
+          "annual_cents_per_member",
+          "self_serve",
+          "contact_sales",
+          "entitlements"
+        ],
+        "title": "PlanCatalogEntry",
+        "type": "object"
+      },
+      "PlanCatalogResponse": {
+        "properties": {
+          "annual_months_charged": {
+            "title": "Annual Months Charged",
+            "type": "integer"
+          },
+          "billing_enabled": {
+            "title": "Billing Enabled",
+            "type": "boolean"
+          },
+          "currency": {
+            "const": "usd",
+            "default": "usd",
+            "title": "Currency",
+            "type": "string"
+          },
+          "infrastructure_features": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Infrastructure Features",
+            "type": "object"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanCatalogEntry"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "sales_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sales Email"
+          }
+        },
+        "required": [
+          "annual_months_charged",
+          "billing_enabled",
+          "sales_email",
+          "infrastructure_features",
+          "plans"
+        ],
+        "title": "PlanCatalogResponse",
+        "type": "object"
+      },
+      "PlanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "interval": {
+            "default": "month",
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Interval",
+            "type": "string"
+          },
+          "plan": {
+            "enum": [
+              "pro",
+              "business"
+            ],
+            "title": "Plan",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan"
+        ],
+        "title": "PlanRequest",
+        "type": "object"
+      },
       "PlanSummaryResponse": {
         "properties": {
           "entitlements": {
@@ -3608,6 +3881,19 @@
           "recovery_codes"
         ],
         "title": "RecoveryCodesResponse",
+        "type": "object"
+      },
+      "RedirectResponse": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "RedirectResponse",
         "type": "object"
       },
       "RegisterRequest": {
@@ -6791,6 +7077,27 @@
         ]
       }
     },
+    "/api/v1/plans": {
+      "get": {
+        "operationId": "list_plans_api_v1_plans_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanCatalogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plans and prices (public)",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
     "/api/v1/worker/v1/heartbeat": {
       "post": {
         "operationId": "heartbeat_api_v1_worker_v1_heartbeat_post",
@@ -7388,6 +7695,218 @@
         "summary": "Audit Logs",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/billing": {
+      "get": {
+        "operationId": "billing_overview_api_v1_workspaces__workspace_id__billing_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plan, subscription and seats",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/billing/checkout": {
+      "post": {
+        "operationId": "start_checkout_api_v1_workspaces__workspace_id__billing_checkout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Stripe Checkout for a first subscription (owners)",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/billing/plan": {
+      "post": {
+        "operationId": "change_plan_api_v1_workspaces__workspace_id__billing_plan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Switch an existing subscription to another plan (prorated)",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/billing/portal": {
+      "post": {
+        "operationId": "open_portal_api_v1_workspaces__workspace_id__billing_portal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stripe customer portal: payment method, invoices, cancellation",
+        "tags": [
+          "billing"
         ]
       }
     },

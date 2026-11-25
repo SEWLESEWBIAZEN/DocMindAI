@@ -11,9 +11,10 @@ export function SiteFooter() {
           <span>DocuMind</span>
         </div>
         <nav aria-label="Footer" className="lp-footer__links">
-          <a href="#benefits">Benefits</a>
-          <a href="#use-cases">Use cases</a>
-          <a href="#security">Security</a>
+          <a href="/#benefits">Benefits</a>
+          <a href="/#use-cases">Use cases</a>
+          <a href="/#security">Security</a>
+          <a href="/pricing">Pricing</a>
           <a href="/status">System status</a>
         </nav>
         <p className="lp-muted">© {YEAR} DocuMind AI</p>

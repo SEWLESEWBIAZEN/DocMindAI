@@ -68,12 +68,45 @@ class Entitlements:
         return replace(self, **{k: v for k, v in overrides.items() if k in names})
 
 
+class BillingInterval(StrEnum):
+    MONTH = "month"
+    YEAR = "year"
+
+
+#: Annual billing charges ten months: two months free.
+ANNUAL_MONTHS_CHARGED = 10
+
+
+@dataclass(frozen=True, slots=True)
+class Pricing:
+    """List prices in US cents, per member (seat). ``None``: by quote (contact sales)."""
+
+    monthly_cents_per_member: int | None
+    self_serve: bool
+
+    @property
+    def annual_cents_per_member(self) -> int | None:
+        if self.monthly_cents_per_member is None:
+            return None
+        return self.monthly_cents_per_member * ANNUAL_MONTHS_CHARGED
+
+    def cents_per_member(self, interval: BillingInterval) -> int | None:
+        if interval is BillingInterval.YEAR:
+            return self.annual_cents_per_member
+        return self.monthly_cents_per_member
+
+
 @dataclass(frozen=True, slots=True)
 class Plan:
     key: PlanKey
     name: str
     description: str
     entitlements: Entitlements
+    pricing: Pricing = Pricing(0, self_serve=False)
+
+    @property
+    def paid(self) -> bool:
+        return self.key is not PlanKey.FREE
 
 
 PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
@@ -98,6 +131,7 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 external_database=False,
                 customer_workers=False,
             ),
+            Pricing(0, self_serve=False),
         ),
         PlanKey.PRO: Plan(
             PlanKey.PRO,
@@ -119,6 +153,7 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 external_database=False,
                 customer_workers=False,
             ),
+            Pricing(1_900, self_serve=True),
         ),
         PlanKey.BUSINESS: Plan(
             PlanKey.BUSINESS,
@@ -140,6 +175,7 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 external_database=True,
                 customer_workers=False,
             ),
+            Pricing(9_900, self_serve=True),
         ),
         PlanKey.ENTERPRISE: Plan(
             PlanKey.ENTERPRISE,
@@ -161,9 +197,30 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 external_database=True,
                 customer_workers=True,
             ),
+            Pricing(None, self_serve=False),
         ),
     }
 )
+
+
+#: Infrastructure features, the entitlement each needs, and how to describe it.
+INFRASTRUCTURE_FEATURES: MappingProxyType[str, str] = MappingProxyType(
+    {
+        "custom_storage": "your own object storage",
+        "dedicated_database": "a dedicated database",
+        "external_database": "your own (external) database",
+        "customer_workers": "processing on your own servers",
+    }
+)
+
+
+def cheapest_plan_with(feature: str) -> PlanKey | None:
+    """The lowest plan that includes an infrastructure feature."""
+    for key in (PlanKey.FREE, PlanKey.PRO, PlanKey.BUSINESS, PlanKey.ENTERPRISE):
+        if getattr(PLANS[key].entitlements, feature):
+            return key
+    return None
+
 
 DEFAULT_PLAN = PlanKey.FREE
 

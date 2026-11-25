@@ -1,6 +1,12 @@
 """ORM models. Import every model module here so Alembic autogenerate sees it."""
 
-from documind.infrastructure.database.models.billing import PlanRecord, UsageRecord, WorkspacePlan
+from documind.infrastructure.database.models.billing import (
+    BillingEvent,
+    BillingSubscription,
+    PlanRecord,
+    UsageRecord,
+    WorkspacePlan,
+)
 from documind.infrastructure.database.models.conversations import (
     Conversation,
     ConversationCollection,
@@ -52,6 +58,8 @@ from documind.infrastructure.database.models.processing import (
 __all__ = [
     "AccountToken",
     "AuditLog",
+    "BillingEvent",
+    "BillingSubscription",
     "Conversation",
     "ConversationCollection",
     "ConversationDocument",

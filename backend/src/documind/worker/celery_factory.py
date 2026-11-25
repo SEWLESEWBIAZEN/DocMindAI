@@ -11,6 +11,7 @@ PROCESS_TASK = "documind.process_document"
 SWEEP_TASK = "documind.sweep_processing_jobs"
 REPLY_SWEEP_TASK = "documind.sweep_stale_replies"
 MIGRATION_TASK = "documind.run_infrastructure_migration"
+SEAT_SYNC_TASK = "documind.sync_billing_seats"
 
 
 def create_celery(settings: Settings) -> Celery:
@@ -41,6 +42,12 @@ def create_celery(settings: Settings) -> Celery:
                 "task": REPLY_SWEEP_TASK,
                 "schedule": 60.0,
                 "options": {"queue": QUEUE, "expires": 60},
+            },
+            # Subscription quantity follows the member count (ADR 0032). No-op without Stripe.
+            "sync-billing-seats": {
+                "task": SEAT_SYNC_TASK,
+                "schedule": float(settings.billing_seat_sync_interval_seconds),
+                "options": {"queue": QUEUE, "expires": settings.billing_seat_sync_interval_seconds},
             },
         },
     )

@@ -37,5 +37,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0029](0029-passkeys.md) | Passkeys (WebAuthn) as a second factor | Accepted |
 | [0030](0030-support-assisted-2fa-reset.md) | Support-assisted 2FA reset | Accepted |
 | [0031](0031-visible-stale-indexes.md) | Make documents on an old embedding model visible | Accepted |
+| [0032](0032-pricing-and-self-serve-billing.md) | Pricing tiers and self-serve billing with Stripe | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

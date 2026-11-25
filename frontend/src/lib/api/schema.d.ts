@@ -638,6 +638,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plans and prices (public) */
+        get: operations["list_plans_api_v1_plans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/worker/v1/heartbeat": {
         parameters: {
             query?: never;
@@ -793,6 +810,74 @@ export interface paths {
         get: operations["audit_logs_api_v1_workspaces__workspace_id__audit_logs_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plan, subscription and seats */
+        get: operations["billing_overview_api_v1_workspaces__workspace_id__billing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Stripe Checkout for a first subscription (owners) */
+        post: operations["start_checkout_api_v1_workspaces__workspace_id__billing_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/billing/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch an existing subscription to another plan (prorated) */
+        post: operations["change_plan_api_v1_workspaces__workspace_id__billing_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stripe customer portal: payment method, invoices, cancellation */
+        post: operations["open_portal_api_v1_workspaces__workspace_id__billing_portal_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1722,6 +1807,50 @@ export interface components {
             target_id: string | null;
             /** Target Type */
             target_type: string | null;
+        };
+        /** BillingOverviewResponse */
+        BillingOverviewResponse: {
+            /**
+             * Blocked Plans
+             * @description Plans the workspace can't move to now, with the reason.
+             */
+            blocked_plans: {
+                [key: string]: string;
+            };
+            /** Can Manage Payment */
+            can_manage_payment: boolean;
+            /** Cancel At Period End */
+            cancel_at_period_end: boolean;
+            /** Current Period End */
+            current_period_end: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Features In Use */
+            features_in_use: string[];
+            /** Interval */
+            interval: string | null;
+            /**
+             * Managed By
+             * @enum {string}
+             */
+            managed_by: "free" | "stripe" | "contract";
+            /** Members */
+            members: number;
+            /**
+             * Over Plan
+             * @description Infrastructure features in use that the current plan doesn't include.
+             */
+            over_plan: string[];
+            /** Plan Key */
+            plan_key: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Sales Email */
+            sales_email: string | null;
+            /** Seats */
+            seats: number;
+            /** Status */
+            status: string | null;
         };
         /** Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post */
         Body_transcribe_api_v1_workspaces__workspace_id__voice_transcribe_post: {
@@ -2758,6 +2887,71 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** PlanCatalogEntry */
+        PlanCatalogEntry: {
+            /**
+             * Annual Cents Per Member
+             * @description Price per member per year when billed annually (two months free).
+             */
+            annual_cents_per_member: number | null;
+            /** Contact Sales */
+            contact_sales: boolean;
+            /** Description */
+            description: string;
+            /** Entitlements */
+            entitlements: {
+                [key: string]: unknown;
+            };
+            /** Key */
+            key: string;
+            /**
+             * Monthly Cents Per Member
+             * @description List price per member per month, in US cents. Null: by quote.
+             */
+            monthly_cents_per_member: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Self Serve
+             * @description Can be bought online on this server.
+             */
+            self_serve: boolean;
+        };
+        /** PlanCatalogResponse */
+        PlanCatalogResponse: {
+            /** Annual Months Charged */
+            annual_months_charged: number;
+            /** Billing Enabled */
+            billing_enabled: boolean;
+            /**
+             * Currency
+             * @default usd
+             * @constant
+             */
+            currency: "usd";
+            /** Infrastructure Features */
+            infrastructure_features: {
+                [key: string]: string;
+            };
+            /** Plans */
+            plans: components["schemas"]["PlanCatalogEntry"][];
+            /** Sales Email */
+            sales_email: string | null;
+        };
+        /** PlanRequest */
+        PlanRequest: {
+            /**
+             * Interval
+             * @default month
+             * @enum {string}
+             */
+            interval: "month" | "year";
+            /**
+             * Plan
+             * @enum {string}
+             */
+            plan: "pro" | "business";
+        };
         /** PlanSummaryResponse */
         PlanSummaryResponse: {
             entitlements: components["schemas"]["EntitlementsResponse"];
@@ -2981,6 +3175,11 @@ export interface components {
              * @description Shown once. Store them somewhere safe.
              */
             recovery_codes: string[];
+        };
+        /** RedirectResponse */
+        RedirectResponse: {
+            /** Url */
+            url: string;
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -4750,6 +4949,26 @@ export interface operations {
             };
         };
     };
+    list_plans_api_v1_plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCatalogResponse"];
+                };
+            };
+        };
+    };
     heartbeat_api_v1_worker_v1_heartbeat_post: {
         parameters: {
             query?: never;
@@ -5090,6 +5309,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    billing_overview_api_v1_workspaces__workspace_id__billing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingOverviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_checkout_api_v1_workspaces__workspace_id__billing_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedirectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_plan_api_v1_workspaces__workspace_id__billing_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingOverviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_portal_api_v1_workspaces__workspace_id__billing_portal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedirectResponse"];
                 };
             };
             /** @description Validation Error */

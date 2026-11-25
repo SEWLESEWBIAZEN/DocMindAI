@@ -15,7 +15,12 @@ from dataclasses import asdict, dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
-from documind.domain.billing.plans import Entitlements
+from documind.domain.billing.plans import (
+    INFRASTRUCTURE_FEATURES,
+    PLANS,
+    Entitlements,
+    cheapest_plan_with,
+)
 
 DatabaseMode = Literal["shared", "dedicated", "external"]
 StorageProviderKey = Literal["documind", "aws_s3", "s3_compatible", "minio", "azure_blob"]
@@ -300,15 +305,28 @@ def from_stored(raw: dict[str, Any]) -> InfrastructureConfig:
     )
 
 
+def features_in_use(config: InfrastructureConfig) -> list[str]:
+    """Entitlement names this configuration needs (see ``INFRASTRUCTURE_FEATURES``)."""
+    used: list[str] = []
+    if config.storage.provider != "documind":
+        used.append("custom_storage")
+    if config.database.mode == "dedicated":
+        used.append("dedicated_database")
+    if config.database.mode == "external":
+        used.append("external_database")
+    if config.processing.mode != "documind":
+        used.append("customer_workers")
+    return used
+
+
 def check_entitlements(config: InfrastructureConfig, ents: Entitlements) -> None:
-    if config.storage.provider != "documind" and not ents.custom_storage:
-        raise ProfileError("Your plan doesn't include your own storage.")
-    if config.database.mode == "dedicated" and not ents.dedicated_database:
-        raise ProfileError("Your plan doesn't include a dedicated database.")
-    if config.database.mode == "external" and not ents.external_database:
-        raise ProfileError("Your plan doesn't include connecting your own database.")
-    if config.processing.mode != "documind" and not ents.customer_workers:
-        raise ProfileError("Your plan doesn't include customer-hosted processing.")
+    for feature in features_in_use(config):
+        if not getattr(ents, feature):
+            plan = cheapest_plan_with(feature)
+            available = f" It's included from the {PLANS[plan].name} plan." if plan else ""
+            raise ProfileError(
+                f"Your plan doesn't include {INFRASTRUCTURE_FEATURES[feature]}.{available}"
+            )
 
 
 def requires_migration(current: InfrastructureConfig, target: InfrastructureConfig) -> list[str]:

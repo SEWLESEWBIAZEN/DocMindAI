@@ -206,6 +206,32 @@ on **Free**; operators assign plans with `documind-manage plan assign <workspace
 Quota checks return `402 quota_exceeded` with `{"quota": {"metric", "limit", "used", "resets_at"}}`.
 Only platform-billed AI usage counts toward monthly limits.
 
+## Pricing and self-serve billing (ADR 0032)
+
+| Plan | Price per member | Your own storage | Dedicated / your own database | Your own workers |
+| --- | --- | --- | --- | --- |
+| Free | $0 | – | – | – |
+| Pro | $19 a month, or $190 a year | ✓ | – | – |
+| Business | $99 a month, or $990 a year | ✓ | ✓ | – |
+| Enterprise | By quote (contact sales) | ✓ | ✓ | ✓ |
+
+Prices live in `domain/billing/plans.py` next to the limits, and are shown by the public
+`GET /api/v1/plans` and the `/pricing` page. What a workspace may do is always decided by its row in
+`workspace_plans`; Stripe only changes that row (audited, `assigned_by = stripe`).
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `STRIPE_SECRET_KEY` | *(unset)* | Secret (`sk_…`) or restricted (`rk_…`) key. Unset: no online payments; plans are assigned by operators. |
+| `STRIPE_WEBHOOK_SECRET` | *(unset)* | The endpoint's signing secret (`whsec_…`). Webhook URL: `https://HOST/api/v1/billing/webhook`. |
+| `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL` | *(unset)* | Recurring per-unit prices for Pro ($19 a month, $190 a year). |
+| `STRIPE_PRICE_BUSINESS_MONTHLY`, `STRIPE_PRICE_BUSINESS_ANNUAL` | *(unset)* | Recurring per-unit prices for Business ($99 a month, $990 a year). |
+| `STRIPE_TIMEOUT_SECONDS` | `20` | Per-request timeout for Stripe calls. |
+| `SALES_EMAIL` | *(unset)* | Where "Contact sales" points (Enterprise, contract plans). |
+| `BILLING_SEAT_SYNC_INTERVAL_SECONDS` | `3600` | How often the worker sets each subscription's quantity to the member count. |
+
+All six Stripe values are set together or not at all; a partial setup is rejected at start-up. Setup
+steps: [`runbooks/billing.md`](runbooks/billing.md).
+
 ## Credential vault and your own AI keys (ADR 0019, ADR 0022)
 
 | Variable                     | Default | Description                                                      |

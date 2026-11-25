@@ -5,6 +5,7 @@ import { CapabilityStrip } from './sections/CapabilityStrip'
 import { FinalCta } from './sections/FinalCta'
 import { Hero } from './sections/Hero'
 import { HowItWorks } from './sections/HowItWorks'
+import { Pricing } from './sections/Pricing'
 import { Security } from './sections/Security'
 import { SiteFooter } from './sections/SiteFooter'
 import { SiteHeader } from './sections/SiteHeader'
@@ -24,6 +25,7 @@ export function LandingPage() {
         <UseCases />
         <HowItWorks />
         <Security />
+        <Pricing />
         <FinalCta />
       </main>
       <SiteFooter />

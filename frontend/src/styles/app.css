@@ -2512,3 +2512,114 @@ mark.reading-highlight {
 .mfa-banner {
   margin-bottom: 16px;
 }
+
+/* ---------------------------------------------------------------- billing */
+
+.billing-interval {
+  grid-template-columns: repeat(2, minmax(140px, auto));
+  align-self: center;
+}
+
+.billing-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 16px 24px;
+  margin: 0;
+}
+
+.billing-facts dt {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.billing-facts dd {
+  margin: 4px 0 0;
+  font-weight: 500;
+}
+
+.billing-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 14px;
+  margin: 0;
+  list-style: none;
+}
+
+.billing-plan {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg);
+  scroll-margin-top: 80px;
+}
+
+.billing-plan--current {
+  border-color: var(--color-accent);
+  background: var(--color-selected);
+}
+
+.billing-plan--wanted:not(.billing-plan--current) {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.billing-plan h3 {
+  font-size: 1.05rem;
+}
+
+.billing-plan__price {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.billing-plan__price strong {
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+}
+
+.billing-plan__note {
+  font-size: 0.82rem;
+  margin: 2px 0 12px;
+}
+
+.billing-plan__action {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  min-height: 40px;
+}
+
+.billing-plan__hint {
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.billing-plan__hint--warn {
+  color: var(--color-warn-strong);
+}
+
+.billing-plan__list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.86rem;
+}
+
+.billing-plan__list li {
+  display: flex;
+  gap: 8px;
+}
+
+.billing-plan__list svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent);
+}

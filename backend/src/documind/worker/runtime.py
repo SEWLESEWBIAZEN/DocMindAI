@@ -61,6 +61,24 @@ async def sweep() -> object:
     return await sweep_processing(c.infrastructure(), c.settings, c.job_dispatcher)
 
 
+async def sync_seats() -> int:
+    """Keep Stripe subscription quantities equal to member counts (ADR 0032)."""
+    from documind.application.billing.subscriptions import SubscriptionService
+    from documind.container import plan_changed
+
+    c = container()
+    if c.billing_gateway is None:
+        return 0
+    async with c.session_factory() as session:
+        return await SubscriptionService(
+            session,
+            c.settings,
+            c.billing_gateway,
+            email=c.email_sender,
+            on_plan_change=plan_changed(c),
+        ).sync_seats()
+
+
 async def sweep_replies_all() -> int:
     c = container()
     return await sweep_replies(

@@ -20,6 +20,7 @@ from documind.application.ai.notifications import key_rejected_notifier
 from documind.application.ai.ports import ProviderFactory
 from documind.application.ai.processing import ResolvedProcessingAI
 from documind.application.ai.resolver import AIResolver, CapabilityAdapter, PlatformAI
+from documind.application.billing.gateway import BillingGateway
 from documind.application.billing.service import CachedEntitlements
 from documind.application.health_service import HealthService
 from documind.application.infrastructure.resolver import InfrastructureResolver
@@ -107,6 +108,8 @@ class Container:
     provider_factory: ProviderFactory | None = None
     workspace_keys: SqlWorkspaceKeys | None = None
     infra: InfrastructureResolver | None = None
+    #: Stripe (ADR 0032); None when self-serve billing isn't configured.
+    billing_gateway: BillingGateway | None = None
     #: Starts an approved infrastructure migration in the background (MI-8).
     migration_dispatch: Callable[[uuid.UUID], Awaitable[bool]] | None = None
 
@@ -237,7 +240,34 @@ def build_container(settings: Settings) -> Container:
         container.storage,
         cache_seconds=settings.tenant_settings_cache_seconds,
     )
+    container.billing_gateway = _build_billing_gateway(settings)
     return container
+
+
+def _build_billing_gateway(settings: Settings) -> BillingGateway | None:
+    if not settings.billing_enabled:
+        return None
+    from documind.infrastructure.billing.stripe_gateway import StripeGateway
+
+    if settings.stripe_secret_key is None or settings.stripe_webhook_secret is None:
+        return None  # pragma: no cover - billing_enabled checks both
+    return StripeGateway(
+        secret_key=settings.stripe_secret_key.get_secret_value(),
+        webhook_secret=settings.stripe_webhook_secret.get_secret_value(),
+        timeout_seconds=settings.stripe_timeout_seconds,
+    )
+
+
+def plan_changed(container: Container) -> Callable[[uuid.UUID], None]:
+    """Drop cached entitlements and AI routing so a new plan applies at once."""
+
+    def invalidate(workspace_id: uuid.UUID) -> None:
+        if container.entitlements is not None:
+            container.entitlements.invalidate(workspace_id)
+        if container.ai is not None:
+            container.ai.invalidate(workspace_id)
+
+    return invalidate
 
 
 class _LateEmail:

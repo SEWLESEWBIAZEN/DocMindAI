@@ -32,6 +32,7 @@ recorded anywhere: audio minutes (ADR 0018), figure descriptions, and whose key 
 - BYOK is enabled on every plan, including Free (ADR 0019 decision 3).
 - Plans are assigned by operators (`documind-manage plan assign`), and every change is audited. Payment
   processing is out of scope. A billing integration would only write `workspace_plans`.
+  *Update: ADR 0032 adds Stripe billing, which does exactly that.*
 
 ### Usage ledger
 

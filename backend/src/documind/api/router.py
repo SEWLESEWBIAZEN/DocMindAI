@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from documind.api.routes import (
     ai_providers,
     auth,
+    billing,
     conversations,
     documents,
     health,
@@ -29,6 +30,8 @@ api_router.include_router(documents.router)
 api_router.include_router(rag.router)
 api_router.include_router(conversations.router)
 api_router.include_router(usage.router)
+api_router.include_router(billing.public_router)
+api_router.include_router(billing.router)
 api_router.include_router(voice.router)
 api_router.include_router(ai_providers.router)
 api_router.include_router(infrastructure.router)

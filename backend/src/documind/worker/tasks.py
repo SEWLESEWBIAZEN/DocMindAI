@@ -11,6 +11,7 @@ from documind.worker.celery_app import (
     PROCESS_TASK,
     QUEUE,
     REPLY_SWEEP_TASK,
+    SEAT_SYNC_TASK,
     SWEEP_TASK,
     app,
 )
@@ -50,3 +51,11 @@ def sweep_stale_replies() -> int:
 def run_infrastructure_migration(migration_id: str) -> str:
     report = runtime.run(runtime.run_migration(uuid.UUID(migration_id)))
     return str(report.get("rows", {}))
+
+
+@app.task(name=SEAT_SYNC_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def sync_billing_seats() -> int:
+    changed = runtime.run(runtime.sync_seats())
+    if changed:
+        logger.info("updated subscription seats", extra={"count": changed})
+    return changed

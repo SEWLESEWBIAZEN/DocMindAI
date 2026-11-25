@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.ai.resolver import UnavailableEmbeddings, WorkspaceAI
 from documind.application.billing.service import BillingService
+from documind.application.billing.subscriptions import SubscriptionService
 from documind.application.conversations.finalizer import ReplyFinalizer
 from documind.application.conversations.service import ConversationService
 from documind.application.conversations.streaming import ReplyRunner, StreamOptions
@@ -31,7 +32,7 @@ from documind.application.processing.reindex import IndexFreshness
 from documind.application.rag.condense import QueryCondenser
 from documind.application.rag.orchestrator import GenerationOptions, RAGOrchestrator
 from documind.application.rag.retrieval import RetrievalOptions, RetrievalService
-from documind.container import Container
+from documind.container import Container, plan_changed
 from documind.core.config import Settings
 from documind.core.logging import get_request_id
 from documind.domain.billing.plans import Capability
@@ -348,6 +349,22 @@ def get_billing_service(session: SessionDep, data: DataSessionDep, meta: MetaDep
 
 
 BillingServiceDep = Annotated[BillingService, Depends(get_billing_service)]
+
+
+def get_subscription_service(
+    session: SessionDep, container: ContainerDep, meta: MetaDep
+) -> SubscriptionService:
+    return SubscriptionService(
+        session,
+        container.settings,
+        container.billing_gateway,
+        meta,
+        email=container.email_sender,
+        on_plan_change=plan_changed(container),
+    )
+
+
+SubscriptionServiceDep = Annotated[SubscriptionService, Depends(get_subscription_service)]
 
 
 class Quotas:

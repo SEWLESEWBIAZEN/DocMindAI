@@ -402,6 +402,8 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Clear errors for invalid/revoked keys | [x] | `provider_key_invalid` (503) with a clear message; key marked invalid, admins emailed, jobs fail permanently, revalidation restores it |
 | Re-indexing when the embedding configuration changes | [x] | `409 reindex_required` → confirm → jobs queued; `GET/POST /reindex`; per-workspace `documind-manage reindex` |
 | Documents on an old embedding model are visible, not silently skipped | [x] | `needs_reindex` badge, "Re-index all" banner, `documents_need_reindex` warning on search and answers (ADR 0031; `test_documents_on_another_model_are_reported_not_silently_skipped`) |
+| Pricing tiers (Free, Pro $19, Business $99 per member/month, yearly = 2 months free, Enterprise by quote) with custom storage from Pro and dedicated/external databases from Business | [x] | `/pricing`, `GET /plans`, ADR 0032 (`test_pricing.py`, `test_public_catalog_lists_prices_and_infrastructure`) |
+| Self-serve billing: Stripe Checkout, portal, signed idempotent webhooks, seat sync, plan changes guarded by infrastructure in use | [x] | `test_billing_api.py` (6), `e2e/billing.spec.ts`; runbook `runbooks/billing.md` |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 
@@ -453,7 +455,7 @@ Acceptance (verified 2026-11-24):
   when the provider doesn't report them.
 - External databases use the system CA bundle; uploading a custom CA isn't supported yet. Signed download
   URLs point at the customer's storage endpoint, so browsers must be able to reach it.
-- There is no payment processing: plans are assigned by operators.
+- ~~There is no payment processing: plans are assigned by operators.~~ Stripe self-serve billing was added later (ADR 0032).
 - The backend Docker image must be rebuilt to include `alembic_dataplane` (the dev Compose file mounts it).
 
 ## Phase 9: Security, testing and performance

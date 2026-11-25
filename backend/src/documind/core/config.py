@@ -201,6 +201,21 @@ class Settings(BaseSettings):
     # Base URL of the web app; used to build links in emails.
     public_app_url: str = "http://localhost:5173"
 
+    # --- Billing (Stripe, ADR 0032) -----------------------------------------
+    # Unset: self-serve billing is off; plans are assigned by operators.
+    stripe_secret_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    # Recurring per-seat prices created in Stripe for each plan and interval.
+    stripe_price_pro_monthly: str | None = None
+    stripe_price_pro_annual: str | None = None
+    stripe_price_business_monthly: str | None = None
+    stripe_price_business_annual: str | None = None
+    stripe_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    # Where "Contact sales" points (Enterprise).
+    sales_email: str | None = None
+    # Seats are kept in step with members by a periodic task.
+    billing_seat_sync_interval_seconds: int = Field(default=3600, ge=60, le=86400)
+
     # --- Authentication ----------------------------------------------------
     jwt_secret_key: SecretStr = Field(min_length=32)
     jwt_issuer: str = "documind"
@@ -347,6 +362,13 @@ class Settings(BaseSettings):
         "credential_encryption_keys",
         "dedicated_database_admin_url",
         "metrics_token",
+        "stripe_secret_key",
+        "stripe_webhook_secret",
+        "stripe_price_pro_monthly",
+        "stripe_price_pro_annual",
+        "stripe_price_business_monthly",
+        "stripe_price_business_annual",
+        "sales_email",
         mode="before",
     )
     @classmethod
@@ -439,6 +461,44 @@ class Settings(BaseSettings):
         if self.llm_provider == "local":
             raise ValueError("LLM_PROVIDER=local is for development only")
         return self
+
+    @model_validator(mode="after")
+    def _validate_stripe(self) -> Settings:
+        values = {
+            "STRIPE_SECRET_KEY": self.stripe_secret_key,
+            "STRIPE_WEBHOOK_SECRET": self.stripe_webhook_secret,
+            **{f"STRIPE_PRICE_{k.upper()}": v for k, v in self.stripe_prices.items()},
+        }
+        missing = [name for name, value in values.items() if value is None]
+        if missing and len(missing) < len(values):
+            raise ValueError("Stripe billing is partly configured; also set " + ", ".join(missing))
+        if not missing:
+            if not self.stripe_secret_key.get_secret_value().startswith(  # type: ignore[union-attr]
+                ("sk_", "rk_")
+            ):
+                raise ValueError("STRIPE_SECRET_KEY must be a Stripe secret or restricted key")
+            if not self.stripe_webhook_secret.get_secret_value().startswith(  # type: ignore[union-attr]
+                "whsec_"
+            ):
+                raise ValueError("STRIPE_WEBHOOK_SECRET must start with whsec_")
+            prices = [v for v in self.stripe_prices.values() if v]
+            if len(set(prices)) != len(prices):
+                raise ValueError("Each STRIPE_PRICE_* must be a different price")
+        return self
+
+    @property
+    def stripe_prices(self) -> dict[str, str | None]:
+        """``{"pro_monthly": price_id, ...}``."""
+        return {
+            "pro_monthly": self.stripe_price_pro_monthly,
+            "pro_annual": self.stripe_price_pro_annual,
+            "business_monthly": self.stripe_price_business_monthly,
+            "business_annual": self.stripe_price_business_annual,
+        }
+
+    @property
+    def billing_enabled(self) -> bool:
+        return self.stripe_secret_key is not None
 
     @model_validator(mode="after")
     def _validate_smtp(self) -> Settings:

@@ -30,6 +30,18 @@ export function AppHome() {
   return <Navigate to={`/w/${target.id}/dashboard`} replace />
 }
 
+/** `/app/billing?plan=…`: the default workspace's billing page (links from /pricing). */
+export function AppBilling() {
+  const { data, error, refetch } = useWorkspaces()
+  const user = useUser()
+  const location = useLocation()
+  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />
+  if (!data) return <FullPageLoading />
+  const target = data.find((w) => w.id === user.default_workspace_id) ?? data[0]
+  if (!target) return <NotFoundPage />
+  return <Navigate to={`/w/${target.id}/billing${location.search}#plans`} replace />
+}
+
 /** Loads the workspace in the URL; unknown or inaccessible ids get a 404 page. */
 export function WorkspaceLayout() {
   const { workspaceId } = useParams()
@@ -119,6 +131,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
     { to: `${base}/members`, label: 'Members', icon: 'users', permission: 'members.read' },
     { to: `${base}/organization`, label: 'Organizations', icon: 'building' },
     { to: `${base}/usage`, label: 'Usage', icon: 'chart', permission: 'usage.read' },
+    { to: `${base}/billing`, label: 'Billing', icon: 'scale', permission: 'billing.manage' },
     { to: `${base}/ai-providers`, label: 'AI providers', icon: 'key', permission: 'ai_providers.manage' },
     ...(workspace.kind === 'organization'
       ? [{ to: `${base}/infrastructure`, label: 'Infrastructure', icon: 'cpu' as const, permission: 'infrastructure.manage' as const }]

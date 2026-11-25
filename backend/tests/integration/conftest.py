@@ -47,6 +47,8 @@ DATA_TABLES = [
     "audit_logs",
     "usage_records",
     "workspace_plans",
+    "billing_subscriptions",
+    "billing_events",
     "infrastructure_events",
     "infrastructure_migrations",
     "worker_registrations",
