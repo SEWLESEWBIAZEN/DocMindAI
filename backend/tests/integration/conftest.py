@@ -32,6 +32,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 PASSWORD = "correct horse battery staple"
 # Every table holding per-test data (roles/permissions are seed data and stay).
 DATA_TABLES = [
+    "connector_items",
+    "connector_connections",
+    "deadlines",
+    "extraction_results",
+    "extraction_runs",
     "message_citations",
     "messages",
     "conversation_documents",

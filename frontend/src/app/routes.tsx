@@ -30,6 +30,7 @@ const infrastructure = () => import('../features/saas/InfrastructurePage')
 const billing = () => import('../features/saas/BillingPage')
 const extraction = () => import('../features/extraction/pages')
 const deadlines = () => import('../features/extraction/DeadlinesPage')
+const connectors = () => import('../features/connectors/ConnectorsPage')
 
 function Public({ children }: { children: ReactNode }) {
   return <RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
@@ -83,6 +84,7 @@ export const routes: RouteObject[] = [
           { path: 'extract', element: page(extraction, 'ExtractionsPage') },
           { path: 'extract/:runId', element: page(extraction, 'ExtractionRunPage') },
           { path: 'deadlines', element: page(deadlines, 'DeadlinesPage') },
+          { path: 'connectors', element: page(connectors, 'ConnectorsPage') },
           { path: '*', element: <NotFoundPage inApp /> },
         ],
       },

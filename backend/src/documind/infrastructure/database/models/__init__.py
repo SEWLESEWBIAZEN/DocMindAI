@@ -7,6 +7,10 @@ from documind.infrastructure.database.models.billing import (
     UsageRecord,
     WorkspacePlan,
 )
+from documind.infrastructure.database.models.connectors import (
+    ConnectorConnection,
+    ConnectorItem,
+)
 from documind.infrastructure.database.models.conversations import (
     Conversation,
     ConversationCollection,
@@ -65,6 +69,8 @@ __all__ = [
     "AuditLog",
     "BillingEvent",
     "BillingSubscription",
+    "ConnectorConnection",
+    "ConnectorItem",
     "Conversation",
     "ConversationCollection",
     "ConversationDocument",

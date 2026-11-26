@@ -7,6 +7,8 @@ import uuid
 
 from documind.worker import runtime
 from documind.worker.celery_app import (
+    CONNECTOR_SCHEDULE_TASK,
+    CONNECTOR_SYNC_TASK,
     EXTRACTION_SWEEP_TASK,
     EXTRACTION_TASK,
     MIGRATION_TASK,
@@ -82,3 +84,14 @@ def send_deadline_reminders() -> int:
     if sent:
         logger.info("sent deadline reminders", extra={"count": sent})
     return sent
+
+
+@app.task(name=CONNECTOR_SYNC_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def sync_connector(connection_id: str, workspace_id: str | None = None) -> str:
+    del workspace_id  # routing is read from the connection itself
+    return runtime.run(runtime.sync_connector(uuid.UUID(connection_id)))
+
+
+@app.task(name=CONNECTOR_SCHEDULE_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def schedule_connector_syncs() -> int:
+    return runtime.run(runtime.schedule_connector_syncs())

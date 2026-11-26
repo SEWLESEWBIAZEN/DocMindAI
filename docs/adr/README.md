@@ -40,5 +40,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0032](0032-pricing-and-self-serve-billing.md) | Pricing tiers and self-serve billing with Stripe | Accepted |
 | [0033](0033-free-trial-and-onboarding.md) | Free trial and first-run onboarding | Accepted |
 | [0034](0034-structured-extraction-and-deadlines.md) | Structured extraction, comparison and deadlines | Accepted |
+| [0035](0035-connectors-google-drive.md) | Connectors, starting with Google Drive | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

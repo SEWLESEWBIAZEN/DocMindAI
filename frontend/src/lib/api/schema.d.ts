@@ -939,6 +939,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Connectors */
+        get: operations["list_connectors_api_v1_workspaces__workspace_id__connectors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/connectors/google-drive/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start connecting Google Drive (admins; needs a recent 2FA check) */
+        post: operations["authorize_google_drive_api_v1_workspaces__workspace_id__connectors_google_drive_authorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/connectors/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose folders to sync */
+        put: operations["configure_connection_api_v1_workspaces__workspace_id__connectors__connection_id__put"];
+        post?: never;
+        /** Disconnect (needs a recent 2FA check). Imported documents stay. */
+        delete: operations["disconnect_api_v1_workspaces__workspace_id__connectors__connection_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/connectors/{connection_id}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Folders */
+        get: operations["list_folders_api_v1_workspaces__workspace_id__connectors__connection_id__folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/connectors/{connection_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sync Connection */
+        post: operations["sync_connection_api_v1_workspaces__workspace_id__connectors__connection_id__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/conversations": {
         parameters: {
             query?: never;
@@ -1950,6 +2036,11 @@ export interface components {
             /** Target Type */
             target_type: string | null;
         };
+        /** AuthorizeResponse */
+        AuthorizeResponse: {
+            /** Url */
+            url: string;
+        };
         /** BillingOverviewResponse */
         BillingOverviewResponse: {
             /**
@@ -2168,6 +2259,61 @@ export interface components {
          * @enum {string}
          */
         ComponentStatus: "ok" | "error";
+        /** ConfigureRequest */
+        ConfigureRequest: {
+            /** Collection Name */
+            collection_name?: string | null;
+            /** Folders */
+            folders: components["schemas"]["FolderResponse"][];
+        };
+        /** ConnectionResponse */
+        ConnectionResponse: {
+            /** Account Email */
+            account_email: string | null;
+            /** Collection Id */
+            collection_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Files Skipped */
+            files_skipped: number;
+            /** Files Synced */
+            files_synced: number;
+            /** Folders */
+            folders: {
+                [key: string]: string;
+            }[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Initial Sync Done */
+            initial_sync_done: boolean;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Sync At */
+            last_sync_at: string | null;
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "google_drive";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "needs_folders" | "active" | "error" | "paused";
+        };
+        /** ConnectorsResponse */
+        ConnectorsResponse: {
+            /** Connections */
+            connections: components["schemas"]["ConnectionResponse"][];
+            /** Providers */
+            providers: components["schemas"]["ProviderInfo"][];
+        };
         /** ConversationDetailResponse */
         ConversationDetailResponse: {
             /** Collection Ids */
@@ -2624,6 +2770,13 @@ export interface components {
              * @enum {string}
              */
             type: "text" | "date" | "money" | "number";
+        };
+        /** FolderResponse */
+        FolderResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3359,6 +3512,23 @@ export interface components {
              * @description "available" or "planned" (not selectable yet)
              */
             status: string;
+        };
+        /** ProviderInfo */
+        ProviderInfo: {
+            /**
+             * Available
+             * @description An OAuth client is configured on this server.
+             */
+            available: boolean;
+            /**
+             * Key
+             * @constant
+             */
+            key: "google_drive";
+            /** Name */
+            name: string;
+            /** Redirect Uri */
+            redirect_uri: string;
         };
         /** ProviderResponse */
         ProviderResponse: {
@@ -6105,6 +6275,200 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_connectors_api_v1_workspaces__workspace_id__connectors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authorize_google_drive_api_v1_workspaces__workspace_id__connectors_google_drive_authorize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    configure_connection_api_v1_workspaces__workspace_id__connectors__connection_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_v1_workspaces__workspace_id__connectors__connection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_folders_api_v1_workspaces__workspace_id__connectors__connection_id__folders_get: {
+        parameters: {
+            query?: {
+                parent?: string | null;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_connection_api_v1_workspaces__workspace_id__connectors__connection_id__sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

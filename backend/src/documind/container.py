@@ -75,6 +75,7 @@ from documind.infrastructure.storage.health import ObjectStorageHealthCheck
 from documind.infrastructure.storage.s3_provider import S3ObjectStorage
 from documind.infrastructure.tasks.celery_dispatcher import CeleryJobDispatcher
 from documind.worker.celery_factory import (
+    CONNECTOR_SYNC_TASK,
     EXTRACTION_TASK,
     MIGRATION_TASK,
     PROCESS_TASK,
@@ -116,6 +117,10 @@ class Container:
     infra: InfrastructureResolver | None = None
     #: Starts an extraction run in the background (ADR 0034): ``(run_id, workspace_id)``.
     extraction_dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]] | None = None
+    #: Google Drive (ADR 0035); None when no OAuth client is configured.
+    drive_client: Any = None
+    #: Starts a connector sync in the background: ``(connection_id, workspace_id)``.
+    connector_dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]] | None = None
     #: Stripe (ADR 0032); None when self-serve billing isn't configured.
     billing_gateway: BillingGateway | None = None
     #: Starts an approved infrastructure migration in the background (MI-8).
@@ -135,6 +140,11 @@ class Container:
         if self.extraction_dispatch is None:  # pragma: no cover - always set by build_container
             raise RuntimeError("extraction dispatcher not configured")
         return self.extraction_dispatch
+
+    def connectors(self) -> Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]]:
+        if self.connector_dispatch is None:  # pragma: no cover - always set by build_container
+            raise RuntimeError("connector dispatcher not configured")
+        return self.connector_dispatch
 
     def ai_resolver(self) -> AIResolver:
         if self.ai is None:  # pragma: no cover - always set by build_container
@@ -260,6 +270,20 @@ def build_container(settings: Settings) -> Container:
         return await extraction.dispatch(run_id, workspace_id=workspace_id)
 
     container.extraction_dispatch = dispatch_extraction
+    connectors = CeleryJobDispatcher(celery, task_name=CONNECTOR_SYNC_TASK, queue=QUEUE)
+
+    async def dispatch_sync(connection_id: uuid.UUID, workspace_id: uuid.UUID) -> bool:
+        return await connectors.dispatch(connection_id, workspace_id=workspace_id)
+
+    container.connector_dispatch = dispatch_sync
+    if settings.google_oauth_client_id and settings.google_oauth_client_secret:
+        from documind.infrastructure.connectors.google_drive import GoogleDriveClient
+
+        container.drive_client = GoogleDriveClient(
+            client_id=settings.google_oauth_client_id,
+            client_secret=settings.google_oauth_client_secret.get_secret_value(),
+            timeout_seconds=settings.connector_timeout_seconds,
+        )
     return container
 
 

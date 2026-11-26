@@ -409,6 +409,7 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Structured extraction: templates (obligations and deadlines, contract terms, invoice) and custom fields; every value cited; CSV export | [x] | ADR 0034; `test_extraction.py` (9), `test_extraction_api.py` (5), `e2e/extraction.spec.ts` |
 | Side-by-side comparison of documents, with differing fields marked | [x] | Fields view in `features/extraction/pages.tsx`; `test_compare_contract_terms_and_limits` |
 | Tracked deadlines: email reminders (7/1/0 days by default), calendar file (.ics) | [x] | `test_deadlines_reminders_and_calendar` |
+| Google Drive connector: OAuth (PKCE, browser-bound callback, 2FA to connect or disconnect), folder picker, first sync and change feed, new versions, archive on removal, quotas, hourly/15-min sync | [x] | ADR 0035; `test_connectors_api.py` (3), `test_google_drive.py` (4), `e2e/connectors.spec.ts`. Not yet run against live Google from this sandbox. |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 

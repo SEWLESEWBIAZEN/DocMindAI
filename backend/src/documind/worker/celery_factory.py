@@ -15,6 +15,8 @@ SEAT_SYNC_TASK = "documind.sync_billing_seats"
 EXTRACTION_TASK = "documind.run_extraction"
 EXTRACTION_SWEEP_TASK = "documind.sweep_extractions"
 REMINDER_TASK = "documind.send_deadline_reminders"
+CONNECTOR_SYNC_TASK = "documind.sync_connector"
+CONNECTOR_SCHEDULE_TASK = "documind.schedule_connector_syncs"
 
 
 def create_celery(settings: Settings) -> Celery:
@@ -51,6 +53,12 @@ def create_celery(settings: Settings) -> Celery:
                 "task": EXTRACTION_SWEEP_TASK,
                 "schedule": 120.0,
                 "options": {"queue": QUEUE, "expires": 120},
+            },
+            # Connectors due for a sync (ADR 0035). No-op when none are connected.
+            "connector-syncs": {
+                "task": CONNECTOR_SCHEDULE_TASK,
+                "schedule": 300.0,
+                "options": {"queue": QUEUE, "expires": 300},
             },
             "deadline-reminders": {
                 "task": REMINDER_TASK,

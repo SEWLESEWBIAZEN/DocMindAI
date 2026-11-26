@@ -248,6 +248,24 @@ Extraction uses the workspace's chat model (its own key or the platform's) and c
 | `EXTRACTION_STALE_SECONDS` | `900` | A run without progress for this long is marked failed (`interrupted`). |
 | `DEADLINE_REMINDER_INTERVAL_SECONDS` | `3600` | How often the worker sends due reminder emails. |
 
+## Connectors: Google Drive (ADR 0035)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GOOGLE_OAUTH_CLIENT_ID` | *(unset)* | OAuth client of type "Web application". Unset: the connector isn't offered. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | *(unset)* | Its secret. |
+| `CONNECTOR_SYNC_INTERVAL_SECONDS` | `900` | How often each connection syncs. |
+| `CONNECTOR_MAX_FILES_PER_SYNC` | `500` | Downloads per sync; the next sync continues. |
+| `CONNECTOR_TIMEOUT_SECONDS` | `60` | Per request to Google. |
+
+Set up in Google Cloud:
+1. Create a project and enable the **Google Drive API**.
+2. Configure the OAuth consent screen with the scope `https://www.googleapis.com/auth/drive.readonly`.
+   It is a restricted scope: apps for the public need Google's verification. Internal apps in one
+   Google Workspace don't.
+3. Create an OAuth client ID (Web application) with the redirect URI
+   `{PUBLIC_APP_URL}/api/v1/connectors/google-drive/callback`.
+
 ## Credential vault and your own AI keys (ADR 0019, ADR 0022)
 
 | Variable                     | Default | Description                                                      |

@@ -92,6 +92,82 @@ async def deadline_reminders() -> int:
     )
 
 
+class _NoDispatch:
+    async def dispatch(self, job_id: uuid.UUID, **_: Any) -> bool:
+        return True
+
+
+async def connector_data(workspace_id: uuid.UUID) -> Any:
+    """The workspace's data plane and a document service on it (connector imports)."""
+    from documind.application.connectors.sync import DataAccess
+    from documind.application.documents.document_service import DocumentService
+    from documind.application.identity.common import RequestMeta
+
+    c = container()
+    infra = await c.infrastructure().resolve(workspace_id)
+    dispatcher: Any = (
+        _NoDispatch() if infra.config.processing.mode == "customer" else c.job_dispatcher
+    )
+    return DataAccess(
+        infra.data_plane.sessions,
+        lambda s: DocumentService(
+            s, c.settings, infra.storage, c.malware_scanner, RequestMeta(), dispatcher
+        ),
+    )
+
+
+async def sync_connector(connection_id: uuid.UUID) -> str:
+    from documind.application.connectors.sync import DriveSync
+
+    c = container()
+    if c.drive_client is None:
+        return "not_configured"
+    lock = f"connector-sync:{connection_id}"
+    if not await c.redis.set(lock, "1", nx=True, ex=1800):
+        return "already_running"
+    try:
+        report = await DriveSync(
+            c.session_factory,
+            c.drive_client,
+            c.cipher,
+            connector_data,
+            max_files=c.settings.connector_max_files_per_sync,
+            max_bytes=c.settings.max_upload_bytes,
+        ).run(connection_id)
+        return report.status
+    finally:
+        await c.redis.delete(lock)
+
+
+async def schedule_connector_syncs() -> int:
+    from datetime import timedelta
+
+    from sqlalchemy import or_, select
+
+    from documind.application.identity.common import utcnow
+    from documind.infrastructure.database.models import ConnectorConnection
+
+    c = container()
+    if c.drive_client is None:
+        return 0
+    due = utcnow() - timedelta(seconds=c.settings.connector_sync_interval_seconds)
+    async with c.session_factory() as s:
+        rows = (
+            await s.execute(
+                select(ConnectorConnection.id, ConnectorConnection.workspace_id).where(
+                    ConnectorConnection.status.in_(("active", "paused")),
+                    or_(
+                        ConnectorConnection.last_sync_at.is_(None),
+                        ConnectorConnection.last_sync_at < due,
+                    ),
+                )
+            )
+        ).all()
+    for connection_id, workspace_id in rows:
+        await c.connectors()(connection_id, workspace_id)
+    return len(rows)
+
+
 async def sync_seats() -> int:
     """Keep Stripe subscription quantities equal to member counts (ADR 0032)."""
     from documind.application.billing.subscriptions import SubscriptionService

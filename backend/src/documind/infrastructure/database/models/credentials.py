@@ -32,7 +32,8 @@ class Credential(Base):
     __tablename__ = "credentials"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('ai_provider_key', 'database_password', 'storage_secret', 'worker_token')",
+            "kind IN ('ai_provider_key', 'database_password', 'storage_secret', 'worker_token', "
+            "'connector_token')",
             name="kind_valid",
         ),
         CheckConstraint("status IN ('active', 'revoked')", name="status_valid"),
