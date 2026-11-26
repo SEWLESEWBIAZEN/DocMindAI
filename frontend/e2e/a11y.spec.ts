@@ -63,6 +63,21 @@ test('every page passes axe in light and dark mode', async ({ page, baseURL }) =
     await audit(page, path, found)
   }
 
+  // The collapsed sidebar: icons only, but every link keeps its name, and the choice survives a reload.
+  await page.goto(`${root}/dashboard`)
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+  await page.reload()
+  const expand = page.getByRole('button', { name: 'Expand sidebar' })
+  await expect(expand).toHaveAttribute('aria-expanded', 'false')
+  const nav = page.getByRole('navigation', { name: 'Main' })
+  await expect(nav.getByRole('link', { name: 'Documents' })).toBeVisible()
+  expect((await nav.boundingBox())?.width).toBeLessThan(80) // icons only; labels are for screen readers
+  await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible()
+  await audit(page, 'collapsed sidebar', found)
+  await expand.click()
+  await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
+  await expect.poll(async () => (await nav.boundingBox())?.width).toBeGreaterThan(200)
+
   // Organization-only pages.
   await page.getByRole('button', { name: /Workspace: .*Switch workspace/ }).click()
   await page.getByRole('menuitem', { name: 'Create organization' }).click()

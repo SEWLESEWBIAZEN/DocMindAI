@@ -336,6 +336,7 @@ simulated speech APIs; the rest is the real stack).
 |-------------|--------|----------|
 | 16 pages: landing, login, registration, forgot password, dashboard, library, upload, viewer, collections, chat, history, organization, members, settings, profile, usage | [x] | Every page is exercised by the Playwright journey or unit tests; plus verify-email, reset-password, accept-invitation and 404 |
 | Navigation: workspace switcher, sidebar, user menu, document search, quick upload, new conversation | [x] | `features/shell/AppShell.tsx`; journey switches workspaces, uses the menus and the mobile drawer |
+| Sidebar collapses to an icon rail (remembered per browser); only the menu scrolls, so the header and "New conversation" keep their size; Geist typeface bundled with the app (the CSP allows fonts from our origin only) | [x] | `AppShell.tsx`, `styles/app.css`; `a11y.spec.ts` audits the collapsed sidebar in both themes and checks every link keeps its name |
 | Chat: document selection, input, streaming, Markdown, citation cards, source navigation, history | [x] | Journey: stream, follow-up, regenerate, "Open source" → viewer with the excerpt highlighted |
 | Feature-based architecture, reusable components, TanStack Query | [x] | `src/features/*`, `src/components/ui` |
 | Axios interceptors, typed API contracts | [x] | Single-flight refresh, 401 retry, CSRF header (`client.test.ts`); generated `schema.d.ts` with a backend staleness test |

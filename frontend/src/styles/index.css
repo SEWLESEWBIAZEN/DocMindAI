@@ -1,15 +1,18 @@
 :root {
-  --color-bg: #f7f7f8;
+  --color-bg: #f6f7f9;
   --color-surface: #ffffff;
-  --color-border: #e4e4e7;
-  --color-text: #18181b;
-  --color-text-muted: #5f5f69; /* ≥ 4.5:1 on surface-2 (WCAG AA) */
+  --color-sidebar: #fbfbfc;
+  --color-border: #e4e7ec;
+  --color-border-strong: #cdd2da;
+  --color-text: #101318;
+  --color-text-soft: #2c313a;
+  --color-text-muted: #5b6270; /* ≥ 4.5:1 on surface-2 (WCAG AA) */
   --color-accent: #0e7490; /* deep cyan: trust, AA with white text */
   --color-ok: #16a34a;
   --color-ok-bg: #dcfce7;
   --color-error: #dc2626;
   --color-error-bg: #fee2e2;
-  --color-surface-2: #f4f4f6;
+  --color-surface-2: #f2f4f7;
   --color-accent-strong: #155e75;
   --color-accent-soft: #ecfeff;
   --color-on-accent: #ffffff;
@@ -20,43 +23,52 @@
   --color-warn-strong: #92400e;
   --color-error-strong: #991b1b;
   --color-warn-bg: #fef3c7;
-  --color-hover: rgb(24 24 27 / 0.05);
+  --color-hover: rgb(16 19 24 / 0.05);
   --color-selected: rgb(14 116 144 / 0.1);
-  --sidebar-width: 264px;
-  --shadow-sm: 0 1px 2px rgb(16 16 24 / 0.06);
+  --sidebar-width: 268px;
+  --shadow-sm: 0 1px 2px rgb(16 19 24 / 0.05), 0 1px 1px rgb(16 19 24 / 0.03);
+  --shadow-md: 0 4px 14px -4px rgb(16 19 24 / 0.1), 0 1px 2px rgb(16 19 24 / 0.05);
   --shadow-lg: 0 24px 60px -18px rgb(8 51 68 / 0.26), 0 2px 6px rgb(16 16 24 / 0.06);
-  --radius: 10px;
+  --radius: 12px;
   /* Motion tokens (strong curves; built-in CSS easings are too weak). */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Geist is bundled with the app (the CSP only allows fonts from our own origin). */
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   color-scheme: light dark;
   font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
+  font-optical-sizing: auto;
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0e0e11;
-    --color-surface: #17171c;
-    --color-border: #2a2a31;
-    --color-text: #ececf1;
-    --color-text-muted: #9a9aa5;
+    --color-bg: #0a0c0f;
+    --color-surface: #121519;
+    --color-sidebar: #0d0f13;
+    --color-border: #22262d;
+    --color-border-strong: #343a44;
+    --color-text: #eceef2;
+    --color-text-soft: #c9ced6;
+    --color-text-muted: #969eab;
     --color-accent: #22d3ee;
     --color-ok: #4ade80;
     --color-ok-bg: #14301f;
     --color-error: #f87171;
     --color-error-bg: #3a1616;
-    --color-surface-2: #1d1d23;
+    --color-surface-2: #181b21;
     --color-accent-strong: #67e8f9;
     --color-accent-soft: #0b2a33;
-    --color-on-accent: #0e0e11;
+    --color-on-accent: #06181d;
     --color-highlight: rgb(245 158 11 / 0.3);
     --color-highlight-text: #fde68a;
     --color-warn: #fbbf24;
@@ -64,9 +76,10 @@
     --color-warn-strong: #fbbf24;
     --color-error-strong: #f87171;
     --color-warn-bg: #3a2a0b;
-    --color-hover: rgb(255 255 255 / 0.06);
-    --color-selected: rgb(34 211 238 / 0.12);
+    --color-hover: rgb(255 255 255 / 0.05);
+    --color-selected: rgb(34 211 238 / 0.1);
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.03);
     --shadow-lg: 0 24px 60px -18px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.04);
   }
 }
@@ -86,6 +99,12 @@ h1 {
   font-size: 1.15rem;
   font-weight: 600;
   margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 code {

@@ -69,8 +69,30 @@ interface NavItem {
   end?: boolean
 }
 
+const COLLAPSED_KEY = 'documind.sidebar.collapsed'
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 function Shell() {
   const [navOpen, setNavOpen] = useState(false)
+  // Desktop only: the sidebar shrinks to an icon rail. The mobile drawer always shows labels.
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const toggleCollapsed = () => {
+    setCollapsed((was) => {
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, was ? '0' : '1')
+      } catch {
+        // Private mode: the choice lasts until reload.
+      }
+      return !was
+    })
+  }
   const location = useLocation()
   const main = useRef<HTMLElement>(null)
   const [path, setPath] = useState(location.pathname)
@@ -95,11 +117,11 @@ function Shell() {
   }, [location.pathname])
 
   return (
-    <div className={`shell${navOpen ? ' shell--nav-open' : ''}`}>
+    <div className={`shell${navOpen ? ' shell--nav-open' : ''}${collapsed ? ' shell--collapsed' : ''}`}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      <Sidebar onClose={() => setNavOpen(false)} />
+      <Sidebar onClose={() => setNavOpen(false)} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       {navOpen && <div className="shell__scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <div className="shell__body">
         <Topbar onOpenNav={() => setNavOpen(true)} navOpen={navOpen} />
@@ -116,7 +138,15 @@ function Shell() {
   )
 }
 
-function Sidebar({ onClose }: { onClose: () => void }) {
+function Sidebar({
+  onClose,
+  collapsed,
+  onToggleCollapsed,
+}: {
+  onClose: () => void
+  collapsed: boolean
+  onToggleCollapsed: () => void
+}) {
   const { base, can, workspace } = useWorkspace()
   const navigate = useNavigate()
   const primary: NavItem[] = [
@@ -144,53 +174,63 @@ function Sidebar({ onClose }: { onClose: () => void }) {
   ]
   const visible = (items: NavItem[]) => items.filter((item) => !item.permission || can(item.permission))
   const showMembers = workspace.kind === 'organization'
+  // With labels hidden, a hover tooltip names each icon.
+  const tip = (label: string) => (collapsed ? label : undefined)
+  const link = (item: NavItem) => (
+    <li key={item.to}>
+      <NavLink to={item.to} end={item.end} className="nav-link" title={tip(item.label)}>
+        <Icon name={item.icon} size={18} />
+        <span className="sidebar__label">{item.label}</span>
+      </NavLink>
+    </li>
+  )
 
   return (
-    <aside className="sidebar" aria-label="Sidebar">
-      <div className="sidebar__top">
-        <Link to={`${base}/dashboard`} className="sidebar__brand" aria-label="DocuMind dashboard">
-          <Logo size={24} />
-          <span>DocuMind</span>
-        </Link>
-        <Button className="sidebar__close" variant="ghost" size="sm" icon="x" label="Close navigation" onClick={onClose} />
+    <aside className="sidebar" id="sidebar" aria-label="Sidebar">
+      <div className="sidebar__head">
+        <div className="sidebar__top">
+          <Link to={`${base}/dashboard`} className="sidebar__brand" aria-label="DocuMind dashboard" title={tip('DocuMind')}>
+            <Logo size={26} />
+            <span className="sidebar__label">DocuMind</span>
+          </Link>
+          <Button className="sidebar__close" variant="ghost" size="sm" icon="x" label="Close navigation" onClick={onClose} />
+        </div>
+        <WorkspaceSwitcher />
+        {can('conversations.use') && (
+          <Button
+            variant="primary"
+            icon="plus"
+            className="sidebar__new"
+            title={tip('New conversation')}
+            onClick={() => navigate(`${base}/chat`, { state: { fresh: Date.now() } })}
+          >
+            <span className="sidebar__label">New conversation</span>
+          </Button>
+        )}
       </div>
-      <WorkspaceSwitcher />
-      {can('conversations.use') && (
-        <Button
-          variant="primary"
-          icon="plus"
-          className="sidebar__new"
-          onClick={() => navigate(`${base}/chat`, { state: { fresh: Date.now() } })}
+      <div className="sidebar__scroll">
+        <nav aria-label="Main" className="sidebar__nav">
+          <ul>{visible(primary).map(link)}</ul>
+          <p className="sidebar__section">
+            <span className="sidebar__label">Workspace</span>
+          </p>
+          <ul>{visible(admin).filter((item) => showMembers || !item.to.endsWith('/members')).map(link)}</ul>
+        </nav>
+        {can('conversations.use') && <RecentConversations />}
+      </div>
+      <div className="sidebar__foot">
+        <button
+          type="button"
+          className="nav-link sidebar__collapse"
+          aria-controls="sidebar"
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand sidebar' : undefined}
+          onClick={onToggleCollapsed}
         >
-          New conversation
-        </Button>
-      )}
-      <nav aria-label="Main" className="sidebar__nav">
-        <ul>
-          {visible(primary).map((item) => (
-            <li key={item.to}>
-              <NavLink to={item.to} end={item.end} className="nav-link">
-                <Icon name={item.icon} size={17} />
-                {item.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-        <p className="sidebar__section">Workspace</p>
-        <ul>
-          {visible(admin)
-            .filter((item) => showMembers || !item.to.endsWith('/members'))
-            .map((item) => (
-              <li key={item.to}>
-                <NavLink to={item.to} className="nav-link">
-                  <Icon name={item.icon} size={17} />
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
-        </ul>
-      </nav>
-      {can('conversations.use') && <RecentConversations />}
+          <Icon name="panelLeft" size={18} />
+          <span className="sidebar__label">{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
+        </button>
+      </div>
     </aside>
   )
 }
