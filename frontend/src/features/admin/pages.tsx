@@ -31,6 +31,7 @@ import { validatePassword } from '../auth/password'
 import { formatBytes, formatDate, formatDateTime, formatNumber, formatRelative } from '../documents/format'
 import { createPasskey, passkeyErrorMessage, passkeysSupported, type Json } from '../../lib/webauthn'
 import { sendEmailCode } from '../documents/api'
+import { DeleteAccountPanel, DeleteOrganizationPanel, EmailPanel, YourDataPanel } from '../account/panels'
 import { StepUpDialog } from '../documents/StepUpDialog'
 import { PlanPanel } from '../saas/PlanPanel'
 import { VoiceSettingsPanel, WorkspaceVoicePolicy } from '../voice/VoiceSettingsPanel'
@@ -481,6 +482,7 @@ export function SettingsPage() {
             </Button>
           </Panel>
         )}
+        {workspace.kind === 'organization' && workspace.role === 'owner' && <DeleteOrganizationPanel />}
       </div>
     </>
   )
@@ -657,6 +659,9 @@ export function ProfilePage() {
         <SecurityPanel />
         <PasskeysPanel />
         <SessionsPanel />
+        <EmailPanel />
+        <YourDataPanel />
+        <DeleteAccountPanel />
       </div>
     </>
   )

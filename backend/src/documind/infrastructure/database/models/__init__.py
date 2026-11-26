@@ -39,6 +39,7 @@ from documind.infrastructure.database.models.extraction import (
 from documind.infrastructure.database.models.identity import (
     AccountToken,
     AuditLog,
+    DataExport,
     Invitation,
     MfaRecoveryCode,
     MfaResetRequest,
@@ -85,6 +86,7 @@ __all__ = [
     "ConversationCollection",
     "ConversationDocument",
     "Credential",
+    "DataExport",
     "Deadline",
     "Document",
     "DocumentChunk",

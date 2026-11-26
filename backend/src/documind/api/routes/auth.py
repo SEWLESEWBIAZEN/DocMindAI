@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from documind.api.dependencies import (
+    AccountServiceDep,
     AuthServiceDep,
     ContainerDep,
     CurrentUser,
@@ -61,6 +62,16 @@ async def register(body: RegisterRequest, auth: AuthServiceDep) -> MessageRespon
 async def verify_email(body: TokenRequest, auth: AuthServiceDep) -> MessageResponse:
     await auth.verify_email(body.token)
     return MessageResponse(detail="Your email is verified. You can sign in now.")
+
+
+@router.post(
+    "/email-change/confirm",
+    response_model=MessageResponse,
+    summary="Confirm a new email address (from the link sent to it)",
+)
+async def confirm_email_change(body: TokenRequest, account: AccountServiceDep) -> MessageResponse:
+    user = await account.confirm_email_change(body.token)
+    return MessageResponse(detail=f"Your email is now {user.email}.")
 
 
 @router.post(

@@ -24,7 +24,6 @@ test('rate answers and see the summary', async ({ page, baseURL }) => {
   }
 
   await nav.getByRole('link', { name: 'Ask' }).click()
-  await page.reload() // the "no documents yet" check was cached before processing finished
   await page.getByRole('button', { name: 'How much notice is needed for non-renewal of the services agreement?' }).click()
   const answer = page.getByRole('article', { name: 'Answer' }).last()
   const good = answer.getByRole('button', { name: 'Good answer' })

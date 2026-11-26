@@ -189,7 +189,7 @@ kbd {
 
 .btn--danger {
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-on-error);
 }
 
 .btn--danger:hover:not(:disabled) {
@@ -3103,4 +3103,19 @@ mark.reading-highlight {
   border-left: 3px solid var(--color-border-strong);
   color: var(--color-text-soft);
   font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------- account self-service (ADR 0039) */
+
+.panel--danger {
+  border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
+}
+
+.panel--danger .panel__header h2 {
+  color: var(--color-error-strong);
+}
+
+.export-list {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
 }

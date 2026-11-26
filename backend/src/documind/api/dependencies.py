@@ -3,7 +3,7 @@
 import dataclasses
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Annotated, cast
 
 from fastapi import BackgroundTasks, Depends, Header, Request
@@ -25,6 +25,8 @@ from documind.application.health_service import HealthService
 from documind.application.identity.account_service import AccountService
 from documind.application.identity.auth_service import AuthService
 from documind.application.identity.common import Principal, RequestMeta
+from documind.application.identity.data_export import DataExportService
+from documind.application.identity.deletion import AccountDeletionService
 from documind.application.identity.invitation_service import InvitationService
 from documind.application.identity.mfa_service import MfaService
 from documind.application.identity.workspace_service import WorkspaceService
@@ -179,6 +181,41 @@ def get_account_service(
         auth,
         meta,
     )
+
+
+def _invalidator(container: Container) -> Callable[[uuid.UUID], None]:
+    def invalidate(workspace_id: uuid.UUID) -> None:
+        if container.entitlements is not None:
+            container.entitlements.invalidate(workspace_id)
+
+    return invalidate
+
+
+def get_account_deletion_service(
+    session: SessionDep, container: ContainerDep, meta: MetaDep
+) -> AccountDeletionService:
+    return AccountDeletionService(
+        session,
+        container.settings,
+        container.password_hasher,
+        container.rate_limiter,
+        container.infrastructure(),
+        container.billing_gateway,
+        meta,
+        invalidate=_invalidator(container),
+    )
+
+
+AccountDeletionServiceDep = Annotated[AccountDeletionService, Depends(get_account_deletion_service)]
+
+
+def get_data_export_service(session: SessionDep, container: ContainerDep) -> DataExportService:
+    return DataExportService(
+        session, container.rate_limiter, container.storage, container.export_dispatch
+    )
+
+
+DataExportServiceDep = Annotated[DataExportService, Depends(get_data_export_service)]
 
 
 def get_mfa_service(

@@ -55,6 +55,7 @@ export function AnswerQualityPage() {
 }
 
 const pct = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 100)}%` : '–')
+const answers = (n: number) => `${formatNumber(n)} answer${n === 1 ? '' : 's'}`
 
 function Summary({ q }: { q: AnswerQuality }) {
   const reasons = (Object.entries(q.reasons) as [FeedbackReason, number][]).sort((a, b) => b[1] - a[1])
@@ -77,12 +78,12 @@ function Summary({ q }: { q: AnswerQuality }) {
         <div className="stat">
           <span className="stat__label">Rated</span>
           <span className="stat__value">{pct(q.rated, q.answers)}</span>
-          <span className="stat__hint">{formatNumber(q.rated)} answers rated</span>
+          <span className="stat__hint">{answers(q.rated)} rated</span>
         </div>
         <div className="stat">
           <span className="stat__label">Not in documents</span>
           <span className="stat__value">{pct(q.insufficient_context, q.answers)}</span>
-          <span className="stat__hint">{formatNumber(q.insufficient_context)} answers found nothing relevant</span>
+          <span className="stat__hint">{answers(q.insufficient_context)} found nothing relevant</span>
         </div>
       </div>
 

@@ -18,6 +18,8 @@ REMINDER_TASK = "documind.send_deadline_reminders"
 CONNECTOR_SYNC_TASK = "documind.sync_connector"
 CONNECTOR_SCHEDULE_TASK = "documind.schedule_connector_syncs"
 SLACK_ANSWER_TASK = "documind.slack_answer"
+DATA_EXPORT_TASK = "documind.build_data_export"
+EXPORT_SWEEP_TASK = "documind.sweep_data_exports"
 
 
 def create_celery(settings: Settings) -> Celery:
@@ -65,6 +67,12 @@ def create_celery(settings: Settings) -> Celery:
                 "task": REMINDER_TASK,
                 "schedule": float(settings.deadline_reminder_interval_seconds),
                 "options": {"queue": QUEUE, "expires": settings.deadline_reminder_interval_seconds},
+            },
+            # Expired "download my data" archives (ADR 0039).
+            "sweep-data-exports": {
+                "task": EXPORT_SWEEP_TASK,
+                "schedule": 3600.0,
+                "options": {"queue": QUEUE, "expires": 3600},
             },
             # Subscription quantity follows the member count (ADR 0032). No-op without Stripe.
             "sync-billing-seats": {

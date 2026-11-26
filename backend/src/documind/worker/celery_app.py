@@ -15,6 +15,8 @@ from documind.core.logging import configure_logging
 from documind.worker.celery_factory import (
     CONNECTOR_SCHEDULE_TASK,
     CONNECTOR_SYNC_TASK,
+    DATA_EXPORT_TASK,
+    EXPORT_SWEEP_TASK,
     EXTRACTION_SWEEP_TASK,
     EXTRACTION_TASK,
     MIGRATION_TASK,
@@ -31,6 +33,8 @@ from documind.worker.celery_factory import (
 __all__ = [
     "CONNECTOR_SCHEDULE_TASK",
     "CONNECTOR_SYNC_TASK",
+    "DATA_EXPORT_TASK",
+    "EXPORT_SWEEP_TASK",
     "EXTRACTION_SWEEP_TASK",
     "EXTRACTION_TASK",
     "MIGRATION_TASK",

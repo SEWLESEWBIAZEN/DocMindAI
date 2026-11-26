@@ -5,9 +5,11 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Query, Response, status
 
 from documind.api.dependencies import (
+    AccountDeletionServiceDep,
+    ContainerDep,
     CurrentUser,
     InvitationServiceDep,
     QuotasDep,
@@ -20,6 +22,7 @@ from documind.api.schemas.identity import (
     AuditLogResponse,
     ChangeRoleRequest,
     CreateOrganizationRequest,
+    DeleteOrganizationRequest,
     InvitationResponse,
     InviteRequest,
     MemberResponse,
@@ -119,6 +122,30 @@ async def rename_workspace(
     workspaces: WorkspaceServiceDep,
 ) -> WorkspaceResponse:
     return workspace_response(await workspaces.rename(ctx, user, body.name))
+
+
+@router.delete(
+    "",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an organization (owners, with 2FA)",
+    description=(
+        "Permanently deletes the organization: documents, collections, conversations, keys, "
+        "connectors and members' access. Cancels its subscription. Needs a recent 2FA check "
+        "and the organization's name typed in `confirm_name`. Refused while it uses its own "
+        "database or storage (`409 custom_infrastructure`)."
+    ),
+)
+async def delete_organization(
+    body: DeleteOrganizationRequest,
+    ctx: WorkspaceCtx,
+    user: CurrentUser,
+    deletion: AccountDeletionServiceDep,
+    container: ContainerDep,
+    tasks: BackgroundTasks,
+) -> Response:
+    purge = await deletion.delete_organization(ctx, user, body.confirm_name)
+    tasks.add_task(purge.run, container.email_sender)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/leave", status_code=status.HTTP_204_NO_CONTENT)

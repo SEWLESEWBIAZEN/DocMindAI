@@ -33,6 +33,7 @@ const deadlines = () => import('../features/extraction/DeadlinesPage')
 const connectors = () => import('../features/connectors/ConnectorsPage')
 const integrations = () => import('../features/integrations/IntegrationsPage')
 const quality = () => import('../features/quality/AnswerQualityPage')
+const account = () => import('../features/account/ConfirmEmailChangePage')
 
 function Public({ children }: { children: ReactNode }) {
   return <RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
@@ -54,6 +55,7 @@ export const routes: RouteObject[] = [
       { path: '/forgot-password', element: <Public>{page(auth, 'ForgotPasswordPage')}</Public> },
       { path: '/reset-password', element: page(auth, 'ResetPasswordPage') },
       { path: '/verify-email', element: page(auth, 'VerifyEmailPage') },
+      { path: '/confirm-email-change', element: page(account, 'ConfirmEmailChangePage') },
       { path: '/sso/complete', element: <RequireAuth>{page(auth, 'SsoCompletePage')}</RequireAuth> },
       {
         path: '/invitations/accept',
@@ -62,6 +64,8 @@ export const routes: RouteObject[] = [
       { path: '/app', element: <RequireAuth>{page(shell, 'AppHome')}</RequireAuth> },
       // From the pricing page: the current workspace's billing, keeping ?plan=&interval=.
       { path: '/app/billing', element: <RequireAuth>{page(shell, 'AppBilling')}</RequireAuth> },
+      // From the data-export email: the default workspace's profile page, at "Your data".
+      { path: '/app/profile', element: <RequireAuth>{page(shell, 'AppProfile')}</RequireAuth> },
       {
         path: '/w/:workspaceId',
         element: <RequireAuth>{page(shell, 'WorkspaceLayout')}</RequireAuth>,

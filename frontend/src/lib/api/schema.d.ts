@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/auth/email-change/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a new email address (from the link sent to it) */
+        post: operations["confirm_email_change_api_v1_auth_email_change_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -375,7 +392,11 @@ export interface paths {
         get: operations["get_me_api_v1_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete your account
+         * @description Deletes your account, your personal workspace (cancelling its subscription) and your conversations everywhere. Organizations keep documents you shared with them. Refused while you're the only owner of an organization. Needs your password, a recent 2FA check if you use 2FA, and `confirm: "DELETE"`.
+         */
+        delete: operations["delete_account_api_v1_me_delete"];
         options?: never;
         head?: never;
         /** Update Me */
@@ -392,6 +413,64 @@ export interface paths {
         get?: never;
         /** Switch the default (active) workspace */
         put: operations["set_active_workspace_api_v1_me_active_workspace_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your email (confirmed from the new address)
+         * @description Needs your password, and a recent 2FA check if you use 2FA. A link goes to the new address; nothing changes until it's opened. The old address is told.
+         */
+        post: operations["change_email_api_v1_me_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your data exports */
+        get: operations["list_exports_api_v1_me_exports_get"];
+        put?: never;
+        /**
+         * Download my data: prepare an archive
+         * @description Prepares a ZIP of your account, your conversations and your personal workspace's files, and emails you when it's ready. Returns the export already being prepared, if there is one.
+         */
+        post: operations["request_export_api_v1_me_exports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/exports/{export_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A short-lived download link for a ready export */
+        get: operations["download_export_api_v1_me_exports__export_id__download_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -734,7 +813,11 @@ export interface paths {
         get: operations["get_workspace_api_v1_workspaces__workspace_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an organization (owners, with 2FA)
+         * @description Permanently deletes the organization: documents, collections, conversations, keys, connectors and members' access. Cancels its subscription. Needs a recent 2FA check and the organization's name typed in `confirm_name`. Refused while it uses its own database or storage (`409 custom_infrastructure`).
+         */
+        delete: operations["delete_organization_api_v1_workspaces__workspace_id__delete"];
         options?: never;
         head?: never;
         /** Rename Workspace */
@@ -2462,6 +2545,16 @@ export interface components {
             /** File */
             file: string;
         };
+        /** ChangeEmailRequest */
+        ChangeEmailRequest: {
+            /**
+             * New Email
+             * Format: email
+             */
+            new_email: string;
+            /** Password */
+            password: string;
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
@@ -2827,6 +2920,32 @@ export interface components {
             /** Questions */
             questions: number;
         };
+        /** DataExportResponse */
+        DataExportResponse: {
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "ready" | "failed" | "expired";
+        };
         /** DatabaseInput */
         DatabaseInput: {
             /** Database */
@@ -2934,6 +3053,24 @@ export interface components {
             status?: ("open" | "done") | null;
             /** Title */
             title?: string | null;
+        };
+        /** DeleteAccountRequest */
+        DeleteAccountRequest: {
+            /**
+             * Confirm
+             * @description Type "DELETE" to confirm.
+             */
+            confirm: string;
+            /** Password */
+            password: string;
+        };
+        /** DeleteOrganizationRequest */
+        DeleteOrganizationRequest: {
+            /**
+             * Confirm Name
+             * @description The organization's name, exactly.
+             */
+            confirm_name: string;
         };
         /** DiscoverResponse */
         DiscoverResponse: {
@@ -3077,6 +3214,13 @@ export interface components {
             uploaded_by_user_id: string | null;
             /** Version Number */
             version_number: number;
+        };
+        /** DownloadLinkResponse */
+        DownloadLinkResponse: {
+            /** Expires In */
+            expires_in: number;
+            /** Url */
+            url: string;
         };
         /** DownloadUrlResponse */
         DownloadUrlResponse: {
@@ -5029,6 +5173,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    confirm_email_change_api_v1_auth_email_change_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;
@@ -5680,6 +5857,37 @@ export interface operations {
             };
         };
     };
+    delete_account_api_v1_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_me_api_v1_me_patch: {
         parameters: {
             query?: never;
@@ -5732,6 +5940,110 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_email_api_v1_me_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_exports_api_v1_me_exports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportResponse"][];
+                };
+            };
+        };
+    };
+    request_export_api_v1_me_exports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportResponse"];
+                };
+            };
+        };
+    };
+    download_export_api_v1_me_exports__export_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadLinkResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -6337,6 +6649,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WorkspaceResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_organization_api_v1_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteOrganizationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

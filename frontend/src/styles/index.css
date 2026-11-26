@@ -12,6 +12,7 @@
   --color-ok-bg: #dcfce7;
   --color-error: #dc2626;
   --color-error-bg: #fee2e2;
+  --color-on-error: #ffffff;
   --color-surface-2: #f2f4f7;
   --color-accent-strong: #155e75;
   --color-accent-soft: #ecfeff;
@@ -66,6 +67,8 @@
     --color-ok-bg: #14301f;
     --color-error: #f87171;
     --color-error-bg: #3a1616;
+  --color-on-error: #1f0707;
+    --color-on-error: #1f0707;
     --color-surface-2: #181b21;
     --color-accent-strong: #67e8f9;
     --color-accent-soft: #0b2a33;
@@ -100,6 +103,7 @@
   --color-ok-bg: #14301f;
   --color-error: #f87171;
   --color-error-bg: #3a1616;
+  --color-on-error: #1f0707;
   --color-surface-2: #181b21;
   --color-accent-strong: #67e8f9;
   --color-accent-soft: #0b2a33;

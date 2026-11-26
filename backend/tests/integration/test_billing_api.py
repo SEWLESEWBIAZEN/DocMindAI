@@ -27,7 +27,7 @@ from documind.application.billing.gateway import (
 )
 from documind.application.billing.subscriptions import SubscriptionService
 from documind.container import build_container
-from tests.integration.conftest import Api
+from tests.integration.conftest import PASSWORD, Api
 from tests.integration.test_infrastructure import (  # noqa: F401 - fixtures
     activate_new,
     customer_bucket,
@@ -562,3 +562,29 @@ def test_free_pro_trial_once_per_workspace_and_person(bapi: Api, fake: FakeStrip
         bapi.client.get(billing(ws(bapi, other)), headers=other).json()["trial_days_available"]
         == 14
     )
+
+
+def test_deleting_an_organization_or_account_cancels_the_subscription(
+    bapi: Api, fake: FakeStripe
+) -> None:
+    """ADR 0039: billing stops at Stripe before anything is deleted."""
+    h = bapi.signup("owner@example.com")
+    org = str(bapi.create_org(h, "Acme")["id"])
+    sid = subscribe(bapi, fake, org, h, "pro")
+    elevated = bapi.elevated(h)
+    r = bapi.client.request(
+        "DELETE", f"/api/v1/workspaces/{org}", json={"confirm_name": "Acme"}, headers=elevated
+    )
+    assert r.status_code == 204, r.text
+    assert fake.cancelled == [sid]
+    assert sql(bapi, "SELECT count(*) AS n FROM billing_subscriptions")[0].n == 0
+
+    # A personal workspace's subscription is cancelled with the account.
+    solo = bapi.signup("solo@example.com")
+    personal = ws(bapi, solo)
+    paid = subscribe(bapi, fake, personal, solo, "pro")
+    r = bapi.client.request(
+        "DELETE", "/api/v1/me", json={"password": PASSWORD, "confirm": "DELETE"}, headers=solo
+    )
+    assert r.status_code == 204, r.text
+    assert fake.cancelled == [sid, paid]

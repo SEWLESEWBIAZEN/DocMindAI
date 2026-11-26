@@ -44,5 +44,6 @@ accepted. To change a decision, add a new ADR that supersedes the old one.
 | [0036](0036-sso-scim-and-collection-access.md) | Single sign-on, SCIM and per-collection access | Accepted |
 | [0037](0037-api-keys-mcp-and-slack.md) | Workspace API keys, MCP server and Slack app | Accepted |
 | [0038](0038-answer-feedback-and-quality-checks.md) | Answer feedback and quality checks | Accepted |
+| [0039](0039-account-self-service.md) | Account self-service: email change, data export, account and organization deletion | Accepted |
 
 Template: Context, Decision, Alternatives, Consequences.

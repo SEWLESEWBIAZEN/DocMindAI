@@ -92,6 +92,28 @@ async def deadline_reminders() -> int:
     )
 
 
+async def data_export(export_id: uuid.UUID, c: Container | None = None) -> str:
+    """Build one "download my data" archive (ADR 0039)."""
+    from documind.application.identity.data_export import build_export
+
+    c = c or container()
+    return await build_export(
+        export_id,
+        sessions=c.session_factory,
+        settings=c.settings,
+        infrastructure=c.infrastructure(),
+        storage=c.storage,
+        email=c.email_sender,
+    )
+
+
+async def sweep_data_exports(c: Container | None = None) -> int:
+    from documind.application.identity.data_export import sweep_exports
+
+    c = c or container()
+    return await sweep_exports(c.session_factory, c.storage)
+
+
 class _NoDispatch:
     async def dispatch(self, job_id: uuid.UUID, **_: Any) -> bool:
         return True

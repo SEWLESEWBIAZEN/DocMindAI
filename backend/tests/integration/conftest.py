@@ -42,6 +42,7 @@ DATA_TABLES = [
     "deadlines",
     "extraction_results",
     "extraction_runs",
+    "data_exports",
     "message_feedback",
     "message_citations",
     "messages",

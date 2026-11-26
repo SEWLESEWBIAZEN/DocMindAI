@@ -62,6 +62,35 @@ class ChangePasswordRequest(_In):
     new_password: str = Password
 
 
+class ChangeEmailRequest(_In):
+    new_email: EmailStr
+    password: str = Password
+
+
+class DeleteAccountRequest(_In):
+    password: str = Password
+    confirm: str = Field(max_length=20, description='Type "DELETE" to confirm.')
+
+
+class DeleteOrganizationRequest(_In):
+    confirm_name: str = Field(max_length=200, description="The organization's name, exactly.")
+
+
+class DataExportResponse(BaseModel):
+    id: uuid.UUID
+    status: Literal["pending", "running", "ready", "failed", "expired"]
+    size_bytes: int | None
+    created_at: datetime
+    completed_at: datetime | None
+    expires_at: datetime | None
+    error: str | None
+
+
+class DownloadLinkResponse(BaseModel):
+    url: str
+    expires_in: int
+
+
 class ProfileUpdateRequest(_In):
     display_name: str = Field(min_length=1, max_length=200)
 

@@ -75,6 +75,9 @@ Required variables have no default; the backend refuses to start without them.
 | `AUTH_COOKIE_SECURE`              |          | `true`             | `Secure` cookie flag. Must be true in production; browsers accept it on `http://localhost`. |
 | `EMAIL_VERIFICATION_TTL_HOURS`    |          | `24`               | Verification link lifetime.                                         |
 | `PASSWORD_RESET_TTL_MINUTES`      |          | `30`               | Reset link lifetime.                                                |
+| `EMAIL_CHANGE_TTL_HOURS`          |          | `24`               | Lifetime of the link that confirms a new email (ADR 0039).          |
+| `DATA_EXPORT_TTL_DAYS`            |          | `7`                | How long a "download my data" archive stays available (ADR 0039).   |
+| `DATA_EXPORT_MAX_FILE_BYTES`      |          | `2147483648`       | Personal-workspace files included in an export, in total (2 GiB). Larger files are listed, not copied. |
 | `INVITATION_TTL_DAYS`             |          | `7`                | Invitation lifetime.                                                |
 | `PASSWORD_HASH_TIME_COST`         |          | `3`                | Argon2id iterations.                                                |
 | `PASSWORD_HASH_MEMORY_KIB`        |          | `65536`            | Argon2id memory (64 MiB).                                           |

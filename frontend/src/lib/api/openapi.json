@@ -790,6 +790,28 @@
         "title": "Body_upload_version_api_v1_workspaces__workspace_id__documents__document_id__versions_post",
         "type": "object"
       },
+      "ChangeEmailRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "new_email": {
+            "format": "email",
+            "title": "New Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "new_email",
+          "password"
+        ],
+        "title": "ChangeEmailRequest",
+        "type": "object"
+      },
       "ChangePasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1775,6 +1797,88 @@
         "title": "DailyUsageResponse",
         "type": "object"
       },
+      "DataExportResponse": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "ready",
+              "failed",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "size_bytes",
+          "created_at",
+          "completed_at",
+          "expires_at",
+          "error"
+        ],
+        "title": "DataExportResponse",
+        "type": "object"
+      },
       "DatabaseInput": {
         "additionalProperties": false,
         "properties": {
@@ -2194,6 +2298,45 @@
         "title": "DeadlineUpdate",
         "type": "object"
       },
+      "DeleteAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "description": "Type \"DELETE\" to confirm.",
+            "maxLength": 20,
+            "title": "Confirm",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "confirm"
+        ],
+        "title": "DeleteAccountRequest",
+        "type": "object"
+      },
+      "DeleteOrganizationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm_name": {
+            "description": "The organization's name, exactly.",
+            "maxLength": 200,
+            "title": "Confirm Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm_name"
+        ],
+        "title": "DeleteOrganizationRequest",
+        "type": "object"
+      },
       "DiscoverResponse": {
         "properties": {
           "required": {
@@ -2568,6 +2711,24 @@
           "is_current"
         ],
         "title": "DocumentVersionResponse",
+        "type": "object"
+      },
+      "DownloadLinkResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in"
+        ],
+        "title": "DownloadLinkResponse",
         "type": "object"
       },
       "DownloadUrlResponse": {
@@ -7562,6 +7723,47 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/auth/email-change/confirm": {
+      "post": {
+        "operationId": "confirm_email_change_api_v1_auth_email_change_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__identity__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm a new email address (from the link sent to it)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
@@ -8374,6 +8576,44 @@
       }
     },
     "/api/v1/me": {
+      "delete": {
+        "description": "Deletes your account, your personal workspace (cancelling its subscription) and your conversations everywhere. Organizations keep documents you shared with them. Refused while you're the only owner of an organization. Needs your password, a recent 2FA check if you use 2FA, and `confirm: \"DELETE\"`.",
+        "operationId": "delete_account_api_v1_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete your account",
+        "tags": [
+          "me"
+        ]
+      },
       "get": {
         "operationId": "get_me_api_v1_me_get",
         "responses": {
@@ -8477,6 +8717,156 @@
           }
         ],
         "summary": "Switch the default (active) workspace",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/v1/me/email": {
+      "post": {
+        "description": "Needs your password, and a recent 2FA check if you use 2FA. A link goes to the new address; nothing changes until it's opened. The old address is told.",
+        "operationId": "change_email_api_v1_me_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__identity__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change your email (confirmed from the new address)",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/v1/me/exports": {
+      "get": {
+        "operationId": "list_exports_api_v1_me_exports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DataExportResponse"
+                  },
+                  "title": "Response List Exports Api V1 Me Exports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Your data exports",
+        "tags": [
+          "me"
+        ]
+      },
+      "post": {
+        "description": "Prepares a ZIP of your account, your conversations and your personal workspace's files, and emails you when it's ready. Returns the export already being prepared, if there is one.",
+        "operationId": "request_export_api_v1_me_exports_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataExportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download my data: prepare an archive",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/v1/me/exports/{export_id}/download": {
+      "get": {
+        "operationId": "download_export_api_v1_me_exports__export_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "export_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Export Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "A short-lived download link for a ready export",
         "tags": [
           "me"
         ]
@@ -9289,6 +9679,56 @@
       }
     },
     "/api/v1/workspaces/{workspace_id}": {
+      "delete": {
+        "description": "Permanently deletes the organization: documents, collections, conversations, keys, connectors and members' access. Cancels its subscription. Needs a recent 2FA check and the organization's name typed in `confirm_name`. Refused while it uses its own database or storage (`409 custom_infrastructure`).",
+        "operationId": "delete_organization_api_v1_workspaces__workspace_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteOrganizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete an organization (owners, with 2FA)",
+        "tags": [
+          "workspaces"
+        ]
+      },
       "get": {
         "operationId": "get_workspace_api_v1_workspaces__workspace_id__get",
         "parameters": [

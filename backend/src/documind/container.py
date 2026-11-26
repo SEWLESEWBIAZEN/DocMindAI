@@ -77,6 +77,7 @@ from documind.infrastructure.storage.s3_provider import S3ObjectStorage
 from documind.infrastructure.tasks.celery_dispatcher import CeleryJobDispatcher
 from documind.worker.celery_factory import (
     CONNECTOR_SYNC_TASK,
+    DATA_EXPORT_TASK,
     EXTRACTION_TASK,
     MIGRATION_TASK,
     PROCESS_TASK,
@@ -129,6 +130,7 @@ class Container:
     slack_client: Any = None
     #: Queues a Slack question for the worker to answer.
     slack_dispatch: Callable[[dict[str, Any]], Awaitable[bool]] | None = None
+    export_dispatch: Callable[[uuid.UUID], Awaitable[bool]] | None = None
     #: Stripe (ADR 0032); None when self-serve billing isn't configured.
     billing_gateway: BillingGateway | None = None
     #: Starts an approved infrastructure migration in the background (MI-8).
@@ -296,6 +298,18 @@ def build_container(settings: Settings) -> Container:
         return True
 
     container.slack_dispatch = dispatch_slack
+
+    async def dispatch_export(export_id: uuid.UUID) -> bool:
+        try:
+            await asyncio.to_thread(
+                celery.send_task, DATA_EXPORT_TASK, args=[str(export_id)], queue=QUEUE
+            )
+        except Exception:
+            logger.exception("Failed to queue a data export")
+            return False
+        return True
+
+    container.export_dispatch = dispatch_export
     from documind.infrastructure.sso.oidc import OidcClient
 
     container.oidc = OidcClient(

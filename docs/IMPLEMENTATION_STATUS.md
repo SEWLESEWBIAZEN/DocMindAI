@@ -82,8 +82,8 @@ Acceptance criteria (verified 2026-11-23):
 - Logging out one device leaves that access token valid for up to 15 minutes
   ("sign out everywhere" is immediate). Documented in ADR 0008.
 - Rate limiting fails open if Redis is down (logged).
-- Email change and account deletion are not implemented yet.
-- Organization deletion is not implemented. Ownership transfer works by
+- ~~Email change and account deletion are not implemented yet.~~ → done (ADR 0039).
+- ~~Organization deletion is not implemented.~~ → done (ADR 0039). Ownership transfer works by
   promoting another owner and then leaving.
 - Emails are sent via FastAPI background tasks; move them to Celery with
   retries in Phase 4.
@@ -422,6 +422,10 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Slack app: signed requests, install (2FA), account linking by code, private slash-command answers, in-thread answers from unrestricted documents only | [x] | ADR 0037; `test_slack_api.py` (2). Fake Slack API; not yet run against a live Slack workspace. |
 | Answer feedback: thumbs up/down with reasons and comment; sharing the question and answer with admins only by explicit choice; admin "Answer quality" page (helpful rate, reasons, per model, shared examples) | [x] | ADR 0038; `test_answer_feedback.py`, privacy paths in `test_conversations_are_private_and_workspace_scoped`, `e2e/feedback.spec.ts` |
 | Repeatable quality checks: `documind-manage eval` with a built-in 16-question set over the sample documents (13 answerable, 3 must decline), JSON/Markdown report, exit code for CI | [x] | ADR 0038; `test_evaluation.py`, `test_eval_command_scores_the_sample_set`. 16/16 with the local model; **not yet run with the real model** |
+| Change email: confirmed from the new address, old address told, no account discovery, SSO-managed addresses refused, 2FA step-up | [x] | ADR 0039; `test_email_change_is_confirmed_from_the_new_address`, `test_email_change_needs_a_fresh_2fa_check_when_2fa_is_on`, `e2e/account.spec.ts` |
+| Download my data: background ZIP (account, conversations in every workspace incl. customer databases, personal files up to 2 GiB), signed link for its owner only, expires after 7 days | [x] | ADR 0039; `test_data_export_contains_account_conversations_and_personal_files`, `e2e/account.spec.ts` |
+| Delete account: password + 2FA + typed confirmation; refused for the last owner of an organization; personal workspace, files and private conversations removed; Stripe cancelled first | [x] | ADR 0039; `test_delete_account`, `test_deleting_an_organization_or_account_cancels_the_subscription`, `e2e/account.spec.ts`. The clean-up in customer-hosted databases has no automated test yet |
+| Delete organization: owners, typed name + 2FA; refused on custom infrastructure; Stripe cancelled first, files purged after commit, members emailed | [x] | ADR 0039; `test_delete_organization`, `e2e/account.spec.ts`. Slack and Google Drive tokens are deleted, not revoked at the provider |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 

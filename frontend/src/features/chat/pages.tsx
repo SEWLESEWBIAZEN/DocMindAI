@@ -537,6 +537,8 @@ function Welcome({ onPick, hasSources }: { onPick: (question: string) => void; h
   const docs = useQuery({
     queryKey: documentKeys.list(workspace.id, { status: 'ready', limit: 1 }),
     queryFn: () => listDocuments(workspace.id, { status: 'ready', limit: 1 }),
+    // A cached "nothing ready yet" goes stale the moment processing finishes: always re-check.
+    staleTime: 0,
   })
   const { base, can } = useWorkspace()
   const samples = useSamples()

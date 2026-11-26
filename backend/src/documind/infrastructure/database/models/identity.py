@@ -312,7 +312,7 @@ class AccountToken(Base):
     __table_args__ = (
         CheckConstraint(
             "purpose IN ('email_verification', 'password_reset', 'mfa_login', 'mfa_email', "
-            "'webauthn_reg', 'webauthn_auth')",
+            "'webauthn_reg', 'webauthn_auth', 'email_change')",
             name="purpose_valid",
         ),
         Index("ix_account_tokens_user_id_purpose", "user_id", "purpose"),
@@ -325,6 +325,31 @@ class AccountToken(Base):
     created_at: Mapped[datetime] = _created()
     expires_at: Mapped[datetime] = mapped_column(TZ)
     used_at: Mapped[datetime | None] = mapped_column(TZ)
+    #: The address an ``email_change`` token moves the account to (ADR 0039).
+    new_email: Mapped[str | None] = mapped_column(String(320))
+
+
+class DataExport(Base):
+    """A "download my data" archive (ADR 0039), kept for a few days in private storage."""
+
+    __tablename__ = "data_exports"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'ready', 'failed', 'expired')", name="status_valid"
+        ),
+        Index("ix_data_exports_user_id_created_at", "user_id", "created_at"),
+        Index("ix_data_exports_status_expires_at", "status", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending")
+    object_key: Mapped[str | None] = mapped_column(String(300))
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = _created()
+    completed_at: Mapped[datetime | None] = mapped_column(TZ)
+    expires_at: Mapped[datetime | None] = mapped_column(TZ)
 
 
 class Invitation(Base):

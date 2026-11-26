@@ -260,6 +260,11 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = True
     email_verification_ttl_hours: int = Field(default=24, ge=1, le=168)
     password_reset_ttl_minutes: int = Field(default=30, ge=5, le=240)
+    # ADR 0039: account self-service.
+    email_change_ttl_hours: int = Field(default=24, ge=1, le=168)
+    data_export_ttl_days: int = Field(default=7, ge=1, le=30)
+    #: Original files from the personal workspace go into the export up to this total.
+    data_export_max_file_bytes: int = Field(default=2 * 1024**3, ge=0)
     invitation_ttl_days: int = Field(default=7, ge=1, le=30)
     # Argon2id cost (RFC 9106 second recommended option by default).
     password_hash_time_cost: int = Field(default=3, ge=1, le=10)

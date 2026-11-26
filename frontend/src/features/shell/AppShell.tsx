@@ -43,6 +43,17 @@ export function AppBilling() {
   return <Navigate to={`/w/${target.id}/billing${location.search}#plans`} replace />
 }
 
+/** `/app/profile`: the default workspace's profile page, at "Your data" (export email link). */
+export function AppProfile() {
+  const { data, error, refetch } = useWorkspaces()
+  const user = useUser()
+  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />
+  if (!data) return <FullPageLoading />
+  const target = data.find((w) => w.id === user.default_workspace_id) ?? data[0]
+  if (!target) return <NotFoundPage />
+  return <Navigate to={`/w/${target.id}/profile#your-data`} replace />
+}
+
 /** Loads the workspace in the URL; unknown or inaccessible ids get a 404 page. */
 export function WorkspaceLayout() {
   const { workspaceId } = useParams()

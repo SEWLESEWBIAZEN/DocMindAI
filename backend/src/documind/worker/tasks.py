@@ -9,6 +9,8 @@ from documind.worker import runtime
 from documind.worker.celery_app import (
     CONNECTOR_SCHEDULE_TASK,
     CONNECTOR_SYNC_TASK,
+    DATA_EXPORT_TASK,
+    EXPORT_SWEEP_TASK,
     EXTRACTION_SWEEP_TASK,
     EXTRACTION_TASK,
     MIGRATION_TASK,
@@ -101,3 +103,13 @@ def schedule_connector_syncs() -> int:
 @app.task(name=SLACK_ANSWER_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
 def slack_answer(job: dict[str, object]) -> str:
     return runtime.run(runtime.slack_answer(dict(job)))
+
+
+@app.task(name=DATA_EXPORT_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def build_data_export(export_id: str) -> str:
+    return runtime.run(runtime.data_export(uuid.UUID(export_id)))
+
+
+@app.task(name=EXPORT_SWEEP_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def sweep_data_exports() -> int:
+    return runtime.run(runtime.sweep_data_exports())

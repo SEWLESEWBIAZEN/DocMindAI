@@ -5,22 +5,34 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, BackgroundTasks, Response, status
 
 from documind.api.dependencies import (
+    AccountDeletionServiceDep,
     AccountServiceDep,
+    ContainerDep,
+    CurrentPrincipal,
     CurrentUser,
+    DataExportServiceDep,
     InvitationServiceDep,
     MfaServiceDep,
     SettingsDep,
     WorkspaceServiceDep,
 )
-from documind.api.routes._identity_common import token_response, user_response
+from documind.api.routes._identity_common import (
+    clear_refresh_cookie,
+    token_response,
+    user_response,
+)
 from documind.api.routes.workspaces import invitation_response, workspace_response
 from documind.api.schemas.identity import (
     AcceptedInvitationResponse,
     ActiveWorkspaceRequest,
+    ChangeEmailRequest,
     ChangePasswordRequest,
+    DataExportResponse,
+    DeleteAccountRequest,
+    DownloadLinkResponse,
     InvitationResponse,
     MessageResponse,
     MfaCodeRequest,
@@ -40,8 +52,101 @@ from documind.api.schemas.identity import (
     UserResponse,
     WorkspaceResponse,
 )
+from documind.application.identity.data_export import DOWNLOAD_LINK_SECONDS, ExportInfo
 
 router = APIRouter(prefix="/me", tags=["me"])
+
+
+def _export(e: ExportInfo) -> DataExportResponse:
+    return DataExportResponse(
+        id=e.id,
+        status=e.status,
+        size_bytes=e.size_bytes,
+        created_at=e.created_at,
+        completed_at=e.completed_at,
+        expires_at=e.expires_at,
+        error=e.error,
+    )
+
+
+@router.post(
+    "/email",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=MessageResponse,
+    summary="Change your email (confirmed from the new address)",
+    description=(
+        "Needs your password, and a recent 2FA check if you use 2FA. A link goes to the "
+        "new address; nothing changes until it's opened. The old address is told."
+    ),
+)
+async def change_email(
+    body: ChangeEmailRequest, principal: CurrentPrincipal, account: AccountServiceDep
+) -> MessageResponse:
+    await account.request_email_change(principal, str(body.new_email), body.password)
+    return MessageResponse(
+        detail="Check the new address for a confirmation link. Your email changes when you open it."
+    )
+
+
+@router.delete(
+    "",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete your account",
+    description=(
+        "Deletes your account, your personal workspace (cancelling its subscription) and your "
+        "conversations everywhere. Organizations keep documents you shared with them. Refused "
+        "while you're the only owner of an organization. Needs your password, a recent 2FA "
+        'check if you use 2FA, and `confirm: "DELETE"`.'
+    ),
+)
+async def delete_account(
+    body: DeleteAccountRequest,
+    principal: CurrentPrincipal,
+    deletion: AccountDeletionServiceDep,
+    container: ContainerDep,
+    settings: SettingsDep,
+    tasks: BackgroundTasks,
+    response: Response,
+) -> Response:
+    purge = await deletion.delete_account(principal, body.password, body.confirm)
+    tasks.add_task(purge.run, container.email_sender)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    clear_refresh_cookie(response, settings)
+    return response
+
+
+@router.get("/exports", response_model=list[DataExportResponse], summary="Your data exports")
+async def list_exports(
+    user: CurrentUser, exports: DataExportServiceDep
+) -> list[DataExportResponse]:
+    return [_export(e) for e in await exports.list(user)]
+
+
+@router.post(
+    "/exports",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=DataExportResponse,
+    summary="Download my data: prepare an archive",
+    description=(
+        "Prepares a ZIP of your account, your conversations and your personal workspace's "
+        "files, and emails you when it's ready. Returns the export already being prepared, "
+        "if there is one."
+    ),
+)
+async def request_export(user: CurrentUser, exports: DataExportServiceDep) -> DataExportResponse:
+    return _export(await exports.request(user))
+
+
+@router.get(
+    "/exports/{export_id}/download",
+    response_model=DownloadLinkResponse,
+    summary="A short-lived download link for a ready export",
+)
+async def download_export(
+    export_id: uuid.UUID, user: CurrentUser, exports: DataExportServiceDep
+) -> DownloadLinkResponse:
+    url = await exports.download_url(user, export_id)
+    return DownloadLinkResponse(url=url, expires_in=DOWNLOAD_LINK_SECONDS)
 
 
 @router.get("", response_model=UserResponse)

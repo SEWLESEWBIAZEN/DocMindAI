@@ -304,3 +304,131 @@ def provider_key_rejected_email(
             url,
         ),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Account self-service (ADR 0039)
+# --------------------------------------------------------------------------- #
+
+
+def mask_email(address: str) -> str:
+    """``s***@example.com``: enough to recognise, not enough to harvest."""
+    local, _, domain = address.partition("@")
+    return f"{local[:1]}***@{domain}" if domain else "***"
+
+
+def email_change_confirm_email(
+    to: str, name: str, base_url: str, token: str, ttl_hours: int
+) -> EmailMessage:
+    url = _link(base_url, "/confirm-email-change", token)
+    return EmailMessage(
+        to=to,
+        subject="Confirm your new DocuMind email",
+        text=f"Hi {name},\n\nConfirm that you want to use this address for DocuMind:\n{url}\n\n"
+        f"This link expires in {ttl_hours} hours. Until you confirm, nothing changes.",
+        html=_html(
+            "Confirm your new email",
+            f"<p>Hi {escape(name)},</p><p>Confirm that you want to use this address for DocuMind. "
+            f"This link expires in {ttl_hours} hours. Until you confirm, nothing changes.</p>",
+            "Confirm new email",
+            url,
+        ),
+    )
+
+
+def email_change_requested_email(to: str, name: str, new_email: str) -> EmailMessage:
+    masked = mask_email(new_email)
+    return EmailMessage(
+        to=to,
+        subject="Someone asked to change your DocuMind email",
+        text=f"Hi {name},\n\nA request was made to change your DocuMind email to {masked}. "
+        "It changes only when the link sent to that address is opened. If this wasn't you, "
+        "change your password now.",
+        html=_html(
+            "Email change requested",
+            f"<p>Hi {escape(name)},</p><p>A request was made to change your DocuMind email to "
+            f"<strong>{escape(masked)}</strong>. It changes only when the link sent to that "
+            "address is opened. If this wasn't you, change your password now.</p>",
+        ),
+    )
+
+
+def email_changed_email(to: str, name: str, new_email: str) -> EmailMessage:
+    masked = mask_email(new_email)
+    return EmailMessage(
+        to=to,
+        subject="Your DocuMind email was changed",
+        text=f"Hi {name},\n\nYour DocuMind account now uses {masked}. This address will no "
+        "longer receive emails about it. If this wasn't you, contact support right away.",
+        html=_html(
+            "Email changed",
+            f"<p>Hi {escape(name)},</p><p>Your DocuMind account now uses "
+            f"<strong>{escape(masked)}</strong>. This address will no longer receive emails "
+            "about it. If this wasn't you, contact support right away.</p>",
+        ),
+    )
+
+
+def email_taken_email(to: str, base_url: str) -> EmailMessage:
+    url = f"{base_url.rstrip('/')}/login"
+    return EmailMessage(
+        to=to,
+        subject="This email already has a DocuMind account",
+        text="Someone asked to move a DocuMind account to this address, but it already "
+        f"belongs to an account. Nothing was changed. Sign in here:\n{url}",
+        html=_html(
+            "This email already has an account",
+            "<p>Someone asked to move a DocuMind account to this address, but it already "
+            "belongs to an account. Nothing was changed.</p>",
+            "Sign in",
+            url,
+        ),
+    )
+
+
+def data_export_ready_email(to: str, name: str, base_url: str, days: int) -> EmailMessage:
+    url = f"{base_url.rstrip('/')}/app/profile#your-data"
+    return EmailMessage(
+        to=to,
+        subject="Your DocuMind data export is ready",
+        text=f"Hi {name},\n\nYour data export is ready. Sign in to download it (available for "
+        f"{days} days):\n{url}",
+        html=_html(
+            "Your data export is ready",
+            f"<p>Hi {escape(name)},</p><p>Your data export is ready. Sign in to download it; "
+            f"it's available for {days} days.</p>",
+            "Download",
+            url,
+        ),
+    )
+
+
+def account_deleted_email(to: str, name: str) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject="Your DocuMind account was deleted",
+        text=f"Hi {name},\n\nYour DocuMind account, your personal workspace and your "
+        "conversations have been deleted. Organizations you belonged to keep the documents "
+        "you shared with them. If this wasn't you, contact support right away.",
+        html=_html(
+            "Account deleted",
+            f"<p>Hi {escape(name)},</p><p>Your DocuMind account, your personal workspace and your "
+            "conversations have been deleted. Organizations you belonged to keep the documents "
+            "you shared with them. If this wasn't you, contact support right away.</p>",
+        ),
+    )
+
+
+def organization_deleted_email(to: str, name: str, organization: str, by: str) -> EmailMessage:
+    return EmailMessage(
+        to=to,
+        subject=f"{organization} was deleted from DocuMind",
+        text=f"Hi {name},\n\n{by} deleted the organization {organization}. Its documents, "
+        "collections and conversations are gone, and you no longer have access to it.",
+        html=_html(
+            f"{organization} was deleted",
+            f"<p>Hi {escape(name)},</p><p>{escape(by)} deleted the organization "
+            f"<strong>{escape(organization)}</strong>. Its documents, collections and "
+            "conversations are gone, and you no longer have access to it.</p>",
+        ),
+    )
