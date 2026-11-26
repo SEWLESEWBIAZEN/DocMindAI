@@ -13,11 +13,14 @@ from documind.api.dependencies import (
     IndexFreshnessDep,
     ProcessingQueriesDep,
     QuotasDep,
+    SessionDep,
     WorkspaceCtx,
 )
 from documind.api.schemas.documents import (
     ChunkListResponse,
     ChunkResponse,
+    CollectionAccessRequest,
+    CollectionAccessResponse,
     CollectionResponse,
     CreateCollectionRequest,
     DocumentPageResponse,
@@ -442,3 +445,57 @@ async def remove_from_collection(
 ) -> Response:
     await collections.remove_document(ctx, collection_id, document_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/collections/{collection_id}/access",
+    response_model=CollectionAccessResponse,
+    tags=["collections"],
+    summary="Who may see a restricted collection (admins)",
+)
+async def get_collection_access(
+    collection_id: uuid.UUID, ctx: WorkspaceCtx, collections: CollectionServiceDep
+) -> CollectionAccessResponse:
+    info = await collections.get(ctx, collection_id)
+    members = await collections.access(ctx, collection_id)
+    return CollectionAccessResponse(restricted=info.restricted, member_user_ids=members)
+
+
+@router.put(
+    "/collections/{collection_id}/access",
+    response_model=CollectionResponse,
+    tags=["collections"],
+    summary="Restrict a collection to some members, or open it to everyone (admins)",
+)
+async def set_collection_access(
+    collection_id: uuid.UUID,
+    body: CollectionAccessRequest,
+    ctx: WorkspaceCtx,
+    collections: CollectionServiceDep,
+    session: SessionDep,
+) -> CollectionResponse:
+    from sqlalchemy import select
+
+    from documind.domain.errors import ValidationFailedError
+    from documind.infrastructure.database.models import WorkspaceMember
+
+    wanted = set(body.member_user_ids)
+    if wanted:
+        found = set(
+            (
+                await session.execute(
+                    select(WorkspaceMember.user_id).where(
+                        WorkspaceMember.workspace_id == ctx.workspace_id,
+                        WorkspaceMember.user_id.in_(wanted),
+                    )
+                )
+            ).scalars()
+        )
+        if found != wanted:
+            raise ValidationFailedError(
+                "Only members of this workspace can be given access.", code="invalid_members"
+            )
+    info = await collections.set_access(
+        ctx, collection_id, restricted=body.restricted, member_user_ids=body.member_user_ids
+    )
+    return _collection(info)

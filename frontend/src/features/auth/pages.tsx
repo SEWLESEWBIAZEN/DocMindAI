@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 
 import { Alert, Button, Field, Spinner, TextArea, TextInput } from '../../components/ui'
 import { apiClient } from '../../lib/api/client'
@@ -66,6 +66,23 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ------------------------------------------------------------------- login
 
+const SSO_ERRORS: Record<string, string> = {
+  expired: 'The sign-in took too long. Try again.',
+  browser: 'Finish signing in with the same browser you started in.',
+  denied: 'Sign-in was cancelled at your identity provider.',
+  failed: "Your organization's identity provider couldn't confirm who you are. Try again or contact your admin.",
+  domain: "That account isn't part of this organization's single sign-on.",
+  unavailable: "Your organization's single sign-on isn't available right now.",
+  inactive: 'This account is deactivated.',
+}
+
+/** After the identity provider: the refresh cookie is set; continue into the organization. */
+export function SsoCompletePage() {
+  const [params] = useSearchParams()
+  const workspace = params.get('workspace')
+  return <Navigate to={workspace && /^[0-9a-f-]{36}$/.test(workspace) ? `/w/${workspace}/dashboard` : '/app'} replace />
+}
+
 export function LoginPage() {
   const { signIn, completeSignIn, expired } = useAuth()
   const navigate = useNavigate()
@@ -85,6 +102,20 @@ export function LoginPage() {
   const [methods, setMethods] = useState<string[]>([])
 
   const finish = () => navigate(safeNext(params.get('next')), { replace: true })
+  const [sso, setSso] = useState(false)
+
+  // Organization single sign-on (ADR 0036): the identity provider signs you in.
+  const startSso = async () => {
+    setError(null)
+    setBusy(true)
+    try {
+      const { data } = await apiClient.post<{ url: string }>('/auth/sso/start', { email: email.trim() }, { skipAuth: true })
+      window.location.assign(data.url)
+    } catch (err) {
+      setError(errorMessage(err))
+      setBusy(false)
+    }
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -104,6 +135,7 @@ export function LoginPage() {
       } else finish()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'email_not_verified') setUnverified(true)
+      if (err instanceof ApiError && err.code === 'sso_required') setSso(true)
       setError(errorMessage(err))
     } finally {
       setBusy(false)
@@ -317,6 +349,27 @@ export function LoginPage() {
           {unverified && <ResendVerification email={email} />}
         </Alert>
       )}
+      {params.get('sso_error') && !error && <Alert>{SSO_ERRORS[params.get('sso_error') ?? ''] ?? 'Single sign-on failed.'}</Alert>}
+      {sso ? (
+        <form
+          className="form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void startSso()
+          }}
+          noValidate
+        >
+          <Field label="Work email" hint="You'll continue at your organization's sign-in page.">
+            <TextInput type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+          </Field>
+          <Button type="submit" variant="primary" loading={busy} disabled={!email}>
+            Continue with single sign-on
+          </Button>
+          <button type="button" className="link-button" onClick={() => setSso(false)}>
+            Sign in with a password instead
+          </button>
+        </form>
+      ) : (
       <form className="form" onSubmit={submit} noValidate>
         <Field label="Email">
           <TextInput
@@ -343,7 +396,11 @@ export function LoginPage() {
         <Button type="submit" variant="primary" loading={busy} disabled={!email || !password}>
           Sign in
         </Button>
+        <button type="button" className="link-button" onClick={() => setSso(true)}>
+          Sign in with single sign-on (SSO)
+        </button>
       </form>
+      )}
     </AuthLayout>
   )
 }

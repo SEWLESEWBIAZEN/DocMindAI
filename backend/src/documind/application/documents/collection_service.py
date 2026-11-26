@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,11 +14,12 @@ from documind.application.identity.common import AuditRecorder, RequestMeta, aud
 from documind.domain.errors import ConflictError, NotFoundError, ValidationFailedError
 from documind.domain.identity.permissions import Permission
 from documind.domain.identity.policies import WorkspaceContext
-from documind.infrastructure.database.models import DocumentCollection
+from documind.infrastructure.database.models import CollectionMember, DocumentCollection
 from documind.infrastructure.database.repositories.documents import (
     CollectionRepository,
     DocumentRepository,
 )
+from documind.infrastructure.database.repositories.visibility import viewer_of
 
 NAME_MAX = 100
 DESCRIPTION_MAX = 500
@@ -32,6 +34,7 @@ class CollectionInfo:
     created_by_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    restricted: bool = False
 
 
 def _clean_name(name: str) -> str:
@@ -60,7 +63,9 @@ class CollectionService:
         self._audit = AuditRecorder(audit_repository(session), meta)
 
     async def _require(self, ctx: WorkspaceContext, collection_id: uuid.UUID) -> DocumentCollection:
-        collection = await self._collections.get(ctx.workspace_id, collection_id)
+        collection = await self._collections.get(
+            ctx.workspace_id, collection_id, viewer=viewer_of(ctx)
+        )
         if collection is None:
             raise NotFoundError("Collection not found.")
         return collection
@@ -78,7 +83,65 @@ class CollectionService:
             created_by_user_id=c.created_by_user_id,
             created_at=c.created_at,
             updated_at=c.updated_at,
+            restricted=c.restricted,
         )
+
+    # --------------------------------------------------------- access (ADR 0036)
+
+    async def access(self, ctx: WorkspaceContext, collection_id: uuid.UUID) -> list[uuid.UUID]:
+        """Members of a restricted collection (admins)."""
+        ctx.require(Permission.WORKSPACE_UPDATE)
+        await self._require(ctx, collection_id)
+        rows = await self._session.execute(
+            select(CollectionMember.user_id).where(
+                CollectionMember.workspace_id == ctx.workspace_id,
+                CollectionMember.collection_id == collection_id,
+            )
+        )
+        return list(rows.scalars())
+
+    async def set_access(
+        self,
+        ctx: WorkspaceContext,
+        collection_id: uuid.UUID,
+        *,
+        restricted: bool,
+        member_user_ids: list[uuid.UUID],
+    ) -> CollectionInfo:
+        """Restrict a collection to some members, or open it again. The caller has
+        checked that ``member_user_ids`` are members of the workspace."""
+        ctx.require(Permission.WORKSPACE_UPDATE)
+        collection = await self._require(ctx, collection_id)
+        collection.restricted = restricted
+        await self._session.execute(
+            delete(CollectionMember).where(
+                CollectionMember.workspace_id == ctx.workspace_id,
+                CollectionMember.collection_id == collection_id,
+            )
+        )
+        if restricted:
+            for user_id in dict.fromkeys(member_user_ids):
+                self._session.add(
+                    CollectionMember(
+                        collection_id=collection_id,
+                        workspace_id=ctx.workspace_id,
+                        user_id=user_id,
+                    )
+                )
+        self._audit.record(
+            "collection.access_changed",
+            actor_user_id=ctx.user_id,
+            workspace_id=ctx.workspace_id,
+            target_type="collection",
+            target_id=collection_id,
+            details={
+                "restricted": restricted,
+                "members": len(member_user_ids) if restricted else 0,
+            },
+        )
+        await self._session.commit()
+        await self._session.refresh(collection)
+        return await self._info(ctx, collection)
 
     async def _commit_unique(self) -> None:
         try:
@@ -122,7 +185,9 @@ class CollectionService:
         ctx.require(Permission.DOCUMENTS_READ)
         return [
             await self._info(ctx, c, n)
-            for c, n in await self._collections.list_with_counts(ctx.workspace_id)
+            for c, n in await self._collections.list_with_counts(
+                ctx.workspace_id, viewer=viewer_of(ctx)
+            )
         ]
 
     async def get(self, ctx: WorkspaceContext, collection_id: uuid.UUID) -> CollectionInfo:
@@ -181,7 +246,7 @@ class CollectionService:
     ) -> None:
         ctx.require(Permission.DOCUMENTS_WRITE)
         await self._require(ctx, collection_id)
-        doc = await self._documents.get(ctx.workspace_id, document_id)
+        doc = await self._documents.get(ctx.workspace_id, document_id, viewer=viewer_of(ctx))
         if doc is None:
             raise NotFoundError("Document not found.")
         if doc.archived_at is not None:

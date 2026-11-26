@@ -56,6 +56,7 @@ import { useVoice } from '../voice/VoiceContext'
 import { ReadingControls, type ReadingPosition } from '../voice/ReadingMode'
 import { useCollections } from './hooks'
 import { StepUpDialog } from './StepUpDialog'
+import { CollectionAccess } from './CollectionAccess'
 import { useUploads } from './UploadManager'
 import { LoadSamplesButton } from '../onboarding/samples'
 import { startReindex } from '../saas/api'
@@ -1110,7 +1111,9 @@ export function CollectionsPage() {
             <span className="file-icon" aria-hidden="true">
               <Icon name="layers" size={16} />
             </span>
-            <h2>{c.name}</h2>
+            <h2>
+              {c.name} {c.restricted && <Badge tone="warning">Restricted</Badge>}
+            </h2>
             {c.description && <p className="muted">{c.description}</p>}
             <span className="muted" style={{ fontSize: '0.82rem' }}>
               {c.document_count} {c.document_count === 1 ? 'document' : 'documents'} · updated {formatRelative(c.updated_at)}
@@ -1222,6 +1225,7 @@ export function CollectionDetailPage() {
           </>
         }
       />
+      {workspace.kind === 'organization' && can('workspace.update') && <CollectionAccess collectionId={collection.id} />}
       {docs.isLoading ? (
         <Loading label="Loading documents" />
       ) : docs.error ? (

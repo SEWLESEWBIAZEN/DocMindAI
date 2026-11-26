@@ -141,11 +141,35 @@ class DocumentCollection(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(String(500))
+    #: Restricted (ADR 0036): only its members, and admins, see it and its documents.
+    restricted: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now(), onupdate=func.now())
+
+
+class CollectionMember(Base):
+    """Who may see a restricted collection (ADR 0036)."""
+
+    __tablename__ = "collection_members"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["collection_id", "workspace_id"],
+            ["document_collections.id", "document_collections.workspace_id"],
+            ondelete="CASCADE",
+            name="fk_collection_members_collection_workspace",
+        ),
+        Index("ix_collection_members_user_id", "user_id"),
+    )
+
+    collection_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column()
+    added_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
 
 
 class DocumentCollectionItem(Base):

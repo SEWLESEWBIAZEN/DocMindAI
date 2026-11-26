@@ -116,6 +116,7 @@ class WorkspaceService:
         *,
         mfa_verified_at: datetime | None = None,
         mfa_method: str | None = None,
+        sso_workspace_id: uuid.UUID | None = None,
         enforce_mfa: bool = True,
     ) -> WorkspaceContext:
         """Authorize entry into a workspace. Non-members get 'not found', never 'forbidden'.
@@ -126,7 +127,9 @@ class WorkspaceService:
         view = await self._workspaces.membership(workspace_id, user.id)
         if view is None:
             raise NotFoundError(WORKSPACE_NOT_FOUND)
-        ctx = await self._context(user, view, mfa_verified_at, mfa_method)
+        ctx = await self._context(
+            user, view, mfa_verified_at, mfa_method, sso=sso_workspace_id == workspace_id
+        )
         if enforce_mfa:
             ensure_mfa_policy_met(ctx, utcnow())
         return ctx
@@ -170,6 +173,8 @@ class WorkspaceService:
         view: MembershipView,
         mfa_verified_at: datetime | None,
         mfa_method: str | None = None,
+        *,
+        sso: bool = False,
     ) -> WorkspaceContext:
         keys = await self._roles.permission_keys(view.role.id)
         known = {p.value for p in Permission}
@@ -182,6 +187,10 @@ class WorkspaceService:
         plan = (await self._plan_keys([workspace.id])).get(workspace.id)
         required = mfa_required_by(plan, workspace.mfa_required) is not None
         await self._sync_mfa_requirement(workspace, required)
+        if sso:
+            # Signed in through this organization's identity provider, which is
+            # responsible for its second factor (ADR 0036).
+            required = False
         return WorkspaceContext(
             workspace_id=workspace.id,
             workspace_kind=WorkspaceKind(workspace.kind),

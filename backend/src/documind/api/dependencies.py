@@ -224,6 +224,7 @@ async def get_workspace_context(
         workspace_id,
         mfa_verified_at=principal.mfa_verified_at,
         mfa_method=principal.mfa_method,
+        sso_workspace_id=principal.sso_workspace_id,
     )
 
 
@@ -242,6 +243,7 @@ async def get_workspace_context_without_mfa_policy(
         workspace_id,
         mfa_verified_at=principal.mfa_verified_at,
         mfa_method=principal.mfa_method,
+        sso_workspace_id=principal.sso_workspace_id,
         enforce_mfa=False,
     )
 

@@ -20,6 +20,7 @@ from documind.infrastructure.database.repositories.retrieval import (
     RetrievalRepository,
     SearchScope,
 )
+from documind.infrastructure.database.repositories.visibility import viewer_of
 
 MAX_QUERY_CHARS = 2000
 
@@ -132,7 +133,7 @@ class RetrievalService:
             cols = frozenset(collection_ids)
         if document_ids:
             wanted = set(document_ids)
-            found = await self._repo.documents(ctx.workspace_id, wanted)
+            found = await self._repo.documents(ctx.workspace_id, wanted, viewer=viewer_of(ctx))
             if found.keys() != wanted:
                 # Same response for "doesn't exist" and "another workspace's".
                 raise NotFoundError("Document not found.")
@@ -155,9 +156,12 @@ class RetrievalService:
                     )
         if collection_ids:
             wanted = set(collection_ids)
-            if await self._repo.collection_ids(ctx.workspace_id, wanted) != wanted:
+            if (
+                await self._repo.collection_ids(ctx.workspace_id, wanted, viewer=viewer_of(ctx))
+                != wanted
+            ):
                 raise NotFoundError("Collection not found.")
-        scope = SearchScope(ctx.workspace_id, docs, cols)
+        scope = SearchScope(ctx.workspace_id, docs, cols, viewer_of(ctx))
         if scope.empty:
             warnings.append(
                 SearchWarning(

@@ -23,6 +23,7 @@ import { errorMessage, isStatus } from '../../lib/api/errors'
 import { setSession } from '../../lib/api/session'
 import type { AuditLog, Invitation, Member, MfaSetup, MfaStatus, Role, Schemas, UsageSummary, Workspace } from '../../lib/api/types'
 import { useWorkspace, workspacesKey } from '../../lib/workspace/WorkspaceContext'
+import { SsoPanel } from '../saas/SsoPanel'
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../../lib/workspace/permissions'
 import { useAuth, useUser } from '../auth/AuthProvider'
 import { PasswordMeter } from '../auth/pages'
@@ -470,6 +471,7 @@ export function SettingsPage() {
           )}
         </Panel>
         {workspace.kind === 'organization' && can('workspace.update') && <MfaRequirementPanel />}
+        {workspace.kind === 'organization' && can('workspace.update') && <SsoPanel />}
         <WorkspaceVoicePolicy />
         {can('audit.read') && <AuditLogPanel />}
         {workspace.kind === 'organization' && (

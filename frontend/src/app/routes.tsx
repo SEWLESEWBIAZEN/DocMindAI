@@ -52,6 +52,7 @@ export const routes: RouteObject[] = [
       { path: '/forgot-password', element: <Public>{page(auth, 'ForgotPasswordPage')}</Public> },
       { path: '/reset-password', element: page(auth, 'ResetPasswordPage') },
       { path: '/verify-email', element: page(auth, 'VerifyEmailPage') },
+      { path: '/sso/complete', element: <RequireAuth>{page(auth, 'SsoCompletePage')}</RequireAuth> },
       {
         path: '/invitations/accept',
         element: <RequireAuth>{page(auth, 'AcceptInvitationPage')}</RequireAuth>,

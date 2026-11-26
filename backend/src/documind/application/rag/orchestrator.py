@@ -41,6 +41,7 @@ from documind.domain.rag.citations import resolve_citations, split_insufficient
 from documind.domain.rag.context import build_context
 from documind.domain.rag.models import BuiltContext, Citation, ContextSource, Turn
 from documind.domain.rag.prompts import INSUFFICIENT_CONTEXT_ANSWER, INSUFFICIENT_CONTEXT_SENTINEL
+from documind.infrastructure.database.repositories.visibility import viewer_of
 
 AnswerStatus = Literal["grounded", "insufficient_context"]
 
@@ -307,7 +308,7 @@ class RAGOrchestrator:
         if page_start is not None and page_end is not None and page_end < page_start:
             raise ValidationFailedError("The last page must not be before the first page.")
         repo = self._retrieval.repository
-        found = await repo.documents(ctx.workspace_id, {document_id})
+        found = await repo.documents(ctx.workspace_id, {document_id}, viewer=viewer_of(ctx))
         doc = found.get(document_id)
         if doc is None:
             raise NotFoundError("Document not found.")
@@ -316,7 +317,12 @@ class RAGOrchestrator:
                 "Only ready, non-archived documents can be summarized.", code="document_not_ready"
             )
         chunks = await repo.document_chunks(
-            ctx.workspace_id, document_id, page_start=page_start, page_end=page_end, limit=200
+            ctx.workspace_id,
+            document_id,
+            page_start=page_start,
+            page_end=page_end,
+            limit=200,
+            viewer=viewer_of(ctx),
         )
         context = build_context(chunks, max_tokens=self._options.context_max_tokens)
         if page_start is None:

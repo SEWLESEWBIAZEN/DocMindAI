@@ -42,6 +42,10 @@ from documind.infrastructure.database.models import (
     DocumentCollection,
     DocumentCollectionItem,
 )
+from documind.infrastructure.database.repositories.visibility import (
+    collection_visible,
+    document_visible,
+)
 
 _TS_CONFIG = "english"
 
@@ -53,6 +57,8 @@ class SearchScope:
     workspace_id: uuid.UUID
     document_ids: frozenset[uuid.UUID] | None = None
     collection_ids: frozenset[uuid.UUID] | None = None
+    #: Filter to what this user may see (ADR 0036); ``None``: no filter.
+    viewer: uuid.UUID | None = None
 
     @property
     def restricted(self) -> bool:
@@ -78,6 +84,7 @@ def _visible(scope: SearchScope) -> list[ColumnElement[bool]]:
         Document.status == "ready",
         Document.archived_at.is_(None),
         DocumentChunk.document_version_id == Document.current_version_id,
+        document_visible(Document.id, scope.viewer),
     ]
     if scope.restricted:
         selected: list[ColumnElement[bool]] = []
@@ -240,12 +247,13 @@ class RetrievalRepository:
         page_start: int | None,
         page_end: int | None,
         limit: int,
+        viewer: uuid.UUID | None = None,
     ) -> list[RetrievedChunk]:
         """A document's current chunks in reading order, optionally limited to pages.
 
         Same visibility filter as search: ready, not archived, current version.
         """
-        scope = SearchScope(workspace_id, frozenset({document_id}), None)
+        scope = SearchScope(workspace_id, frozenset({document_id}), None, viewer)
         stmt = _base().where(*_visible(scope))
         if page_start is not None:
             stmt = stmt.where(
@@ -260,18 +268,24 @@ class RetrievalRepository:
         ]
 
     async def documents(
-        self, workspace_id: uuid.UUID, ids: set[uuid.UUID]
+        self, workspace_id: uuid.UUID, ids: set[uuid.UUID], *, viewer: uuid.UUID | None = None
     ) -> dict[uuid.UUID, DocumentAvailability]:
         stmt = select(Document.id, Document.title, Document.status, Document.archived_at).where(
-            Document.workspace_id == workspace_id, Document.id.in_(ids)
+            Document.workspace_id == workspace_id,
+            Document.id.in_(ids),
+            document_visible(Document.id, viewer),
         )
         return {
             row.id: DocumentAvailability(row.id, row.title, row.status, row.archived_at is not None)
             for row in (await self._s.execute(stmt)).all()
         }
 
-    async def collection_ids(self, workspace_id: uuid.UUID, ids: set[uuid.UUID]) -> set[uuid.UUID]:
+    async def collection_ids(
+        self, workspace_id: uuid.UUID, ids: set[uuid.UUID], *, viewer: uuid.UUID | None = None
+    ) -> set[uuid.UUID]:
         stmt = select(DocumentCollection.id).where(
-            DocumentCollection.workspace_id == workspace_id, DocumentCollection.id.in_(ids)
+            DocumentCollection.workspace_id == workspace_id,
+            DocumentCollection.id.in_(ids),
+            collection_visible(viewer),
         )
         return set((await self._s.execute(stmt)).scalars())

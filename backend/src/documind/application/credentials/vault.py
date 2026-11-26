@@ -17,7 +17,14 @@ from documind.infrastructure.security.vault import EnvelopeCipher, Sealed, Vault
 logger = logging.getLogger(__name__)
 
 KINDS = frozenset(
-    {"ai_provider_key", "database_password", "storage_secret", "worker_token", "connector_token"}
+    {
+        "ai_provider_key",
+        "database_password",
+        "storage_secret",
+        "worker_token",
+        "connector_token",
+        "sso_client_secret",
+    }
 )
 _TOUCH_EVERY = timedelta(hours=1)
 

@@ -33,6 +33,7 @@ DATA_PLANE_TABLES: tuple[str, ...] = (
     "document_versions",
     "document_collections",
     "document_collection_items",
+    "collection_members",
     "processing_jobs",
     "document_pages",
     "document_chunks",

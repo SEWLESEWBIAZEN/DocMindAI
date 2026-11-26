@@ -301,6 +301,8 @@ class RefreshToken(Base):
     )
     user_agent: Mapped[str | None] = mapped_column(String(255))
     ip_address: Mapped[str | None] = mapped_column(String(45))
+    #: Signed in with this organization's SSO (ADR 0036); kept across refreshes.
+    sso_workspace_id: Mapped[uuid.UUID | None] = mapped_column()
 
 
 class AccountToken(Base):

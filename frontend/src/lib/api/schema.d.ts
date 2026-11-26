@@ -245,6 +245,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/sso/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Does this email use SSO? */
+        post: operations["discover_api_v1_auth_sso_discover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sso/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start signing in with SSO */
+        post: operations["start_api_v1_auth_sso_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/verify-email": {
         parameters: {
             query?: never;
@@ -919,6 +953,24 @@ export interface paths {
         head?: never;
         /** Update Collection */
         patch: operations["update_collection_api_v1_workspaces__workspace_id__collections__collection_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/collections/{collection_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who may see a restricted collection (admins) */
+        get: operations["get_collection_access_api_v1_workspaces__workspace_id__collections__collection_id__access_get"];
+        /** Restrict a collection to some members, or open it to everyone (admins) */
+        put: operations["set_collection_access_api_v1_workspaces__workspace_id__collections__collection_id__access_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/workspaces/{workspace_id}/collections/{collection_id}/documents/{document_id}": {
@@ -1825,6 +1877,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This organization's SSO settings */
+        get: operations["get_settings_api_v1_workspaces__workspace_id__sso_get"];
+        /** Set up SSO (admins; needs a recent 2FA check) */
+        put: operations["save_settings_api_v1_workspaces__workspace_id__sso_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/sso/scim-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** New SCIM token (shown once) */
+        post: operations["new_scim_token_api_v1_workspaces__workspace_id__sso_scim_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/usage": {
         parameters: {
             query?: never;
@@ -2216,6 +2303,20 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** CollectionAccessRequest */
+        CollectionAccessRequest: {
+            /** Member User Ids */
+            member_user_ids?: string[];
+            /** Restricted */
+            restricted: boolean;
+        };
+        /** CollectionAccessResponse */
+        CollectionAccessResponse: {
+            /** Member User Ids */
+            member_user_ids: string[];
+            /** Restricted */
+            restricted: boolean;
+        };
         /** CollectionResponse */
         CollectionResponse: {
             /**
@@ -2236,6 +2337,12 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Restricted
+             * @description Only its members (and admins) see it and its documents.
+             * @default false
+             */
+            restricted: boolean;
             /**
              * Updated At
              * Format: date-time
@@ -2572,6 +2679,13 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** DiscoverResponse */
+        DiscoverResponse: {
+            /** Required */
+            required: boolean;
+            /** Sso */
+            sso: boolean;
+        };
         /**
          * DocumentFormat
          * @enum {string}
@@ -2716,6 +2830,14 @@ export interface components {
             filename: string;
             /** Url */
             url: string;
+        };
+        /** EmailBody */
+        EmailBody: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
         };
         /** EmailRequest */
         EmailRequest: {
@@ -3829,6 +3951,14 @@ export interface components {
             /** Questions */
             questions: string[];
         };
+        /** ScimTokenResponse */
+        ScimTokenResponse: {
+            /**
+             * Token
+             * @description Shown once. Use as the Bearer token in your identity provider.
+             */
+            token: string;
+        };
         /** SearchHitResponse */
         SearchHitResponse: {
             /**
@@ -3947,6 +4077,66 @@ export interface components {
             /** Voice */
             voice?: string | null;
         };
+        /** SsoRequest */
+        SsoRequest: {
+            /** Client Id */
+            client_id: string;
+            /** Client Secret */
+            client_secret?: string | null;
+            /**
+             * Default Role
+             * @default member
+             * @enum {string}
+             */
+            default_role: "member" | "viewer";
+            /** Domains */
+            domains: string[];
+            /**
+             * Enforced
+             * @default false
+             */
+            enforced: boolean;
+            /** Issuer */
+            issuer: string;
+        };
+        /** SsoResponse */
+        SsoResponse: {
+            /** Client Id */
+            client_id: string;
+            /** Default Role */
+            default_role: string;
+            /** Domains */
+            domains: string[];
+            /** Enforced */
+            enforced: boolean;
+            /** Has Client Secret */
+            has_client_secret: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Issuer */
+            issuer: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** Scim Base Url */
+            scim_base_url: string;
+            /** Scim Enabled */
+            scim_enabled: boolean;
+            /** Scim Token Prefix */
+            scim_token_prefix: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending_verification" | "active" | "disabled";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** StartExtractionRequest */
         StartExtractionRequest: {
             /** Collection Id */
@@ -3964,6 +4154,11 @@ export interface components {
             template: string;
             /** Title */
             title?: string | null;
+        };
+        /** StartResponse */
+        StartResponse: {
+            /** Url */
+            url: string;
         };
         /** StepUpResponse */
         StepUpResponse: {
@@ -4808,6 +5003,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_api_v1_auth_sso_discover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_api_v1_auth_sso_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6202,6 +6463,74 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_access_api_v1_workspaces__workspace_id__collections__collection_id__access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAccessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_collection_access_api_v1_workspaces__workspace_id__collections__collection_id__access_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionAccessRequest"];
             };
         };
         responses: {
@@ -8519,6 +8848,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_settings_api_v1_workspaces__workspace_id__sso_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_settings_api_v1_workspaces__workspace_id__sso_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    new_scim_token_api_v1_workspaces__workspace_id__sso_scim_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScimTokenResponse"];
                 };
             };
             /** @description Validation Error */

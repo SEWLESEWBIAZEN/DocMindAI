@@ -57,6 +57,7 @@ from documind.infrastructure.database.repositories.documents import (
     DocumentRepository,
 )
 from documind.infrastructure.database.repositories.processing import ProcessingJobRepository
+from documind.infrastructure.database.repositories.visibility import viewer_of
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,9 @@ class DocumentService:
     async def _require(
         self, ctx: WorkspaceContext, document_id: uuid.UUID, *, for_update: bool = False
     ) -> Document:
-        doc = await self._documents.get(ctx.workspace_id, document_id, for_update=for_update)
+        doc = await self._documents.get(
+            ctx.workspace_id, document_id, for_update=for_update, viewer=viewer_of(ctx)
+        )
         if doc is None:
             raise NotFoundError(DOCUMENT_NOT_FOUND)
         return doc
@@ -211,6 +214,13 @@ class DocumentService:
     async def _ensure_not_duplicate(self, ctx: WorkspaceContext, checksum: str) -> None:
         existing = await self._documents.by_checksum(ctx.workspace_id, checksum)
         if existing is not None:
+            visible = await self._documents.get(
+                ctx.workspace_id, existing.id, viewer=viewer_of(ctx)
+            )
+            if visible is None:  # in a restricted collection: don't reveal it (ADR 0036)
+                raise ConflictError(
+                    "This file is already in the workspace.", code="duplicate_document"
+                )
             where = " (archived; restore it instead)" if existing.archived_at else ""
             raise ConflictError(
                 f"This file is already in the workspace as “{existing.title}”{where}.",
@@ -247,7 +257,8 @@ class DocumentService:
         final_title = clean_title(title) if title else title_from_filename(inspected.filename)
         if (
             collection_id is not None
-            and await self._collections.get(ctx.workspace_id, collection_id) is None
+            and await self._collections.get(ctx.workspace_id, collection_id, viewer=viewer_of(ctx))
+            is None
         ):
             raise NotFoundError("Collection not found.")
         await self._ensure_not_duplicate(ctx, inspected.checksum_sha256)
@@ -450,10 +461,13 @@ class DocumentService:
         ctx.require(Permission.DOCUMENTS_READ)
         if (
             f.collection_id
-            and await self._collections.get(ctx.workspace_id, f.collection_id) is None
+            and await self._collections.get(
+                ctx.workspace_id, f.collection_id, viewer=viewer_of(ctx)
+            )
+            is None
         ):
             raise NotFoundError("Collection not found.")
-        docs, total = await self._documents.search(ctx.workspace_id, f)
+        docs, total = await self._documents.search(ctx.workspace_id, f, viewer=viewer_of(ctx))
         collections = await self._documents.collection_ids(ctx.workspace_id, [d.id for d in docs])
         return DocumentPage(
             items=[self._info(d, collections.get(d.id)) for d in docs],

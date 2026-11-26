@@ -166,7 +166,10 @@ class AuthService:
         return raw
 
     def _start_session(
-        self, user: User, family_id: uuid.UUID | None = None
+        self,
+        user: User,
+        family_id: uuid.UUID | None = None,
+        sso_workspace_id: uuid.UUID | None = None,
     ) -> tuple[RefreshToken, str]:
         raw = generate_token()
         token = RefreshToken(
@@ -177,6 +180,7 @@ class AuthService:
             expires_at=utcnow() + timedelta(days=self._settings.refresh_token_ttl_days),
             user_agent=(self._meta.user_agent or "")[:255] or None,
             ip_address=self._meta.ip_address,
+            sso_workspace_id=sso_workspace_id,
         )
         self._refresh.add(token)
         return token, raw
@@ -191,7 +195,11 @@ class AuthService:
         mfa_method: str | None = None,
     ) -> AuthResult:
         access = self._tokens.issue(
-            user.id, user.auth_version, mfa_verified_at=mfa_verified_at, mfa_method=mfa_method
+            user.id,
+            user.auth_version,
+            mfa_verified_at=mfa_verified_at,
+            mfa_method=mfa_method,
+            sso_workspace_id=refresh.sso_workspace_id,
         )
         return AuthResult(
             user=user,
@@ -324,6 +332,12 @@ class AuthService:
             "login:email", email, s.rate_limit_login_per_email, s.rate_limit_login_window_seconds
         )
         invalid = AuthenticationError("Invalid email or password.", code="invalid_credentials")
+        from documind.application.identity.sso_service import sso_required_for
+
+        if await sso_required_for(self._session, email) is not None:
+            raise AuthenticationError(
+                "Your organization signs in with single sign-on.", code="sso_required"
+            )
 
         user = await self._users.get_by_email(email)
         if user is None:
@@ -504,7 +518,9 @@ class AuthService:
             await self._session.commit()
             raise invalid
 
-        replacement, raw = self._start_session(user, family_id=current.family_id)
+        replacement, raw = self._start_session(
+            user, family_id=current.family_id, sso_workspace_id=current.sso_workspace_id
+        )
         await self._session.flush()
         current.revoked_at = now
         current.revoked_reason = "rotated"
@@ -544,8 +560,24 @@ class AuthService:
         if user is None or not user.is_active or user.auth_version != claims.auth_version:
             raise AuthenticationError("Your session is no longer valid. Please sign in again.")
         return Principal(
-            user=user, mfa_verified_at=claims.mfa_verified_at, mfa_method=claims.mfa_method
+            user=user,
+            mfa_verified_at=claims.mfa_verified_at,
+            mfa_method=claims.mfa_method,
+            sso_workspace_id=claims.sso_workspace_id,
         )
+
+    async def sso_session(self, user: User, workspace_id: uuid.UUID) -> AuthResult:
+        """A session after signing in with an organization's SSO (ADR 0036)."""
+        refresh, raw = self._start_session(user, sso_workspace_id=workspace_id)
+        self._audit.record(
+            "auth.login_sso",
+            actor_user_id=user.id,
+            workspace_id=workspace_id,
+            target_type="user",
+            target_id=user.id,
+        )
+        await self._session.commit()
+        return self._result(user, refresh, raw)
 
     # ----------------------------------------------------------- password flows
 

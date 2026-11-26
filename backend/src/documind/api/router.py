@@ -16,6 +16,7 @@ from documind.api.routes import (
     metrics,
     onboarding,
     rag,
+    sso,
     usage,
     voice,
     worker_api,
@@ -34,6 +35,9 @@ api_router.include_router(onboarding.router)
 api_router.include_router(extraction.router)
 api_router.include_router(connectors.router)
 api_router.include_router(connectors.public_router)
+api_router.include_router(sso.auth_router)
+api_router.include_router(sso.router)
+api_router.include_router(sso.scim_router)
 api_router.include_router(rag.router)
 api_router.include_router(conversations.router)
 api_router.include_router(usage.router)

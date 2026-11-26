@@ -902,6 +902,51 @@
         "title": "CleanupResponse",
         "type": "object"
       },
+      "CollectionAccessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "member_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Member User Ids",
+            "type": "array"
+          },
+          "restricted": {
+            "title": "Restricted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "restricted"
+        ],
+        "title": "CollectionAccessRequest",
+        "type": "object"
+      },
+      "CollectionAccessResponse": {
+        "properties": {
+          "member_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Member User Ids",
+            "type": "array"
+          },
+          "restricted": {
+            "title": "Restricted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "restricted",
+          "member_user_ids"
+        ],
+        "title": "CollectionAccessResponse",
+        "type": "object"
+      },
       "CollectionResponse": {
         "properties": {
           "created_at": {
@@ -944,6 +989,12 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "restricted": {
+            "default": false,
+            "description": "Only its members (and admins) see it and its documents.",
+            "title": "Restricted",
+            "type": "boolean"
           },
           "updated_at": {
             "format": "date-time",
@@ -1967,6 +2018,24 @@
         "title": "DeadlineUpdate",
         "type": "object"
       },
+      "DiscoverResponse": {
+        "properties": {
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "sso": {
+            "title": "Sso",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sso",
+          "required"
+        ],
+        "title": "DiscoverResponse",
+        "type": "object"
+      },
       "DocumentFormat": {
         "enum": [
           "pdf",
@@ -2346,6 +2415,21 @@
           "filename"
         ],
         "title": "DownloadUrlResponse",
+        "type": "object"
+      },
+      "EmailBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailBody",
         "type": "object"
       },
       "EmailRequest": {
@@ -5128,6 +5212,20 @@
         "title": "SampleStatusResponse",
         "type": "object"
       },
+      "ScimTokenResponse": {
+        "properties": {
+          "token": {
+            "description": "Shown once. Use as the Bearer token in your identity provider.",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ScimTokenResponse",
+        "type": "object"
+      },
       "SearchHitResponse": {
         "properties": {
           "chunk_id": {
@@ -5456,6 +5554,155 @@
         "title": "SpeechRequest",
         "type": "object"
       },
+      "SsoRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "client_id": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "default_role": {
+            "default": "member",
+            "enum": [
+              "member",
+              "viewer"
+            ],
+            "title": "Default Role",
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Domains",
+            "type": "array"
+          },
+          "enforced": {
+            "default": false,
+            "title": "Enforced",
+            "type": "boolean"
+          },
+          "issuer": {
+            "maxLength": 500,
+            "minLength": 8,
+            "title": "Issuer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer",
+          "client_id",
+          "domains"
+        ],
+        "title": "SsoRequest",
+        "type": "object"
+      },
+      "SsoResponse": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "default_role": {
+            "title": "Default Role",
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Domains",
+            "type": "array"
+          },
+          "enforced": {
+            "title": "Enforced",
+            "type": "boolean"
+          },
+          "has_client_secret": {
+            "title": "Has Client Secret",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "title": "Redirect Uri",
+            "type": "string"
+          },
+          "scim_base_url": {
+            "title": "Scim Base Url",
+            "type": "string"
+          },
+          "scim_enabled": {
+            "title": "Scim Enabled",
+            "type": "boolean"
+          },
+          "scim_token_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scim Token Prefix"
+          },
+          "status": {
+            "enum": [
+              "pending_verification",
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "issuer",
+          "client_id",
+          "has_client_secret",
+          "domains",
+          "default_role",
+          "enforced",
+          "status",
+          "scim_enabled",
+          "scim_token_prefix",
+          "redirect_uri",
+          "scim_base_url",
+          "updated_at"
+        ],
+        "title": "SsoResponse",
+        "type": "object"
+      },
       "StartExtractionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5532,6 +5779,19 @@
           "template"
         ],
         "title": "StartExtractionRequest",
+        "type": "object"
+      },
+      "StartResponse": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "StartResponse",
         "type": "object"
       },
       "StepUpResponse": {
@@ -7221,6 +7481,88 @@
         "summary": "Create an account (always 202, to prevent account enumeration)",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sso/discover": {
+      "post": {
+        "operationId": "discover_api_v1_auth_sso_discover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Does this email use SSO?",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/api/v1/auth/sso/start": {
+      "post": {
+        "operationId": "start_api_v1_auth_sso_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start signing in with SSO",
+        "tags": [
+          "sso"
         ]
       }
     },
@@ -9346,6 +9688,132 @@
           }
         ],
         "summary": "Update Collection",
+        "tags": [
+          "documents",
+          "collections"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/collections/{collection_id}/access": {
+      "get": {
+        "operationId": "get_collection_access_api_v1_workspaces__workspace_id__collections__collection_id__access_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionAccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Who may see a restricted collection (admins)",
+        "tags": [
+          "documents",
+          "collections"
+        ]
+      },
+      "put": {
+        "operationId": "set_collection_access_api_v1_workspaces__workspace_id__collections__collection_id__access_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restrict a collection to some members, or open it to everyone (admins)",
         "tags": [
           "documents",
           "collections"
@@ -13649,6 +14117,166 @@
         "summary": "Semantic (hybrid) search across the workspace's ready documents",
         "tags": [
           "search"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/sso": {
+      "get": {
+        "operationId": "get_settings_api_v1_workspaces__workspace_id__sso_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SsoResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Settings Api V1 Workspaces  Workspace Id  Sso Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "This organization's SSO settings",
+        "tags": [
+          "sso"
+        ]
+      },
+      "put": {
+        "operationId": "save_settings_api_v1_workspaces__workspace_id__sso_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set up SSO (admins; needs a recent 2FA check)",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/sso/scim-token": {
+      "post": {
+        "operationId": "new_scim_token_api_v1_workspaces__workspace_id__sso_scim_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScimTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "New SCIM token (shown once)",
+        "tags": [
+          "sso"
         ]
       }
     },

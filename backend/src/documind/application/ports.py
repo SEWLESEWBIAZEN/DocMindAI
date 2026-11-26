@@ -35,6 +35,8 @@ class AccessTokenClaims:
     mfa_verified_at: datetime | None = None
     # How: "totp", "recovery_code" or "email_code" (ADR 0028: some workspaces refuse email).
     mfa_method: str | None = None
+    # Signed in through this organization's SSO (ADR 0036).
+    sso_workspace_id: UUID | None = None
 
 
 class AccessTokenService(Protocol):
@@ -45,6 +47,7 @@ class AccessTokenService(Protocol):
         *,
         mfa_verified_at: datetime | None = None,
         mfa_method: str | None = None,
+        sso_workspace_id: UUID | None = None,
     ) -> IssuedAccessToken: ...
 
     def decode(self, token: str) -> AccessTokenClaims:

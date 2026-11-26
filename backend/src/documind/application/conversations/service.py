@@ -56,6 +56,7 @@ from documind.infrastructure.database.repositories.conversations import (
     MessageRepository,
 )
 from documind.infrastructure.database.repositories.retrieval import RetrievalRepository
+from documind.infrastructure.database.repositories.visibility import viewer_of
 
 TITLE_MAX = 200
 AUTO_TITLE_CHARS = 80
@@ -146,12 +147,16 @@ class ConversationService:
             raise ValidationFailedError(f"Select at most {MAX_SOURCES} documents and collections.")
         if docs:
             ctx.require(Permission.DOCUMENTS_READ)
-            found = await self._retrieval.documents(ctx.workspace_id, set(docs))
+            found = await self._retrieval.documents(
+                ctx.workspace_id, set(docs), viewer=viewer_of(ctx)
+            )
             if found.keys() != set(docs):
                 raise NotFoundError("Document not found.")
         if cols:
             ctx.require(Permission.DOCUMENTS_READ)
-            if await self._retrieval.collection_ids(ctx.workspace_id, set(cols)) != set(cols):
+            if await self._retrieval.collection_ids(
+                ctx.workspace_id, set(cols), viewer=viewer_of(ctx)
+            ) != set(cols):
                 raise NotFoundError("Collection not found.")
         return docs, cols
 

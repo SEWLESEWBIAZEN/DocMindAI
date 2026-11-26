@@ -17,6 +17,10 @@ from documind.infrastructure.database.models import (
     DocumentCollectionItem,
     DocumentVersion,
 )
+from documind.infrastructure.database.repositories.visibility import (
+    collection_visible,
+    document_visible,
+)
 
 SortField = Literal["created_at", "updated_at", "title", "size_bytes"]
 ArchivedFilter = Literal["exclude", "only", "include"]
@@ -50,10 +54,17 @@ class DocumentRepository:
         self._s.add_all(objects)
 
     async def get(
-        self, workspace_id: uuid.UUID, document_id: uuid.UUID, *, for_update: bool = False
+        self,
+        workspace_id: uuid.UUID,
+        document_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+        viewer: uuid.UUID | None = None,
     ) -> Document | None:
         stmt = select(Document).where(
-            Document.workspace_id == workspace_id, Document.id == document_id
+            Document.workspace_id == workspace_id,
+            Document.id == document_id,
+            document_visible(Document.id, viewer),
         )
         if for_update:
             stmt = stmt.with_for_update()
@@ -75,8 +86,12 @@ class DocumentRepository:
         )
         return list((await self._s.execute(stmt)).scalars())
 
-    def _filtered(self, workspace_id: uuid.UUID, f: DocumentFilter) -> Select[Document]:
-        stmt = select(Document).where(Document.workspace_id == workspace_id)
+    def _filtered(
+        self, workspace_id: uuid.UUID, f: DocumentFilter, viewer: uuid.UUID | None = None
+    ) -> Select[Document]:
+        stmt = select(Document).where(
+            Document.workspace_id == workspace_id, document_visible(Document.id, viewer)
+        )
         if f.archived == "exclude":
             stmt = stmt.where(Document.archived_at.is_(None))
         elif f.archived == "only":
@@ -104,9 +119,9 @@ class DocumentRepository:
         return stmt
 
     async def search(
-        self, workspace_id: uuid.UUID, f: DocumentFilter
+        self, workspace_id: uuid.UUID, f: DocumentFilter, *, viewer: uuid.UUID | None = None
     ) -> tuple[list[Document], int]:
-        base = self._filtered(workspace_id, f)
+        base = self._filtered(workspace_id, f, viewer)
         total = (
             await self._s.execute(select(func.count()).select_from(base.subquery()))
         ).scalar_one()
@@ -168,11 +183,12 @@ class CollectionRepository:
         self._s.add(collection)
 
     async def get(
-        self, workspace_id: uuid.UUID, collection_id: uuid.UUID
+        self, workspace_id: uuid.UUID, collection_id: uuid.UUID, *, viewer: uuid.UUID | None = None
     ) -> DocumentCollection | None:
         stmt = select(DocumentCollection).where(
             DocumentCollection.workspace_id == workspace_id,
             DocumentCollection.id == collection_id,
+            collection_visible(viewer),
         )
         return (await self._s.execute(stmt)).scalar_one_or_none()
 
@@ -188,7 +204,7 @@ class CollectionRepository:
         return (await self._s.execute(stmt)).first() is not None
 
     async def list_with_counts(
-        self, workspace_id: uuid.UUID
+        self, workspace_id: uuid.UUID, *, viewer: uuid.UUID | None = None
     ) -> list[tuple[DocumentCollection, int]]:
         count = (
             select(func.count())
@@ -201,7 +217,7 @@ class CollectionRepository:
         )
         stmt = (
             select(DocumentCollection, count)
-            .where(DocumentCollection.workspace_id == workspace_id)
+            .where(DocumentCollection.workspace_id == workspace_id, collection_visible(viewer))
             .order_by(func.lower(DocumentCollection.name))
         )
         return [(c, int(n)) for c, n in await self._s.execute(stmt)]

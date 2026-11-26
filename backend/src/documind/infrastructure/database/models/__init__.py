@@ -24,6 +24,7 @@ from documind.infrastructure.database.models.credentials import (
     WorkspaceAISettings,
 )
 from documind.infrastructure.database.models.documents import (
+    CollectionMember,
     Document,
     DocumentCollection,
     DocumentCollectionItem,
@@ -63,12 +64,14 @@ from documind.infrastructure.database.models.processing import (
     DocumentPage,
     ProcessingJob,
 )
+from documind.infrastructure.database.models.sso import SsoConnection
 
 __all__ = [
     "AccountToken",
     "AuditLog",
     "BillingEvent",
     "BillingSubscription",
+    "CollectionMember",
     "ConnectorConnection",
     "ConnectorItem",
     "Conversation",
@@ -99,6 +102,7 @@ __all__ = [
     "ProcessingJob",
     "RefreshToken",
     "Role",
+    "SsoConnection",
     "UsageRecord",
     "User",
     "WebAuthnCredential",

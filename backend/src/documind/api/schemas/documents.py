@@ -88,6 +88,20 @@ class CollectionResponse(BaseModel):
     created_by_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    restricted: bool = Field(
+        default=False, description="Only its members (and admins) see it and its documents."
+    )
+
+
+class CollectionAccessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    restricted: bool
+    member_user_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+
+
+class CollectionAccessResponse(BaseModel):
+    restricted: bool
+    member_user_ids: list[uuid.UUID]
 
 
 class CreateCollectionRequest(BaseModel):

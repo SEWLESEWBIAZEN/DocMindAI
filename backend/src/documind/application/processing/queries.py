@@ -21,6 +21,7 @@ from documind.infrastructure.database.repositories.processing import (
     IndexRepository,
     ProcessingJobRepository,
 )
+from documind.infrastructure.database.repositories.visibility import viewer_of
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +38,7 @@ class ProcessingQueries:
 
     async def _document(self, ctx: WorkspaceContext, document_id: uuid.UUID) -> Document:
         ctx.require(Permission.DOCUMENTS_READ)
-        doc = await self._documents.get(ctx.workspace_id, document_id)
+        doc = await self._documents.get(ctx.workspace_id, document_id, viewer=viewer_of(ctx))
         if doc is None:
             raise NotFoundError("Document not found.")
         return doc

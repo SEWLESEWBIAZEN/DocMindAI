@@ -117,6 +117,8 @@ class Container:
     infra: InfrastructureResolver | None = None
     #: Starts an extraction run in the background (ADR 0034): ``(run_id, workspace_id)``.
     extraction_dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]] | None = None
+    #: OpenID Connect relying party for organization SSO (ADR 0036).
+    oidc: Any = None
     #: Google Drive (ADR 0035); None when no OAuth client is configured.
     drive_client: Any = None
     #: Starts a connector sync in the background: ``(connection_id, workspace_id)``.
@@ -276,6 +278,11 @@ def build_container(settings: Settings) -> Container:
         return await connectors.dispatch(connection_id, workspace_id=workspace_id)
 
     container.connector_dispatch = dispatch_sync
+    from documind.infrastructure.sso.oidc import OidcClient
+
+    container.oidc = OidcClient(
+        allowed_private_hosts=frozenset(settings.infrastructure_allowed_private_hosts)
+    )
     if settings.google_oauth_client_id and settings.google_oauth_client_secret:
         from documind.infrastructure.connectors.google_drive import GoogleDriveClient
 

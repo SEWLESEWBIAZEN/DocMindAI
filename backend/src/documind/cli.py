@@ -396,6 +396,57 @@ async def _migrations(container: Container, command: str, migration_id: uuid.UUI
     return 0
 
 
+async def _sso(
+    container: Container,
+    command: str,
+    connection_id: uuid.UUID | None,
+    operator: str | None,
+    note: str | None,
+) -> int:
+    """Verify an organization owns its SSO domains, out of band, before approving (ADR 0036)."""
+    from sqlalchemy import select
+
+    from documind.application.identity.common import RequestMeta
+    from documind.application.identity.sso_service import SsoService
+    from documind.infrastructure.database.models import SsoConnection
+
+    async with container.session_factory() as session:
+        if command == "list":
+            rows = (await session.execute(select(SsoConnection))).scalars()
+            _print(
+                [
+                    {
+                        "id": str(r.id),
+                        "workspace_id": str(r.workspace_id),
+                        "issuer": r.issuer,
+                        "domains": r.domains,
+                        "status": r.status,
+                        "enforced": r.enforced,
+                        "verified_by": r.verified_by,
+                    }
+                    for r in rows
+                ]
+            )
+            return 0
+        if connection_id is None or not operator:  # pragma: no cover - checked by the parser
+            return 2
+        service = SsoService(
+            session,
+            container.settings,
+            container.oidc,
+            container.redis,
+            container.cipher,
+            container.password_hasher,
+            None,  # type: ignore[arg-type]  # no sign-in from the CLI
+            RequestMeta(),
+        )
+        row = await service.decide(
+            connection_id, approve=command == "approve", operator=operator, note=note or ""
+        )
+        _print({"id": str(row.id), "status": row.status, "domains": row.domains})
+        return 0
+
+
 async def _mfa_reset(
     container: Container,
     command: str,
@@ -490,6 +541,11 @@ def main(argv: list[str] | None = None) -> int:
     reset.add_argument(
         "--status", choices=["pending", "approved", "denied", "cancelled", "completed"]
     )
+    sso = sub.add_parser("sso", help="verify organizations' SSO domains (ADR 0036)")
+    sso.add_argument("sso_command", choices=["list", "approve", "disable"])
+    sso.add_argument("connection_id", nargs="?", type=uuid.UUID)
+    sso.add_argument("--operator", help="who verified domain ownership (recorded)")
+    sso.add_argument("--note", help="how ownership was verified, e.g. DNS TXT record (recorded)")
     mig = sub.add_parser("migrations", help="approved infrastructure migrations (MI-8)")
     mig.add_argument("migrations_command", choices=["list", "run", "abort"])
     mig.add_argument("migration_id", nargs="?", type=uuid.UUID)
@@ -545,6 +601,14 @@ def main(argv: list[str] | None = None) -> int:
                     args.note,
                     args.status,
                 )
+            )
+        )
+    if args.command == "sso":
+        if args.sso_command != "list" and (args.connection_id is None or not args.operator):
+            parser.error("approve and disable need CONNECTION_ID and --operator")
+        return asyncio.run(
+            _with_container(
+                lambda c: _sso(c, args.sso_command, args.connection_id, args.operator, args.note)
             )
         )
     if args.command == "migrations":

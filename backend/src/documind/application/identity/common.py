@@ -22,6 +22,7 @@ class Principal:
     user: User
     mfa_verified_at: datetime | None = None
     mfa_method: str | None = None
+    sso_workspace_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

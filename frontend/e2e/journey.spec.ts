@@ -173,7 +173,7 @@ test('complete journey: sign up, upload, ask with citations, team, 2FA', async (
   // --- sign in again: 2FA is on, so a code is needed after the password (ADR 0026) ---
   await page.getByLabel('Email').fill(owner)
   await page.getByLabel('Password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Sign in' }).click()
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Two-factor authentication' })).toBeVisible()
   await expectAccessible(page, 'sign-in code')
   await page.getByLabel('Authentication code').fill('000000')

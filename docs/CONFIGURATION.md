@@ -266,6 +266,20 @@ Set up in Google Cloud:
 3. Create an OAuth client ID (Web application) with the redirect URI
    `{PUBLIC_APP_URL}/api/v1/connectors/google-drive/callback`.
 
+## Single sign-on and SCIM (ADR 0036)
+
+No environment variables are needed. Organizations on Business or Enterprise set SSO up in
+**Settings → Single sign-on**. The page shows the values for the identity provider:
+
+- **Redirect URI:** `{PUBLIC_APP_URL}/api/v1/auth/sso/callback`. Register this exact URL. Scopes:
+  `openid email profile`.
+- **SCIM base URL:** `{PUBLIC_APP_URL}/api/v1/scim/v2`, with the token from "New SCIM token" as
+  the bearer token.
+
+A new or changed connection waits for an operator to verify domain ownership. See
+`runbooks/incident-response.md`, "Verifying an SSO domain". Issuers on private networks are
+refused unless they are listed in `INFRASTRUCTURE_ALLOWED_PRIVATE_HOSTS`.
+
 ## Credential vault and your own AI keys (ADR 0019, ADR 0022)
 
 | Variable                     | Default | Description                                                      |

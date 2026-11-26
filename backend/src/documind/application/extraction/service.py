@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.application.identity.common import (
@@ -39,10 +39,16 @@ from documind.domain.identity.policies import WorkspaceContext
 from documind.infrastructure.database.models import (
     Deadline,
     Document,
+    DocumentCollection,
     DocumentCollectionItem,
     ExtractionResult,
     ExtractionRun,
     WorkspaceMember,
+)
+from documind.infrastructure.database.repositories.visibility import (
+    collection_visible,
+    document_visible,
+    viewer_of,
 )
 
 Dispatch = Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]]
@@ -86,7 +92,17 @@ class ExtractionService:
         collection_id: uuid.UUID | None,
     ) -> list[uuid.UUID]:
         wanted = list(dict.fromkeys(document_ids))
+        viewer = viewer_of(ctx)
         if collection_id is not None:
+            visible = await self._s.execute(
+                select(DocumentCollection.id).where(
+                    DocumentCollection.workspace_id == ctx.workspace_id,
+                    DocumentCollection.id == collection_id,
+                    collection_visible(viewer),
+                )
+            )
+            if visible.first() is None:
+                raise NotFoundError("Collection not found.")
             rows = await self._s.execute(
                 select(DocumentCollectionItem.document_id)
                 .join(Document, Document.id == DocumentCollectionItem.document_id)
@@ -94,6 +110,7 @@ class ExtractionService:
                     DocumentCollectionItem.workspace_id == ctx.workspace_id,
                     DocumentCollectionItem.collection_id == collection_id,
                     Document.archived_at.is_(None),
+                    document_visible(Document.id, viewer),
                 )
                 .order_by(Document.title)
             )
@@ -115,7 +132,9 @@ class ExtractionService:
             (
                 await self._s.execute(
                     select(Document.id).where(
-                        Document.workspace_id == ctx.workspace_id, Document.id.in_(wanted)
+                        Document.workspace_id == ctx.workspace_id,
+                        Document.id.in_(wanted),
+                        document_visible(Document.id, viewer),
                     )
                 )
             ).scalars()
@@ -228,11 +247,15 @@ class ExtractionService:
             (
                 await self._s.execute(
                     select(Document.id, Document.title).where(
-                        Document.workspace_id == ctx.workspace_id, Document.id.in_(ids)
+                        Document.workspace_id == ctx.workspace_id,
+                        Document.id.in_(ids),
+                        document_visible(Document.id, viewer_of(ctx)),
                     )
                 )
             ).all()
         )
+        # Someone else's run may cover documents this person can't see (ADR 0036).
+        results = [r for r in results if r.document_id in titles]
         return RunView(run, results, titles)
 
     async def delete(self, ctx: WorkspaceContext, run_id: uuid.UUID) -> None:
@@ -331,14 +354,31 @@ class DeadlineService:
         return [str(u) for u in ids]
 
     async def _get(self, ctx: WorkspaceContext, deadline_id: uuid.UUID) -> Deadline:
-        row = await self._s.get(Deadline, deadline_id)
-        if row is None or row.workspace_id != ctx.workspace_id:
+        row = (
+            await self._s.execute(
+                select(Deadline).where(
+                    Deadline.id == deadline_id,
+                    Deadline.workspace_id == ctx.workspace_id,
+                    or_(
+                        Deadline.document_id.is_(None),
+                        document_visible(Deadline.document_id, viewer_of(ctx)),
+                    ),
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
             raise NotFoundError("Deadline not found.")
         return row
 
     async def deadlines(self, ctx: WorkspaceContext, *, status: str = "open") -> list[Deadline]:
         ctx.require(Permission.DOCUMENTS_READ)
-        stmt = select(Deadline).where(Deadline.workspace_id == ctx.workspace_id)
+        stmt = select(Deadline).where(
+            Deadline.workspace_id == ctx.workspace_id,
+            or_(
+                Deadline.document_id.is_(None),
+                document_visible(Deadline.document_id, viewer_of(ctx)),
+            ),
+        )
         if status in ("open", "done"):
             stmt = stmt.where(Deadline.status == status)
         stmt = stmt.order_by(Deadline.due_date, Deadline.created_at).limit(500)
@@ -358,8 +398,14 @@ class DeadlineService:
     ) -> Deadline:
         ctx.require(Permission.DOCUMENTS_WRITE)
         if document_id is not None:
-            doc = await self._s.get(Document, document_id)
-            if doc is None or doc.workspace_id != ctx.workspace_id:
+            found = await self._s.execute(
+                select(Document.id).where(
+                    Document.workspace_id == ctx.workspace_id,
+                    Document.id == document_id,
+                    document_visible(Document.id, viewer_of(ctx)),
+                )
+            )
+            if found.first() is None:
                 raise NotFoundError("Document not found.")
         row = Deadline(
             id=uuid.uuid4(),

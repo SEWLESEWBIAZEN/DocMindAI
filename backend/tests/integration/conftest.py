@@ -33,6 +33,8 @@ PASSWORD = "correct horse battery staple"
 # Every table holding per-test data (roles/permissions are seed data and stay).
 DATA_TABLES = [
     "connector_items",
+    "collection_members",
+    "sso_connections",
     "connector_connections",
     "deadlines",
     "extraction_results",

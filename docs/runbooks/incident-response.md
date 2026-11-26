@@ -180,6 +180,31 @@ from the sign-in screen. Requests are a favourite of attackers who know a passwo
 Several requests for one account, or many requests from one address, are signs of an attack. Deny
 them and follow [Security incident](#security-incident).
 
+## Verifying an SSO domain
+
+An organization that sets up single sign-on, or changes its issuer, client or domains, waits as
+`pending_verification`. Approving a domain lets that organization's identity provider sign in
+everyone with an address at that domain, so check ownership first.
+
+1. List connections with `dm sso list`. Note the organization, its domains and its issuer.
+2. **Confirm the customer owns each domain.** Acceptable checks:
+   - a DNS TXT record you ask them to publish, such as `documind-verify=<connection id>`
+     (`dig TXT example.com`);
+   - for an existing customer, confirmation from a known admin reached through contact details
+     you already had.
+
+   The issuer should belong to the same company or a known identity provider. A tenant URL on a
+   mismatched domain needs a second look.
+3. Approve or disable, recording who checked and how:
+
+   ```bash
+   dm sso approve <id> --operator <you> --note "TXT record checked 2026-11-26"
+   dm sso disable <id> --operator <you> --note "domain not owned"
+   ```
+
+If an identity provider is compromised, `dm sso disable <id>` stops SSO sign-in at once. Then
+revoke the affected sessions and follow [Security incident](#security-incident).
+
 ## Security incident
 
 1. **Contain.**

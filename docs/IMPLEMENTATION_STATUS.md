@@ -410,6 +410,9 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Side-by-side comparison of documents, with differing fields marked | [x] | Fields view in `features/extraction/pages.tsx`; `test_compare_contract_terms_and_limits` |
 | Tracked deadlines: email reminders (7/1/0 days by default), calendar file (.ics) | [x] | `test_deadlines_reminders_and_calendar` |
 | Google Drive connector: OAuth (PKCE, browser-bound callback, 2FA to connect or disconnect), folder picker, first sync and change feed, new versions, archive on removal, quotas, hourly/15-min sync | [x] | ADR 0035; `test_connectors_api.py` (3), `test_google_drive.py` (4), `e2e/connectors.spec.ts`. Not yet run against live Google from this sandbox. |
+| Single sign-on (OIDC) for Business and Enterprise organizations: PKCE, nonce, browser-bound callback, JWKS-verified ID tokens, operator-verified domains, just-in-time provisioning, optional enforcement | [x] | ADR 0036; `test_sso_api.py` (4), `e2e/access.spec.ts`. Tested with a fake provider, not a live IdP. |
+| SCIM 2.0 user provisioning and deprovisioning (token shown once, last owner protected) | [x] | ADR 0036; `test_scim_provisioning` |
+| Per-collection access: restricted collections hidden from non-members in lists, search, answers, summaries, extraction and deadlines | [x] | ADR 0036; `test_collection_access_api.py` (2), `e2e/access.spec.ts` |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 
