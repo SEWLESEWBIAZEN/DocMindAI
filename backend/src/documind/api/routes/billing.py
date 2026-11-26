@@ -160,6 +160,22 @@ async def start_checkout(
 
 
 @router.post(
+    "/sync",
+    response_model=BillingOverviewResponse,
+    summary="Refresh the subscription from Stripe (owners)",
+    description=(
+        "Reads the workspace's subscription from Stripe and applies it. The app calls "
+        "this on return from Checkout, so the plan changes even if a webhook is late."
+    ),
+)
+async def sync_billing(
+    ctx: WorkspaceCtx, billing: SubscriptionServiceDep, container: ContainerDep
+) -> BillingOverviewResponse:
+    await container.rate_limiter.hit("billing:sync", str(ctx.workspace_id), 10, 60)
+    return _overview(await billing.sync(ctx))
+
+
+@router.post(
     "/plan",
     response_model=BillingOverviewResponse,
     summary="Switch an existing subscription to another plan (prorated)",

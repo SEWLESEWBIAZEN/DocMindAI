@@ -16,6 +16,7 @@ import {
   openPortal,
   planKey,
   startCheckout,
+  syncBilling,
   type BillingOverview,
   type PaidPlan,
 } from './api'
@@ -116,6 +117,22 @@ export function BillingPage() {
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
+  // Coming back from Checkout: read the subscription from Stripe at once, so the
+  // plan changes even when the webhook is slow or doesn't arrive.
+  const sync = useMutation({
+    mutationFn: () => syncBilling(workspace.id),
+    onSuccess: async (o) => {
+      queryClient.setQueryData(billingKey(workspace.id), o)
+      await queryClient.invalidateQueries({ queryKey: planKey(workspace.id) })
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+  const synced = useRef(false)
+  useEffect(() => {
+    if (returned !== 'success' || synced.current || !can('billing.manage')) return
+    synced.current = true
+    sync.mutate()
+  }, [returned, can, sync])
   const portal = useMutation({
     mutationFn: () => openPortal(workspace.id),
     onSuccess: (url) => window.location.assign(url),
@@ -222,9 +239,21 @@ export function BillingPage() {
         description="Your plan, members and payment. Paid plans are priced per member."
         actions={
           o.can_manage_payment && (
-            <Button icon="external" loading={portal.isPending} onClick={() => portal.mutate()}>
-              Payment & invoices
-            </Button>
+            <span className="row">
+              <Button
+                icon="refresh"
+                variant="ghost"
+                loading={sync.isPending}
+                onClick={() =>
+                  sync.mutate(undefined, { onSuccess: (r) => toast.success(`Up to date: ${r.plan_name} plan.`) })
+                }
+              >
+                Refresh from Stripe
+              </Button>
+              <Button icon="external" loading={portal.isPending} onClick={() => portal.mutate()}>
+                Payment & invoices
+              </Button>
+            </span>
           )
         }
       />

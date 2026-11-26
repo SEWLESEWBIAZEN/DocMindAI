@@ -152,6 +152,15 @@ class StripeGateway:
             raise _error(exc) from exc
         return subscription_state(sub)
 
+    async def customer_subscriptions(self, customer_id: str) -> list[SubscriptionState]:
+        try:
+            page = await self._client.v1.subscriptions.list_async(
+                {"customer": customer_id, "status": "all", "limit": 10}
+            )
+        except stripe.StripeError as exc:
+            raise _error(exc) from exc
+        return [subscription_state(sub) for sub in _get(page, "data", []) or []]
+
     async def update_subscription(
         self, subscription_id: str, *, price_id: str | None = None, seats: int | None = None
     ) -> SubscriptionState:

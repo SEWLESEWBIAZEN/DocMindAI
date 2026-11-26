@@ -953,6 +953,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/billing/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh the subscription from Stripe (owners)
+         * @description Reads the workspace's subscription from Stripe and applies it. The app calls this on return from Checkout, so the plan changes even if a webhook is late.
+         */
+        post: operations["sync_billing_api_v1_workspaces__workspace_id__billing_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/collections": {
         parameters: {
             query?: never;
@@ -6654,6 +6674,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RedirectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_billing_api_v1_workspaces__workspace_id__billing_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingOverviewResponse"];
                 };
             };
             /** @description Validation Error */

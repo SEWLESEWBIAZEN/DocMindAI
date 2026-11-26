@@ -78,6 +78,12 @@ class FakeStripe:
     async def subscription(self, subscription_id: str) -> SubscriptionState:
         return self.subscriptions[subscription_id]
 
+    async def customer_subscriptions(self, customer_id: str) -> list[SubscriptionState]:
+        if self.fail:
+            raise BillingGatewayError("down")
+        found = [s for s in self.subscriptions.values() if s.customer_id == customer_id]
+        return list(reversed(found))  # newest first, like Stripe
+
     async def update_subscription(
         self, subscription_id: str, *, price_id: str | None = None, seats: int | None = None
     ) -> SubscriptionState:
@@ -268,6 +274,32 @@ def test_checkout_webhook_assigns_plan_and_is_idempotent(bapi: Api, fake: FakeSt
     assert again.json()["code"] == "subscription_exists"
     portal = bapi.client.post(billing(w, "/portal"), headers=h).json()["url"]
     assert portal.startswith("https://billing.stripe.test/p/cus_")
+
+
+def test_sync_applies_a_paid_subscription_without_any_webhook(bapi: Api, fake: FakeStripe) -> None:
+    h = bapi.signup("owner@example.com")
+    w = ws(bapi, h)
+    # Nothing to sync before a checkout: just the overview.
+    assert bapi.client.post(billing(w, "/sync"), headers=h).json()["plan_key"] == "free"
+    bapi.client.post(
+        billing(w, "/checkout"), json={"plan": "business", "interval": "month"}, headers=h
+    )
+    fake.complete(status="active")  # paid at Stripe; the webhook never arrives
+    assert plan_of(bapi, w) == ("free", None)
+
+    synced = bapi.client.post(billing(w, "/sync"), headers=h)
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["plan_key"] == "business"
+    assert synced.json()["status"] == "active"
+    assert plan_of(bapi, w) == ("business", "stripe")
+    actions = {r.action for r in sql(bapi, "SELECT action FROM audit_logs")}
+    assert "billing.synced" in actions
+
+    # Owners only; Stripe being down is a clear 503.
+    member = bapi.signup("member@example.com")
+    assert bapi.client.post(billing(w, "/sync"), headers=member).status_code == 404
+    fake.fail = True
+    assert bapi.client.post(billing(w, "/sync"), headers=h).status_code == 503
 
 
 def test_webhook_signature_is_required(bapi: Api) -> None:

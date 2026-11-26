@@ -89,6 +89,9 @@ docker run --rm -it --network documind_default stripe/stripe-cli listen \
 - **Events not arriving:** in Stripe, the webhook's event log shows the response. `422
   invalid_signature` means the secret is wrong; `503 billing_unavailable` means DocuMind couldn't
   reach Stripe to read the subscription, and Stripe retries automatically.
+- **Webhook missed or late:** coming back from Checkout, the Billing page reads the
+  subscription from Stripe (`POST /workspaces/{id}/billing/sync`), so the plan changes even
+  without the webhook. Owners can also click **Refresh from Stripe**.
 - **Replays are safe:** handled event ids are stored in `billing_events`, and each event re-reads
   the subscription's current state from Stripe, so order doesn't matter.
 - **Find a workspace's subscription:**

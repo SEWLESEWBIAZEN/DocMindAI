@@ -428,6 +428,34 @@ class SubscriptionService:
 
     # -------------------------------------------------------------- webhooks
 
+    async def sync(self, ctx: WorkspaceContext) -> BillingOverview:
+        """Read the workspace's subscription straight from Stripe and apply it.
+
+        Webhooks remain the main path. This covers the moment the customer comes back
+        from Checkout and any webhook that was delayed or never delivered.
+        """
+        ctx.require(Permission.BILLING_MANAGE)
+        row = await self._s.get(BillingSubscription, ctx.workspace_id)
+        if self._gateway is not None and row is not None and row.customer_id:
+            try:
+                found = await self._gateway.customer_subscriptions(row.customer_id)
+            except BillingGatewayError as exc:
+                raise _unavailable() from exc
+            # The live one wins; otherwise the newest (Stripe lists newest first).
+            state = next((x for x in found if x.status in LIVE), found[0] if found else None)
+            if state is not None and state.customer_id == row.customer_id:
+                await self._apply(row, state)
+                self._audit.record(
+                    "billing.synced",
+                    actor_user_id=ctx.user_id,
+                    workspace_id=ctx.workspace_id,
+                    target_type="subscription",
+                    target_id=state.id,
+                    details={"status": state.status},
+                )
+                await self._s.commit()
+        return await self.overview(ctx)
+
     async def handle_webhook(self, payload: bytes, signature: str | None) -> str:
         """Apply a Stripe event. Returns ``applied``, ``ignored`` or ``duplicate``."""
         gateway = self._require_gateway()

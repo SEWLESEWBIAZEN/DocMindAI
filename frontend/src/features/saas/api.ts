@@ -174,6 +174,11 @@ export async function changePlan(id: string, plan: PaidPlan, interval: 'month' |
   return (await apiClient.post<BillingOverview>(`${ws(id)}/billing/plan`, { plan, interval })).data
 }
 
+/** Ask the server to read the subscription from Stripe now (after Checkout, or if a webhook is late). */
+export async function syncBilling(id: string): Promise<BillingOverview> {
+  return (await apiClient.post<BillingOverview>(`${ws(id)}/billing/sync`)).data
+}
+
 export async function openPortal(id: string): Promise<string> {
   return (await apiClient.post<{ url: string }>(`${ws(id)}/billing/portal`)).data.url
 }

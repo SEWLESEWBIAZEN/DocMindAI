@@ -9893,6 +9893,55 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/billing/sync": {
+      "post": {
+        "description": "Reads the workspace's subscription from Stripe and applies it. The app calls this on return from Checkout, so the plan changes even if a webhook is late.",
+        "operationId": "sync_billing_api_v1_workspaces__workspace_id__billing_sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Refresh the subscription from Stripe (owners)",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/collections": {
       "get": {
         "operationId": "list_collections_api_v1_workspaces__workspace_id__collections_get",

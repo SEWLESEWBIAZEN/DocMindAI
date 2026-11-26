@@ -50,6 +50,10 @@ class BillingGateway(Protocol):
 
     async def subscription(self, subscription_id: str) -> SubscriptionState: ...
 
+    async def customer_subscriptions(self, customer_id: str) -> list[SubscriptionState]:
+        """The customer's subscriptions, newest first."""
+        ...
+
     async def update_subscription(
         self, subscription_id: str, *, price_id: str | None = None, seats: int | None = None
     ) -> SubscriptionState: ...
