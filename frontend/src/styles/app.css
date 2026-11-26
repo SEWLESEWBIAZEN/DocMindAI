@@ -705,6 +705,24 @@ kbd {
   color: var(--color-error);
 }
 
+.menu__item[aria-checked='true'] {
+  font-weight: 550;
+}
+
+.menu__check {
+  margin-left: auto;
+  color: var(--color-accent);
+}
+
+.menu__group {
+  padding: 6px 9px 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
 .menu__item:disabled {
   opacity: 0.5;
   cursor: not-allowed;

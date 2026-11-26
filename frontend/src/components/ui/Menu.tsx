@@ -8,13 +8,16 @@ export interface MenuItem {
   onSelect: () => void
   danger?: boolean
   disabled?: boolean
+  /** Set for one-of-several choices: the item becomes a menuitemradio. */
+  checked?: boolean
 }
 
 interface MenuProps {
   /** Accessible label for the trigger. */
   label: string
   trigger: ReactNode
-  items: (MenuItem | 'separator')[]
+  /** `{ group }` is a small visual heading; give the items themselves self-explanatory labels. */
+  items: (MenuItem | 'separator' | { group: string })[]
   align?: 'start' | 'end'
   header?: ReactNode
   className?: string
@@ -27,10 +30,10 @@ export function Menu({ label, trigger, items, align = 'end', header, className, 
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
-  const actionable = items.filter((item): item is MenuItem => item !== 'separator' && !item.disabled)
+  const actionable = items.filter((item): item is MenuItem => typeof item === 'object' && 'onSelect' in item && !item.disabled)
 
   const focusItem = (index: number) => {
-    const nodes = root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])')
+    const nodes = root.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]:not([disabled])')
     if (!nodes?.length) return
     nodes[(index + nodes.length) % nodes.length]?.focus()
   }
@@ -51,7 +54,7 @@ export function Menu({ label, trigger, items, align = 'end', header, className, 
   }
 
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const nodes = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [])
+    const nodes = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]:not([disabled])') ?? [])
     const current = nodes.indexOf(document.activeElement as HTMLButtonElement)
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -99,11 +102,16 @@ export function Menu({ label, trigger, items, align = 'end', header, className, 
           {items.map((item, index) =>
             item === 'separator' ? (
               <div key={`sep-${index}`} className="menu__separator" role="separator" />
+            ) : typeof item === 'object' && 'group' in item ? (
+              <div key={`group-${item.group}`} className="menu__group" aria-hidden="true">
+                {item.group}
+              </div>
             ) : (
               <button
                 key={item.label}
                 type="button"
-                role="menuitem"
+                role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+                aria-checked={item.checked}
                 className={`menu__item${item.danger ? ' menu__item--danger' : ''}`}
                 disabled={item.disabled}
                 tabIndex={-1}
@@ -114,6 +122,7 @@ export function Menu({ label, trigger, items, align = 'end', header, className, 
               >
                 {item.icon && <Icon name={item.icon} size={16} />}
                 {item.label}
+                {item.checked && <Icon name="check" size={16} className="menu__check" />}
               </button>
             ),
           )}

@@ -50,8 +50,9 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Dark: from the device setting unless the user picked a theme (account menu → Theme). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --color-bg: #0a0c0f;
     --color-surface: #121519;
     --color-sidebar: #0d0f13;
@@ -82,6 +83,43 @@
     --shadow-md: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.03);
     --shadow-lg: 0 24px 60px -18px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.04);
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #0a0c0f;
+  --color-surface: #121519;
+  --color-sidebar: #0d0f13;
+  --color-border: #22262d;
+  --color-border-strong: #343a44;
+  --color-text: #eceef2;
+  --color-text-soft: #c9ced6;
+  --color-text-muted: #969eab;
+  --color-accent: #22d3ee;
+  --color-ok: #4ade80;
+  --color-ok-bg: #14301f;
+  --color-error: #f87171;
+  --color-error-bg: #3a1616;
+  --color-surface-2: #181b21;
+  --color-accent-strong: #67e8f9;
+  --color-accent-soft: #0b2a33;
+  --color-on-accent: #06181d;
+  --color-highlight: rgb(245 158 11 / 0.3);
+  --color-highlight-text: #fde68a;
+  --color-warn: #fbbf24;
+  --color-ok-strong: #4ade80;
+  --color-warn-strong: #fbbf24;
+  --color-error-strong: #f87171;
+  --color-warn-bg: #3a2a0b;
+  --color-hover: rgb(255 255 255 / 0.05);
+  --color-selected: rgb(34 211 238 / 0.1);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 6px 20px -6px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.03);
+  --shadow-lg: 0 24px 60px -18px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 *,

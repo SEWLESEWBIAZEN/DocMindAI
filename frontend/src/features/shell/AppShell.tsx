@@ -8,6 +8,7 @@ import { NotFoundPage } from '../../app/NotFoundPage'
 import { Button, ErrorState, Icon, Menu, type IconName } from '../../components/ui'
 import { apiClient } from '../../lib/api/client'
 import { useWorkspace, useWorkspaces, WorkspaceProvider } from '../../lib/workspace/WorkspaceContext'
+import { setTheme, useTheme } from '../../lib/theme'
 import type { Permission } from '../../lib/workspace/permissions'
 import { ROLE_LABELS } from '../../lib/workspace/permissions'
 import { useAuth, useUser } from '../auth/AuthProvider'
@@ -382,6 +383,7 @@ function UserMenu() {
   const { signOut } = useAuth()
   const { base } = useWorkspace()
   const navigate = useNavigate()
+  const theme = useTheme()
   const initials = user.display_name
     .split(/\s+/)
     .map((part) => part[0])
@@ -403,6 +405,11 @@ function UserMenu() {
         { label: 'Profile', icon: 'user', onSelect: () => navigate(`${base}/profile`) },
         { label: 'Security & 2FA', icon: 'shield', onSelect: () => navigate(`${base}/profile#security`) },
         { label: 'Workspace settings', icon: 'settings', onSelect: () => navigate(`${base}/settings`) },
+        'separator',
+        { group: 'Theme' },
+        { label: 'Light theme', icon: 'sun', checked: theme === 'light', onSelect: () => setTheme('light') },
+        { label: 'Dark theme', icon: 'moon', checked: theme === 'dark', onSelect: () => setTheme('dark') },
+        { label: 'System theme', icon: 'monitor', checked: theme === 'system', onSelect: () => setTheme('system') },
         'separator',
         {
           label: 'Sign out',

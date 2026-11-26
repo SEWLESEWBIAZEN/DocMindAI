@@ -152,3 +152,34 @@ test('the core journey works with the keyboard alone', async ({ page, baseURL })
     expect(outline, `focus indicator on tab stop ${i + 1}`).not.toMatch(/^none\/0px\/none$/)
   }
 })
+
+test('the theme can be picked in the account menu and is remembered', async ({ page, baseURL }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await registerAndSignIn(page, baseURL ?? 'http://localhost:5173', 'Theo Theme', uniqueEmail('theme'))
+  const background = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
+  const lightBg = await background()
+
+  const account = page.getByRole('button', { name: /Account menu/ })
+  await account.click()
+  await expect(page.getByRole('menuitemradio', { name: 'System theme' })).toHaveAttribute('aria-checked', 'true')
+  await page.getByRole('menuitemradio', { name: 'Dark theme' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect.poll(background).not.toBe(lightBg)
+  await page.waitForTimeout(600)
+  expect(await violations(page)).toEqual([])
+
+  // Applied before the app loads (public/theme.js), so there's no light flash.
+  await page.reload({ waitUntil: 'commit' })
+  await page.waitForSelector('body')
+  expect(await page.locator('html').getAttribute('data-theme')).toBe('dark')
+
+  // Light wins over a dark device; "System" follows the device again.
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await account.click()
+  await page.getByRole('menuitemradio', { name: 'Light theme' }).click()
+  await expect.poll(background).toBe(lightBg)
+  await account.click()
+  await page.getByRole('menuitemradio', { name: 'System theme' }).click()
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme')
+  await expect.poll(background).not.toBe(lightBg)
+})
