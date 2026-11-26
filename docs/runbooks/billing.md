@@ -44,8 +44,22 @@ STRIPE_PRICE_BUSINESS_ANNUAL=price_...
 SALES_EMAIL=sales@example.com
 ```
 
-Restart `api`, `worker` and `beat`. For local testing, forward events with the Stripe CLI:
-`stripe listen --forward-to localhost:8000/api/v1/billing/webhook` (it prints a `whsec_…` to use).
+Restart `api`, `worker` and `beat`. For local testing, forward events with the Stripe CLI.
+Newer versions require the events to be listed. It prints a `whsec_…` to use as
+`STRIPE_WEBHOOK_SECRET`:
+
+```bash
+EVENTS=checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.subscription.trial_will_end
+stripe listen --events "$EVENTS" -f http://localhost:8000/api/v1/billing/webhook
+```
+
+Without installing the CLI, run it in Docker on the Compose network (Windows `cmd`: one line, with
+the events written out):
+
+```bash
+docker run --rm -it --network documind_default stripe/stripe-cli listen \
+  --api-key sk_test_... --events "$EVENTS" -f http://backend:8000/api/v1/billing/webhook
+```
 
 ## 3. How it behaves
 
