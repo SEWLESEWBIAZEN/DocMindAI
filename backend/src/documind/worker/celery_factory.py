@@ -17,6 +17,7 @@ EXTRACTION_SWEEP_TASK = "documind.sweep_extractions"
 REMINDER_TASK = "documind.send_deadline_reminders"
 CONNECTOR_SYNC_TASK = "documind.sync_connector"
 CONNECTOR_SCHEDULE_TASK = "documind.schedule_connector_syncs"
+SLACK_ANSWER_TASK = "documind.slack_answer"
 
 
 def create_celery(settings: Settings) -> Celery:

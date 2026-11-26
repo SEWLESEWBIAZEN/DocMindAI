@@ -813,6 +813,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** API keys (admins) */
+        get: operations["list_keys_api_v1_workspaces__workspace_id__api_keys_get"];
+        put?: never;
+        /** Create an API key (admins; needs a recent 2FA check) */
+        post: operations["create_key_api_v1_workspaces__workspace_id__api_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/api-keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an API key */
+        delete: operations["revoke_key_api_v1_workspaces__workspace_id__api_keys__key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/ask": {
         parameters: {
             query?: never;
@@ -1696,6 +1731,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integrations */
+        get: operations["overview_api_v1_workspaces__workspace_id__integrations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/integrations/slack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove the Slack app (admins; needs a recent 2FA check) */
+        delete: operations["slack_disconnect_api_v1_workspaces__workspace_id__integrations_slack_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/integrations/slack/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start adding the Slack app (admins; needs a recent 2FA check) */
+        post: operations["slack_authorize_api_v1_workspaces__workspace_id__integrations_slack_authorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/integrations/slack/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink your Slack account */
+        delete: operations["slack_unlink_api_v1_workspaces__workspace_id__integrations_slack_link_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/integrations/slack/link-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A code to link your Slack account */
+        post: operations["slack_link_code_api_v1_workspaces__workspace_id__integrations_slack_link_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/invitations": {
         parameters: {
             query?: never;
@@ -2072,6 +2192,46 @@ export interface components {
             usage: components["schemas"]["UsageResponse"];
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
+        };
+        /** ApiKeyRequest */
+        ApiKeyRequest: {
+            /**
+             * Expires In Days
+             * @default 90
+             */
+            expires_in_days: number | null;
+            /** Name */
+            name: string;
+            /** Scopes */
+            scopes: components["schemas"]["Scope"][];
+        };
+        /** ApiKeyResponse */
+        ApiKeyResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By User Id
+             * Format: uuid
+             */
+            created_by_user_id: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Prefix */
+            prefix: string;
+            /** Scopes */
+            scopes: string[];
         };
         /** AppInfo */
         AppInfo: {
@@ -2959,6 +3119,23 @@ export interface components {
             /** Workspace Kind */
             workspace_kind: string;
         };
+        /** IntegrationsResponse */
+        IntegrationsResponse: {
+            /** Api Base Url */
+            api_base_url: string;
+            /** Can Manage */
+            can_manage: boolean;
+            /**
+             * Included
+             * @description Whether the workspace's plan includes integrations
+             */
+            included: boolean;
+            /** Mcp Url */
+            mcp_url: string;
+            /** Scopes */
+            scopes: components["schemas"]["ScopeInfo"][];
+            slack: components["schemas"]["SlackStatus"];
+        };
         /** InvitationResponse */
         InvitationResponse: {
             /**
@@ -3008,6 +3185,15 @@ export interface components {
         KeyOnlyResponse: {
             /** Key Only */
             key_only: boolean;
+        };
+        /** LinkCodeResponse */
+        LinkCodeResponse: {
+            /** Code */
+            code: string;
+            /** Command */
+            command: string;
+            /** Expires In Seconds */
+            expires_in_seconds: number;
         };
         /** LivenessResponse */
         LivenessResponse: {
@@ -3349,6 +3535,39 @@ export interface components {
              * @description approved: queued to run; the workspace locks while it runs
              */
             status: string;
+        };
+        /** NewApiKeyResponse */
+        NewApiKeyResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By User Id
+             * Format: uuid
+             */
+            created_by_user_id: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Prefix */
+            prefix: string;
+            /** Scopes */
+            scopes: string[];
+            /**
+             * Token
+             * @description Shown once. Send it as `Authorization: Bearer <token>`.
+             */
+            token: string;
         };
         /**
          * OverallStatus
@@ -3959,6 +4178,17 @@ export interface components {
              */
             token: string;
         };
+        /**
+         * Scope
+         * @enum {string}
+         */
+        Scope: "documents:read" | "documents:write" | "ask";
+        /** ScopeInfo */
+        ScopeInfo: {
+            /** Description */
+            description: string;
+            key: components["schemas"]["Scope"];
+        };
         /** SearchHitResponse */
         SearchHitResponse: {
             /**
@@ -4054,6 +4284,25 @@ export interface components {
         SendMessageRequest: {
             /** Content */
             content: string;
+        };
+        /** SlackStatus */
+        SlackStatus: {
+            /**
+             * Available
+             * @description Whether this server has a Slack app configured
+             */
+            available: boolean;
+            /** Connected */
+            connected: boolean;
+            /** Connected At */
+            connected_at: string | null;
+            /**
+             * Linked
+             * @description Whether you have linked your Slack account
+             */
+            linked: boolean;
+            /** Team Name */
+            team_name: string | null;
         };
         /** SourcesRequest */
         SourcesRequest: {
@@ -6108,6 +6357,102 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["KeyOnlyResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_keys_api_v1_workspaces__workspace_id__api_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_key_api_v1_workspaces__workspace_id__api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_key_api_v1_workspaces__workspace_id__api_keys__key_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -8373,6 +8718,157 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_api_v1_workspaces__workspace_id__integrations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_disconnect_api_v1_workspaces__workspace_id__integrations_slack_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_authorize_api_v1_workspaces__workspace_id__integrations_slack_authorize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_unlink_api_v1_workspaces__workspace_id__integrations_slack_link_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    slack_link_code_api_v1_workspaces__workspace_id__integrations_slack_link_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkCodeResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

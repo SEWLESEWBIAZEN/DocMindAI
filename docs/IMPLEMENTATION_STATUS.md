@@ -413,6 +413,9 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Single sign-on (OIDC) for Business and Enterprise organizations: PKCE, nonce, browser-bound callback, JWKS-verified ID tokens, operator-verified domains, just-in-time provisioning, optional enforcement | [x] | ADR 0036; `test_sso_api.py` (4), `e2e/access.spec.ts`. Tested with a fake provider, not a live IdP. |
 | SCIM 2.0 user provisioning and deprovisioning (token shown once, last owner protected) | [x] | ADR 0036; `test_scim_provisioning` |
 | Per-collection access: restricted collections hidden from non-members in lists, search, answers, summaries, extraction and deadlines | [x] | ADR 0036; `test_collection_access_api.py` (2), `e2e/access.spec.ts` |
+| Workspace API keys (Pro and up): scopes, expiry, shown once and stored hashed, 2FA to create, limited to document/search/answer routes, never admin permissions | [x] | ADR 0037; `test_keys_are_scoped_to_their_workspace_routes_and_scopes`, `test_integrations.py`, `e2e/integrations.spec.ts` |
+| MCP server (Streamable HTTP): search, ask, list and read documents, list collections, with the same permissions and quotas | [x] | ADR 0037; `test_mcp_server_tools`; checked with the official MCP Python SDK |
+| Slack app: signed requests, install (2FA), account linking by code, private slash-command answers, in-thread answers from unrestricted documents only | [x] | ADR 0037; `test_slack_api.py` (2). Fake Slack API; not yet run against a live Slack workspace. |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 

@@ -88,6 +88,15 @@ describe('pricing helpers', () => {
     expect(enterprise[0]).toBe('Unlimited members')
   })
 
+  it('lists integrations from Pro and single sign-on from Business', () => {
+    const [free, pro, business, enterprise] = CATALOG.plans.map(highlights)
+    expect(free.join()).not.toContain('API keys')
+    expect(pro).toContain('API keys, MCP server and Slack app')
+    expect(pro.join()).not.toContain('Single sign-on')
+    expect(business).toContain('Single sign-on (SSO) and SCIM provisioning')
+    expect(enterprise).toContain('Single sign-on (SSO) and SCIM provisioning')
+  })
+
   it('sends paid plans to billing and Enterprise to sales', () => {
     const [free, pro, business, enterprise] = CATALOG.plans
     expect(planAction(free, CATALOG, 'year').href).toBe('/register')

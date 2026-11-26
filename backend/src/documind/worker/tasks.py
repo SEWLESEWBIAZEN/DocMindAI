@@ -17,6 +17,7 @@ from documind.worker.celery_app import (
     REMINDER_TASK,
     REPLY_SWEEP_TASK,
     SEAT_SYNC_TASK,
+    SLACK_ANSWER_TASK,
     SWEEP_TASK,
     app,
 )
@@ -95,3 +96,8 @@ def sync_connector(connection_id: str, workspace_id: str | None = None) -> str:
 @app.task(name=CONNECTOR_SCHEDULE_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
 def schedule_connector_syncs() -> int:
     return runtime.run(runtime.schedule_connector_syncs())
+
+
+@app.task(name=SLACK_ANSWER_TASK, ignore_result=True)  # type: ignore[untyped-decorator]
+def slack_answer(job: dict[str, object]) -> str:
+    return runtime.run(runtime.slack_answer(dict(job)))

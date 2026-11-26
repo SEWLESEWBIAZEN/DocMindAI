@@ -39,6 +39,9 @@ class WorkspaceContext:
     # when their grace period ends.
     mfa_required: bool = False
     mfa_enrollment_deadline: datetime | None = None
+    # ADR 0037: answers posted where others can read them (a Slack channel) use only
+    # documents everyone in the workspace may see.
+    public_only: bool = False
 
     def can(self, permission: Permission) -> bool:
         return permission in self.permissions

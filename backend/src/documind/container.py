@@ -6,6 +6,7 @@ Everything else depends on abstractions or receives collaborators explicitly.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -80,6 +81,7 @@ from documind.worker.celery_factory import (
     MIGRATION_TASK,
     PROCESS_TASK,
     QUEUE,
+    SLACK_ANSWER_TASK,
     create_celery,
 )
 
@@ -123,6 +125,10 @@ class Container:
     drive_client: Any = None
     #: Starts a connector sync in the background: ``(connection_id, workspace_id)``.
     connector_dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]] | None = None
+    #: Slack Web API (ADR 0037); None when no Slack app is configured.
+    slack_client: Any = None
+    #: Queues a Slack question for the worker to answer.
+    slack_dispatch: Callable[[dict[str, Any]], Awaitable[bool]] | None = None
     #: Stripe (ADR 0032); None when self-serve billing isn't configured.
     billing_gateway: BillingGateway | None = None
     #: Starts an approved infrastructure migration in the background (MI-8).
@@ -278,6 +284,18 @@ def build_container(settings: Settings) -> Container:
         return await connectors.dispatch(connection_id, workspace_id=workspace_id)
 
     container.connector_dispatch = dispatch_sync
+
+    async def dispatch_slack(job: dict[str, Any]) -> bool:
+        try:
+            await asyncio.to_thread(
+                celery.send_task, SLACK_ANSWER_TASK, kwargs={"job": job}, queue=QUEUE
+            )
+        except Exception:
+            logger.exception("Failed to queue a Slack answer")
+            return False
+        return True
+
+    container.slack_dispatch = dispatch_slack
     from documind.infrastructure.sso.oidc import OidcClient
 
     container.oidc = OidcClient(
@@ -290,6 +308,14 @@ def build_container(settings: Settings) -> Container:
             client_id=settings.google_oauth_client_id,
             client_secret=settings.google_oauth_client_secret.get_secret_value(),
             timeout_seconds=settings.connector_timeout_seconds,
+        )
+    if settings.slack_enabled and settings.slack_client_secret is not None:
+        from documind.infrastructure.integrations.slack import SlackClient
+
+        container.slack_client = SlackClient(
+            client_id=str(settings.slack_client_id),
+            client_secret=settings.slack_client_secret.get_secret_value(),
+            timeout_seconds=settings.slack_timeout_seconds,
         )
     return container
 

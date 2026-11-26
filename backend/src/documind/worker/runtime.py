@@ -197,3 +197,56 @@ async def run_migration(migration_id: uuid.UUID) -> dict[str, object]:
     c = container()
     executor = MigrationExecutor(c.session_factory, c.infrastructure())
     return (await executor.run(migration_id)).as_dict()
+
+
+async def slack_answer(job: dict[str, Any], c: Container | None = None) -> str:
+    """Answer one Slack question and post the reply (ADR 0037)."""
+    from documind.application.billing.service import BillingService
+    from documind.application.identity.common import RequestMeta
+    from documind.application.identity.workspace_service import WorkspaceService
+    from documind.application.integrations.slack import AnswerDeps, answer_job
+    from documind.application.rag import factory as rag_factory
+    from documind.domain.billing.plans import Capability
+    from documind.domain.errors import NotFoundError
+    from documind.domain.identity.policies import WorkspaceContext
+    from documind.infrastructure.database.models import User
+
+    c = c or container()
+    if c.slack_client is None:
+        return "not_configured"
+    async with c.session_factory() as session:
+
+        async def context_for(user_id: uuid.UUID, workspace_id: uuid.UUID) -> WorkspaceContext:
+            user = await session.get(User, user_id)
+            if user is None or not user.is_active:
+                raise NotFoundError("Your linked DocuMind account is no longer active.")
+            return await WorkspaceService(
+                session,
+                RequestMeta(),
+                mfa_grace_days=c.settings.mfa_enforcement_grace_days,
+                mfa_step_up_seconds=c.settings.mfa_step_up_ttl_seconds,
+            ).resolve_context(user, workspace_id)
+
+        async def answer(ctx: WorkspaceContext, question: str) -> Any:
+            ai = await c.ai_resolver().resolve(ctx.workspace_id, user_id=ctx.user_id)
+            infra = await c.infrastructure().resolve(ctx.workspace_id)
+            async with infra.data_plane.sessions() as data:
+                if ai.uses_platform(Capability.CHAT):
+                    await BillingService(session, RequestMeta(), data_session=data).check_ai(
+                        ctx.workspace_id, "chat_tokens", ai.entitlements
+                    )
+                retrieval = rag_factory.retrieval_service(data, c.settings, ai)
+                orchestrator = rag_factory.rag_orchestrator(retrieval, c.settings, ai)
+                return await orchestrator.answer(ctx, question)
+
+        return await answer_job(
+            job,
+            AnswerDeps(
+                session=session,
+                settings=c.settings,
+                client=c.slack_client,
+                cipher=c.cipher,
+                context_for=context_for,
+                answer=answer,
+            ),
+        )

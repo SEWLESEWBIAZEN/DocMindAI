@@ -136,6 +136,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
     { to: `${base}/billing`, label: 'Billing', icon: 'scale', permission: 'billing.manage' },
     { to: `${base}/ai-providers`, label: 'AI providers', icon: 'key', permission: 'ai_providers.manage' },
     { to: `${base}/connectors`, label: 'Connectors', icon: 'refresh', permission: 'workspace.update' },
+    { to: `${base}/integrations`, label: 'Integrations', icon: 'sparkles', permission: 'conversations.use' },
     ...(workspace.kind === 'organization'
       ? [{ to: `${base}/infrastructure`, label: 'Infrastructure', icon: 'cpu' as const, permission: 'infrastructure.manage' as const }]
       : []),

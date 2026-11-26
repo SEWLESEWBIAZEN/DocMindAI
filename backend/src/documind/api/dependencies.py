@@ -1,5 +1,6 @@
 """FastAPI dependency providers. Routes depend on these, never on globals."""
 
+import dataclasses
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -30,19 +31,22 @@ from documind.application.infrastructure.resolver import ResolvedInfrastructure
 from documind.application.ports import EmailMessage, EmailSender, JobDispatcher
 from documind.application.processing.queries import ProcessingQueries
 from documind.application.processing.reindex import IndexFreshness
-from documind.application.rag.condense import QueryCondenser
-from documind.application.rag.orchestrator import GenerationOptions, RAGOrchestrator
-from documind.application.rag.retrieval import RetrievalOptions, RetrievalService
+from documind.application.rag import factory as rag_factory
+from documind.application.rag.orchestrator import RAGOrchestrator
+from documind.application.rag.retrieval import RetrievalService
 from documind.container import Container, plan_changed
 from documind.core.config import Settings
 from documind.core.logging import get_request_id
 from documind.domain.billing.plans import Capability
 from documind.domain.errors import (
     AuthenticationError,
+    NotFoundError,
     PermissionDeniedError,
     ServiceUnavailableError,
 )
 from documind.domain.identity.policies import WorkspaceContext
+from documind.domain.integrations.api_keys import TOKEN_PREFIX as API_KEY_PREFIX
+from documind.domain.integrations.api_keys import permissions_for, route_allowed
 from documind.infrastructure.database.dataplane_runtime import relay_outbox
 from documind.infrastructure.database.models import User
 
@@ -200,12 +204,48 @@ async def get_principal(
     auth: AuthServiceDep,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> Principal:
+    """A signed-in person. API keys are refused here: they reach workspace routes only."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise AuthenticationError("Sign in to continue.", code="not_authenticated")
+    if credentials.credentials.startswith(API_KEY_PREFIX):
+        raise PermissionDeniedError(
+            "API keys can't be used here, only with a workspace's documents, search and answers.",
+            code="api_key_not_allowed",
+        )
     return await auth.authenticate(credentials.credentials)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
+
+
+async def get_caller(
+    auth: AuthServiceDep,
+    session: SessionDep,
+    container: ContainerDep,
+    meta: MetaDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Principal:
+    """A signed-in person or a workspace API key (ADR 0037)."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise AuthenticationError("Sign in to continue.", code="not_authenticated")
+    token = credentials.credentials
+    if not token.startswith(API_KEY_PREFIX):
+        return await auth.authenticate(token)
+    from documind.application.integrations.api_keys import ApiKeyService
+
+    principal = await ApiKeyService(session, container.settings, meta).authenticate(token)
+    key_id = principal.api_key.key_id if principal.api_key else None
+    s = container.settings
+    await container.rate_limiter.hit(
+        "api:key",
+        str(key_id),
+        s.rate_limit_api_key_per_minute,
+        60,
+    )
+    return principal
+
+
+CallerDep = Annotated[Principal, Depends(get_caller)]
 
 
 def get_current_user(principal: CurrentPrincipal) -> User:
@@ -216,16 +256,36 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 async def get_workspace_context(
-    workspace_id: uuid.UUID, principal: CurrentPrincipal, workspaces: WorkspaceServiceDep
+    workspace_id: uuid.UUID,
+    request: Request,
+    principal: CallerDep,
+    workspaces: WorkspaceServiceDep,
 ) -> WorkspaceContext:
-    """Authorize the caller for the workspace in the path (404 for non-members)."""
-    return await workspaces.resolve_context(
+    """Authorize the caller for the workspace in the path (404 for non-members).
+
+    An API key reaches only its own workspace, only the routes keys may call,
+    and never more than both its scopes and its creator's role allow.
+    """
+    key = principal.api_key
+    if key is not None:
+        if key.workspace_id != workspace_id:
+            raise NotFoundError("Workspace not found.")
+        route = request.scope.get("route")
+        if not route_allowed(getattr(route, "path", "")):
+            raise PermissionDeniedError(
+                "API keys can't be used for this. Sign in to the app instead.",
+                code="api_key_not_allowed",
+            )
+    ctx = await workspaces.resolve_context(
         principal.user,
         workspace_id,
         mfa_verified_at=principal.mfa_verified_at,
         mfa_method=principal.mfa_method,
         sso_workspace_id=principal.sso_workspace_id,
     )
+    if key is not None:
+        ctx = dataclasses.replace(ctx, permissions=ctx.permissions & permissions_for(key.scopes))
+    return ctx
 
 
 WorkspaceCtx = Annotated[WorkspaceContext, Depends(get_workspace_context)]
@@ -500,18 +560,7 @@ DeadlineServiceDep = Annotated[DeadlineService, Depends(get_deadline_service)]
 def get_retrieval_service(
     session: DataSessionDep, container: ContainerDep, ai: WorkspaceAIDep
 ) -> RetrievalService:
-    s = container.settings
-    return RetrievalService(
-        session,
-        ai.embeddings,
-        RetrievalOptions(
-            top_k=s.retrieval_top_k,
-            candidates=s.retrieval_candidates,
-            min_similarity=s.retrieval_min_score,
-            hybrid=s.retrieval_hybrid,
-            ef_search=s.retrieval_ef_search,
-        ),
-    )
+    return rag_factory.retrieval_service(session, container.settings, ai)
 
 
 RetrievalServiceDep = Annotated[RetrievalService, Depends(get_retrieval_service)]
@@ -520,23 +569,7 @@ RetrievalServiceDep = Annotated[RetrievalService, Depends(get_retrieval_service)
 def get_rag_orchestrator(
     retrieval: RetrievalServiceDep, container: ContainerDep, ai: WorkspaceAIDep
 ) -> RAGOrchestrator:
-    s = container.settings
-    return RAGOrchestrator(
-        retrieval,
-        ai.llm,
-        GenerationOptions(
-            max_output_tokens=s.llm_max_output_tokens,
-            temperature=s.llm_temperature,
-            context_max_tokens=s.rag_context_max_tokens,
-            history_max_turns=s.conversation_history_turns,
-            history_max_tokens=s.conversation_history_max_tokens,
-        ),
-        condenser=QueryCondenser(
-            ai.llm,
-            enabled=s.conversation_condense_followups,
-            temperature=s.llm_temperature,
-        ),
-    )
+    return rag_factory.rag_orchestrator(retrieval, container.settings, ai)
 
 
 RAGOrchestratorDep = Annotated[RAGOrchestrator, Depends(get_rag_orchestrator)]

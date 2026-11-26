@@ -23,6 +23,7 @@ from documind.worker.celery_factory import (
     REMINDER_TASK,
     REPLY_SWEEP_TASK,
     SEAT_SYNC_TASK,
+    SLACK_ANSWER_TASK,
     SWEEP_TASK,
     create_celery,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "REMINDER_TASK",
     "REPLY_SWEEP_TASK",
     "SEAT_SYNC_TASK",
+    "SLACK_ANSWER_TASK",
     "SWEEP_TASK",
     "app",
 ]

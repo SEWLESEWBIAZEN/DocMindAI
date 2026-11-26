@@ -24,6 +24,7 @@ KINDS = frozenset(
         "worker_token",
         "connector_token",
         "sso_client_secret",
+        "slack_bot_token",
     }
 )
 _TOUCH_EVERY = timedelta(hours=1)

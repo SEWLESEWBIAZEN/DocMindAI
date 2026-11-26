@@ -12,6 +12,7 @@ from documind.api.routes import (
     extraction,
     health,
     infrastructure,
+    integrations,
     me,
     metrics,
     onboarding,
@@ -39,6 +40,8 @@ api_router.include_router(sso.auth_router)
 api_router.include_router(sso.router)
 api_router.include_router(sso.scim_router)
 api_router.include_router(rag.router)
+api_router.include_router(integrations.router)
+api_router.include_router(integrations.slack_router)
 api_router.include_router(conversations.router)
 api_router.include_router(usage.router)
 api_router.include_router(billing.public_router)

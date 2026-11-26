@@ -34,6 +34,9 @@ PASSWORD = "correct horse battery staple"
 DATA_TABLES = [
     "connector_items",
     "collection_members",
+    "slack_user_links",
+    "slack_installations",
+    "api_keys",
     "sso_connections",
     "connector_connections",
     "deadlines",

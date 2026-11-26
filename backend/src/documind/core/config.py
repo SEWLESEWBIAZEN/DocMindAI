@@ -153,6 +153,8 @@ class Settings(BaseSettings):
     retrieval_ef_search: int = Field(default=100, ge=10, le=1000)
     rag_context_max_tokens: int = Field(default=6000, ge=500, le=100_000)
     rate_limit_ai_per_user: int = Field(default=30, ge=1)
+    # ADR 0037: requests per minute for each workspace API key.
+    rate_limit_api_key_per_minute: int = Field(default=120, ge=1)
     rate_limit_ai_window_seconds: int = Field(default=60, ge=1)
 
     # --- Voice (ADR 0011) ----------------------------------------------------
@@ -211,6 +213,14 @@ class Settings(BaseSettings):
     connector_sync_interval_seconds: int = Field(default=900, ge=60, le=86_400)
     connector_max_files_per_sync: int = Field(default=500, ge=1, le=10_000)
     connector_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+
+    # --- Slack app (ADR 0037) ----------------------------------------------
+    # Unset: Slack isn't offered. Request URLs to register in the Slack app:
+    # {PUBLIC_APP_URL}/api/v1/integrations/slack/{commands,events,callback}
+    slack_client_id: str | None = None
+    slack_client_secret: SecretStr | None = None
+    slack_signing_secret: SecretStr | None = None
+    slack_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
 
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
@@ -391,6 +401,9 @@ class Settings(BaseSettings):
         "sales_email",
         "google_oauth_client_id",
         "google_oauth_client_secret",
+        "slack_client_id",
+        "slack_client_secret",
+        "slack_signing_secret",
         mode="before",
     )
     @classmethod
@@ -521,6 +534,10 @@ class Settings(BaseSettings):
     @property
     def google_drive_enabled(self) -> bool:
         return bool(self.google_oauth_client_id and self.google_oauth_client_secret)
+
+    @property
+    def slack_enabled(self) -> bool:
+        return bool(self.slack_client_id and self.slack_client_secret and self.slack_signing_secret)
 
     @property
     def billing_enabled(self) -> bool:

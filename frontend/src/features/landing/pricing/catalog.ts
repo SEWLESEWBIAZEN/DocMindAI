@@ -85,6 +85,8 @@ function tokens(n: number | null): string {
   return `${n >= 1_000_000 ? `${n / 1_000_000}M` : n.toLocaleString('en-US')} AI answer tokens a month`
 }
 
+const SSO_PLANS = new Set(['business', 'enterprise'])
+
 /** Short, plain-language feature list for a plan card. */
 export function highlights(plan: CatalogPlan): string[] {
   const e = ents(plan)
@@ -99,6 +101,8 @@ export function highlights(plan: CatalogPlan): string[] {
   if (e.dedicated_database) items.push('Dedicated database, hosted by us')
   if (e.external_database) items.push('Connect your own PostgreSQL database')
   if (e.customer_workers) items.push('Processing on your own servers')
+  if (plan.key !== 'free') items.push('API keys, MCP server and Slack app')
+  if (SSO_PLANS.has(plan.key)) items.push('Single sign-on (SSO) and SCIM provisioning')
   if (plan.key !== 'free') items.push('Two-factor sign-in for every member')
   return items
 }
@@ -149,9 +153,19 @@ export const COMPARISON: { group: string; rows: ComparisonRow[] }[] = [
     ],
   },
   {
+    group: 'Integrations',
+    rows: [
+      { label: 'Google Drive sync', value: () => true },
+      { label: 'API keys and MCP server for AI assistants', value: (p) => p.key !== 'free' },
+      { label: 'Slack app', value: (p) => p.key !== 'free' },
+    ],
+  },
+  {
     group: 'Security',
     rows: [
       { label: 'Tenant isolation, audit log, encrypted secrets', value: () => true },
+      { label: 'Restricted collections for sensitive documents', value: () => true },
+      { label: 'Single sign-on (OIDC) and SCIM provisioning', value: (p) => SSO_PLANS.has(p.key) },
       { label: 'Two-factor sign-in required for members', value: (p) => p.key !== 'free' },
       { label: 'Passkeys and one-time email codes', value: () => true },
     ],

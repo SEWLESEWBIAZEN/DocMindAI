@@ -25,9 +25,14 @@ from documind.infrastructure.database.models import (
     DocumentCollectionItem,
 )
 
+# Belongs to no collection: sees only documents that aren't restricted.
+NOBODY = uuid.UUID(int=0)
+
 
 def viewer_of(ctx: WorkspaceContext) -> uuid.UUID | None:
     """Admins and owners see every document; everyone else is filtered."""
+    if ctx.public_only:
+        return NOBODY
     return None if ctx.can(Permission.WORKSPACE_UPDATE) else ctx.user_id
 
 

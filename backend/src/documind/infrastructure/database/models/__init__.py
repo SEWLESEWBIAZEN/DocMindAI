@@ -59,6 +59,11 @@ from documind.infrastructure.database.models.infrastructure import (
     WorkerRegistration,
     WorkspaceInfrastructure,
 )
+from documind.infrastructure.database.models.integrations import (
+    ApiKey,
+    SlackInstallation,
+    SlackUserLink,
+)
 from documind.infrastructure.database.models.processing import (
     DocumentChunk,
     DocumentPage,
@@ -68,6 +73,7 @@ from documind.infrastructure.database.models.sso import SsoConnection
 
 __all__ = [
     "AccountToken",
+    "ApiKey",
     "AuditLog",
     "BillingEvent",
     "BillingSubscription",
@@ -102,6 +108,8 @@ __all__ = [
     "ProcessingJob",
     "RefreshToken",
     "Role",
+    "SlackInstallation",
+    "SlackUserLink",
     "SsoConnection",
     "UsageRecord",
     "User",

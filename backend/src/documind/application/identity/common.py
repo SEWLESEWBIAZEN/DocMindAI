@@ -23,6 +23,15 @@ class Principal:
     mfa_verified_at: datetime | None = None
     mfa_method: str | None = None
     sso_workspace_id: uuid.UUID | None = None
+    #: Set when the caller used a workspace API key instead of a session (ADR 0037).
+    api_key: ApiKeyGrant | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ApiKeyGrant:
+    key_id: uuid.UUID
+    workspace_id: uuid.UUID
+    scopes: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)

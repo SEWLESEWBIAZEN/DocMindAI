@@ -280,6 +280,33 @@ A new or changed connection waits for an operator to verify domain ownership. Se
 `runbooks/incident-response.md`, "Verifying an SSO domain". Issuers on private networks are
 refused unless they are listed in `INFRASTRUCTURE_ALLOWED_PRIVATE_HOSTS`.
 
+## API keys, MCP server and Slack (ADR 0037)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `RATE_LIMIT_API_KEY_PER_MINUTE` | `120` | Requests per minute per API key (AI calls also count against the creator's AI budget). |
+| `SLACK_CLIENT_ID` | *(unset)* | Slack app client ID. If any of the three Slack values is unset, Slack isn't offered. |
+| `SLACK_CLIENT_SECRET` | *(unset)* | Slack app client secret. |
+| `SLACK_SIGNING_SECRET` | *(unset)* | Verifies every request from Slack. |
+| `SLACK_TIMEOUT_SECONDS` | `15` | Per request to Slack. |
+
+API keys and the MCP server need no configuration. Workspaces on Pro and above find them under
+**Integrations**. MCP clients use `{PUBLIC_APP_URL}/api/v1/workspaces/{id}/mcp` with the header
+`Authorization: Bearer dmk_…`.
+
+Create the Slack app at api.slack.com:
+1. **OAuth & Permissions:**
+   - Add the redirect URL `{PUBLIC_APP_URL}/api/v1/integrations/slack/callback`.
+   - Add the bot scopes `commands`, `app_mentions:read` and `chat:write`.
+2. **Slash Commands:** create `/documind` with the request URL
+   `{PUBLIC_APP_URL}/api/v1/integrations/slack/commands`.
+3. **Event Subscriptions:** set the request URL to
+   `{PUBLIC_APP_URL}/api/v1/integrations/slack/events` and subscribe to the bot event
+   `app_mention`. Slack verifies the URL when you save it, so the server must already have
+   the signing secret.
+4. **Distribution:** to let other Slack workspaces install the app, enable public
+   distribution.
+
 ## Credential vault and your own AI keys (ADR 0019, ADR 0022)
 
 | Variable                     | Default | Description                                                      |
