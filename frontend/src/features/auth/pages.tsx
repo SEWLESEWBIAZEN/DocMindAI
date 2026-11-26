@@ -10,6 +10,8 @@ import { getPasskey, passkeyErrorMessage, type Json } from '../../lib/webauthn'
 import { workspacesKey } from '../../lib/workspace/WorkspaceContext'
 import { Logo } from '../landing/components/Logo'
 import { useAuth } from './AuthProvider'
+import { GoogleButton } from './GoogleButton'
+import { useGoogleSignIn } from './googleSignIn'
 import { PASSWORD_MAX, PASSWORD_MIN, passwordScore, validatePassword } from './password'
 import { safeNext } from './routeGuards'
 
@@ -76,11 +78,37 @@ const SSO_ERRORS: Record<string, string> = {
   inactive: 'This account is deactivated.',
 }
 
-/** After the identity provider: the refresh cookie is set; continue into the organization. */
+const GOOGLE_ERRORS: Record<string, string> = {
+  expired: 'Signing in with Google took too long. Try again.',
+  browser: 'Finish signing in with Google in the same browser you started in.',
+  denied: 'Signing in with Google was cancelled.',
+  failed: "Google couldn't confirm who you are. Try again, or use your password.",
+  inactive: 'This account is deactivated.',
+  unavailable: "Signing in with Google isn't available right now.",
+  rate_limited: 'Too many attempts. Wait a few minutes and try again.',
+}
+
+/** After the identity provider: the refresh cookie is set; continue into the app. */
 export function SsoCompletePage() {
   const [params] = useSearchParams()
   const workspace = params.get('workspace')
+  const next = params.get('next')
+  if (next) return <Navigate to={safeNext(next)} replace />
   return <Navigate to={workspace && /^[0-9a-f-]{36}$/.test(workspace) ? `/w/${workspace}/dashboard` : '/app'} replace />
+}
+
+/** What the Google callback put after "#": a 2FA challenge, or "use your organization's SSO". */
+function readHandoff(): { mfa?: string; methods: string[]; next?: string; sso?: string } {
+  const hash = new URLSearchParams(window.location.hash.slice(1))
+  const out = {
+    mfa: hash.get('mfa') ?? undefined,
+    methods: (hash.get('methods') ?? '').split(',').filter(Boolean),
+    next: hash.get('next') ?? undefined,
+    sso: hash.get('sso') ?? undefined,
+  }
+  // Tokens don't stay in the address bar or the history.
+  if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  return out
 }
 
 export function LoginPage() {
@@ -101,8 +129,31 @@ export function LoginPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [methods, setMethods] = useState<string[]>([])
 
-  const finish = () => navigate(safeNext(params.get('next')), { replace: true })
+  const google = useGoogleSignIn()
+  const [handoffNext, setHandoffNext] = useState<string | null>(null)
+  const finish = () => navigate(safeNext(handoffNext ?? params.get('next')), { replace: true })
   const [sso, setSso] = useState(false)
+  const [ssoNotice, setSsoNotice] = useState(false)
+
+  // Back from Google (ADR 0040): continue with the 2FA step, or go to the organization's SSO.
+  const handoff = useRef(false)
+  useEffect(() => {
+    if (handoff.current) return
+    handoff.current = true
+    const h = readHandoff()
+    if (h.next) setHandoffNext(h.next)
+    if (h.mfa) {
+      setChallenge(h.mfa)
+      setMethods(h.methods)
+      if (h.methods.includes('passkey')) setMethod('passkey')
+      else if (!h.methods.includes('authenticator')) void emailCode(h.mfa)
+    } else if (h.sso) {
+      setEmail(h.sso)
+      setSso(true)
+      setSsoNotice(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Organization single sign-on (ADR 0036): the identity provider signs you in.
   const startSso = async () => {
@@ -350,6 +401,11 @@ export function LoginPage() {
         </Alert>
       )}
       {params.get('sso_error') && !error && <Alert>{SSO_ERRORS[params.get('sso_error') ?? ''] ?? 'Single sign-on failed.'}</Alert>}
+      {params.get('google_error') && !error && (
+        <Alert>{GOOGLE_ERRORS[params.get('google_error') ?? ''] ?? 'Signing in with Google failed.'}</Alert>
+      )}
+      {ssoNotice && !error && <Alert tone="info">Your organization signs you in with single sign-on. Continue below.</Alert>}
+      {!sso && google && <GoogleButton next={params.get('next')} onError={setError} />}
       {sso ? (
         <form
           className="form"
@@ -430,6 +486,7 @@ function ResendVerification({ email }: { email: string }) {
 
 export function RegisterPage() {
   const [params] = useSearchParams()
+  const google = useGoogleSignIn()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -489,6 +546,7 @@ export function RegisterPage() {
       }
     >
       {error && <Alert>{error}</Alert>}
+      {google && <GoogleButton next={params.get('next')} onError={setError} />}
       <form className="form" onSubmit={submit} noValidate>
         <Field label="Name" error={errors.display_name}>
           <TextInput autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} autoFocus />

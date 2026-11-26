@@ -268,6 +268,43 @@ class AuthService:
             )
         )
 
+    async def register_verified(self, email: str, display_name: str, *, via: str) -> User:
+        """An account whose email an identity provider already verified (ADR 0040).
+
+        No usable password: the person signs in with that provider, or sets one with
+        "Forgot password". The caller commits.
+        """
+        user = User(
+            id=uuid.uuid4(),
+            email=normalize_email(email),
+            password_hash=await self._hasher.hash(generate_token()),
+            display_name=clean_display_name(display_name or email.split("@")[0])[:100],
+            email_verified_at=utcnow(),
+        )
+        workspace = Workspace(
+            id=uuid.uuid4(),
+            kind=WorkspaceKind.PERSONAL.value,
+            name="Personal",
+            personal_owner_id=user.id,
+        )
+        owner = await self._roles.get_by_key(RoleKey.OWNER)
+        self._users.add(user)
+        await self._session.flush()
+        self._workspaces.add(workspace)
+        await self._session.flush()
+        self._workspaces.add(
+            WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role_id=owner.id)
+        )
+        user.default_workspace_id = workspace.id
+        self._audit.record(
+            "user.registered",
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            details={"via": via},
+        )
+        return user
+
     async def _notify_existing_account(self, user: User) -> None:
         if user.email_verified_at is None:
             await self._issue_verification(user)
@@ -357,6 +394,11 @@ class AuthService:
 
         if self._hasher.needs_rehash(user.password_hash):
             user.password_hash = await self._hasher.hash(password)
+        return await self.continue_sign_in(user, via="password")
+
+    async def continue_sign_in(self, user: User, *, via: str) -> AuthResult | MfaChallenge:
+        """The first factor is done (password, or Google): 2FA if it's on, else a session."""
+        s = self._settings
         if user.mfa_enabled and await MfaResetService(
             self._session, self._email, self._meta, delay_hours=s.mfa_reset_delay_hours
         ).apply_if_due(user):
@@ -372,6 +414,7 @@ class AuthService:
                 actor_user_id=user.id,
                 target_type="user",
                 target_id=user.id,
+                details={} if via == "password" else {"via": via},
             )
             await self._session.commit()
             return MfaChallenge(
@@ -380,7 +423,11 @@ class AuthService:
         user.last_login_at = utcnow()
         refresh, raw = self._start_session(user)
         self._audit.record(
-            "auth.login_succeeded", actor_user_id=user.id, target_type="user", target_id=user.id
+            "auth.login_succeeded",
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            details={} if via == "password" else {"via": via},
         )
         await self._session.commit()
         return self._result(user, refresh, raw)

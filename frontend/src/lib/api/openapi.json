@@ -2980,6 +2980,52 @@
         "title": "FolderResponse",
         "type": "object"
       },
+      "GoogleStartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where to go afterwards.",
+            "title": "Next"
+          }
+        },
+        "title": "GoogleStartRequest",
+        "type": "object"
+      },
+      "GoogleStartResponse": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "GoogleStartResponse",
+        "type": "object"
+      },
+      "GoogleStatusResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "GoogleStatusResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -7759,6 +7805,69 @@
           }
         },
         "summary": "Confirm a new email address (from the link sent to it)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/google": {
+      "get": {
+        "operationId": "google_status_api_v1_auth_google_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Is \u201cContinue with Google\u201d on?",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/google/start": {
+      "post": {
+        "description": "Returns Google's sign-in page. Afterwards Google sends the browser to the callback, which starts a session (or the 2FA step) and continues in the app.",
+        "operationId": "google_start_api_v1_auth_google_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start signing in (or up) with Google",
         "tags": [
           "auth"
         ]

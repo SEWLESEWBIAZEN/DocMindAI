@@ -3119,3 +3119,29 @@ mark.reading-highlight {
   border: 1px solid var(--color-border);
   border-radius: 12px;
 }
+
+/* ---------------------------------------------------------------- Continue with Google (ADR 0040) */
+
+.btn--google {
+  width: 100%;
+  gap: 10px;
+  height: 40px;
+  font-weight: 550;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}

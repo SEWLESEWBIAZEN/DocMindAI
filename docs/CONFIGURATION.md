@@ -251,12 +251,25 @@ Extraction uses the workspace's chat model (its own key or the platform's) and c
 | `EXTRACTION_STALE_SECONDS` | `900` | A run without progress for this long is marked failed (`interrupted`). |
 | `DEADLINE_REMINDER_INTERVAL_SECONDS` | `3600` | How often the worker sends due reminder emails. |
 
-## Connectors: Google Drive (ADR 0035)
+## Connectors: Google Drive (ADR 0035), and "Continue with Google" (ADR 0040)
+
+One Google OAuth client (type "Web application") serves both. In Google Cloud Console:
+
+1. **APIs & Services → OAuth consent screen:** app name, support email, and your domain. The
+   sign-in scopes (`openid`, `email`, `profile`) need no Google review. The Drive scope does
+   (see below).
+2. **Credentials → Create credentials → OAuth client ID → Web application.** Add both
+   redirect URIs:
+   - `{PUBLIC_APP_URL}/api/v1/auth/google/callback` (sign-in);
+   - `{PUBLIC_APP_URL}/api/v1/connectors/google-drive/callback` (Drive).
+3. Put the client ID and secret in `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`,
+   set `GOOGLE_SIGNIN_ENABLED=true`, and restart.
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GOOGLE_OAUTH_CLIENT_ID` | *(unset)* | OAuth client of type "Web application". Unset: the connector isn't offered. |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | *(unset)* | Its secret. |
+| `GOOGLE_SIGNIN_ENABLED` | `false` | "Continue with Google" on the sign-in and sign-up pages for everyone (ADR 0040), using the same client. Needs the client above. |
 | `CONNECTOR_SYNC_INTERVAL_SECONDS` | `900` | How often each connection syncs. |
 | `CONNECTOR_MAX_FILES_PER_SYNC` | `500` | Downloads per sync; the next sync continues. |
 | `CONNECTOR_TIMEOUT_SECONDS` | `60` | Per request to Google. |

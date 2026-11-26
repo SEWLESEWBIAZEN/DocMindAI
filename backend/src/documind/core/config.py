@@ -210,6 +210,9 @@ class Settings(BaseSettings):
     # Redirect URI to register: {PUBLIC_APP_URL}/api/v1/connectors/google-drive/callback
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: SecretStr | None = None
+    # "Continue with Google" on the sign-in and sign-up pages (ADR 0040). Uses the same
+    # OAuth client; also register {PUBLIC_APP_URL}/api/v1/auth/google/callback with it.
+    google_signin_enabled: bool = False
     connector_sync_interval_seconds: int = Field(default=900, ge=60, le=86_400)
     connector_max_files_per_sync: int = Field(default=500, ge=1, le=10_000)
     connector_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
@@ -541,6 +544,10 @@ class Settings(BaseSettings):
     @property
     def google_drive_enabled(self) -> bool:
         return bool(self.google_oauth_client_id and self.google_oauth_client_secret)
+
+    @property
+    def google_signin_available(self) -> bool:
+        return self.google_signin_enabled and self.google_drive_enabled
 
     @property
     def slack_enabled(self) -> bool:

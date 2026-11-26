@@ -10,6 +10,7 @@ from documind.api.routes import (
     conversations,
     documents,
     extraction,
+    google,
     health,
     infrastructure,
     integrations,
@@ -37,6 +38,7 @@ api_router.include_router(extraction.router)
 api_router.include_router(connectors.router)
 api_router.include_router(connectors.public_router)
 api_router.include_router(sso.auth_router)
+api_router.include_router(google.router)
 api_router.include_router(sso.router)
 api_router.include_router(sso.scim_router)
 api_router.include_router(rag.router)

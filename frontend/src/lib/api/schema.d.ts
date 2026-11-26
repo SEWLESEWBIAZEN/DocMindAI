@@ -21,6 +21,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Is “Continue with Google” on? */
+        get: operations["google_status_api_v1_auth_google_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start signing in (or up) with Google
+         * @description Returns Google's sign-in page. Afterwards Google sends the browser to the callback, which starts a session (or the 2FA step) and continues in the app.
+         */
+        post: operations["google_start_api_v1_auth_google_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -3300,6 +3337,24 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** GoogleStartRequest */
+        GoogleStartRequest: {
+            /**
+             * Next
+             * @description Where to go afterwards.
+             */
+            next?: string | null;
+        };
+        /** GoogleStartResponse */
+        GoogleStartResponse: {
+            /** Url */
+            url: string;
+        };
+        /** GoogleStatusResponse */
+        GoogleStatusResponse: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5193,6 +5248,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["documind__api__schemas__identity__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    google_status_api_v1_auth_google_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleStatusResponse"];
+                };
+            };
+        };
+    };
+    google_start_api_v1_auth_google_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleStartResponse"];
                 };
             };
             /** @description Validation Error */

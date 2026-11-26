@@ -56,6 +56,8 @@ x-backend-environment: &backend-environment
   # Google Drive connector (ADR 0035); empty: not offered.
   GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
   GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+  # "Continue with Google" (ADR 0040), with the same client.
+  GOOGLE_SIGNIN_ENABLED: ${GOOGLE_SIGNIN_ENABLED:-false}
   SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
   SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
   SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
