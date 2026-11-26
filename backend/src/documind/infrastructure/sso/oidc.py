@@ -13,6 +13,11 @@ import jwt
 from documind.infrastructure.network.ssrf import BlockedHostError, check_host
 
 ALGORITHMS = ["RS256", "RS384", "RS512", "PS256", "ES256", "ES384"]
+GOOGLE_ISSUER = "https://accounts.google.com"
+
+
+def is_google(issuer: str) -> bool:
+    return issuer.rstrip("/") == GOOGLE_ISSUER
 
 
 class OidcError(Exception):
@@ -32,6 +37,9 @@ class Identity:
     subject: str
     email: str
     name: str | None
+    #: Google Workspace domain of the account (Google's ``hd`` claim); None elsewhere
+    #: and for personal Google accounts.
+    hosted_domain: str | None = None
 
 
 async def _safe(url: str, allowed: frozenset[str]) -> None:
@@ -99,6 +107,7 @@ class OidcClient:
         nonce: str,
         code_challenge: str,
         login_hint: str | None = None,
+        hosted_domain: str | None = None,
     ) -> str:
         params = {
             "response_type": "code",
@@ -112,6 +121,8 @@ class OidcClient:
         }
         if login_hint:
             params["login_hint"] = login_hint
+        if hosted_domain:
+            params["hd"] = hosted_domain  # Google: offer only accounts of this domain
         sep = "&" if "?" in config.authorization_endpoint else "?"
         return f"{config.authorization_endpoint}{sep}{urlencode(params)}"
 
@@ -152,7 +163,12 @@ class OidcClient:
                 key=key.key,
                 algorithms=ALGORITHMS,
                 audience=client_id,
-                issuer=config.issuer,
+                # Google's ID tokens may name the issuer with or without the scheme.
+                issuer=(
+                    [config.issuer, "accounts.google.com"]
+                    if is_google(config.issuer)
+                    else config.issuer
+                ),
                 options={"require": ["exp", "iat", "iss", "aud", "sub"]},
                 leeway=60,
             )
@@ -166,6 +182,10 @@ class OidcClient:
         if claims.get("email_verified") is False:
             raise OidcError("The identity provider says the email isn't verified.")
         name = claims.get("name")
+        hd = claims.get("hd")
         return Identity(
-            str(claims["sub"]), email.strip().lower(), name if isinstance(name, str) else None
+            str(claims["sub"]),
+            email.strip().lower(),
+            name if isinstance(name, str) else None,
+            hosted_domain=hd.strip().lower() if isinstance(hd, str) and hd.strip() else None,
         )

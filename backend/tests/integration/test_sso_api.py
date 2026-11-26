@@ -37,7 +37,10 @@ CLIENT_ID = "documind-test"
 
 
 class FakeIdp:
-    def __init__(self) -> None:
+    def __init__(self, issuer: str = ISSUER) -> None:
+        self.issuer = issuer
+        self.token_issuer = issuer
+        self.hd: str | None = None
         self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         self.other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         self.email = ALICE
@@ -53,7 +56,7 @@ class FakeIdp:
     def id_token(self) -> str:
         now = int(time.time())
         claims = {
-            "iss": ISSUER,
+            "iss": self.token_issuer,
             "aud": self.audience,
             "sub": "idp-" + self.email,
             "email": self.email,
@@ -63,6 +66,8 @@ class FakeIdp:
             "exp": now + 300,
             "nonce": self.nonce,
         }
+        if self.hd:
+            claims["hd"] = self.hd
         key = self.other_key if self.sign_with_other else self.key
         return jwt.encode(claims, key, algorithm="RS256", headers={"kid": "k1"})
 
@@ -72,10 +77,10 @@ class FakeIdp:
             return httpx.Response(
                 200,
                 json={
-                    "issuer": ISSUER,
-                    "authorization_endpoint": f"{ISSUER}/auth",
-                    "token_endpoint": f"{ISSUER}/token",
-                    "jwks_uri": f"{ISSUER}/certs",
+                    "issuer": self.issuer,
+                    "authorization_endpoint": f"{self.issuer}/auth",
+                    "token_endpoint": f"{self.issuer}/token",
+                    "jwks_uri": f"{self.issuer}/certs",
                 },
             )
         if path.endswith("/certs"):
@@ -107,13 +112,14 @@ def sapi(make_api: Any, idp: FakeIdp) -> Api:
 def org_with_sso(
     api: Api, idp: FakeIdp, *, enforced: bool = False
 ) -> tuple[str, dict[str, str], dict[str, str], str]:
+    issuer = idp.issuer
     owner = api.signup("owner@acme.example.com")
     org = str(api.create_org(owner, "Acme")["id"])
     assign(api, org, "business")
     secret, _ = api.enable_mfa(owner)
     elevated = api.step_up(owner, secret)
     body = {
-        "issuer": ISSUER,
+        "issuer": issuer,
         "client_id": CLIENT_ID,
         "client_secret": "s3cret",
         "domains": ["acme.example.com"],
@@ -351,3 +357,59 @@ def test_scim_provisioning(sapi: Api, idp: FakeIdp) -> None:
     # The last owner can't be removed through SCIM.
     owner_id = sapi.client.get("/api/v1/me", headers=owner).json()["id"]
     assert sapi.client.delete(f"/api/v1/scim/v2/Users/{owner_id}", headers=scim).status_code == 409
+
+
+GOOGLE = "https://accounts.google.com"
+
+
+@pytest.fixture
+def google(make_api: Any, monkeypatch: pytest.MonkeyPatch) -> tuple[Api, FakeIdp]:
+    """Google's real issuer, served by the fake: no network, no DNS."""
+
+    async def public(host: str, port: int, *, allowed: frozenset[str]) -> list[str]:
+        del host, port, allowed
+        return ["203.0.113.10"]
+
+    monkeypatch.setattr("documind.infrastructure.sso.oidc.check_host", public)
+    idp = FakeIdp(GOOGLE)
+    idp.token_issuer = "accounts.google.com"  # Google sometimes omits the scheme
+    oidc = OidcClient(http=httpx.AsyncClient(transport=httpx.MockTransport(idp.handler)))
+    api: Api = make_api({"oidc": oidc})
+    return api, idp
+
+
+def test_google_workspace_accounts_only_and_sessions_dont_slide(
+    google: tuple[Api, FakeIdp],
+) -> None:
+    api, idp = google
+    org, _, _, _ = org_with_sso(api, idp)
+    approve(api, org)
+    start = api.client.post("/api/v1/auth/sso/start", json={"email": ALICE})
+    assert parse_qs(urlparse(start.json()["url"]).query)["hd"] == [DOMAIN]
+
+    # A personal Google account registered with a work address: no hd claim.
+    assert sign_in(api, idp, ALICE).headers["location"].endswith("sso_error=domain")
+    idp.hd = "other.example.com"
+    assert sign_in(api, idp, ALICE).headers["location"].endswith("sso_error=domain")
+
+    idp.hd = DOMAIN
+    back = sign_in(api, idp, ALICE)
+    assert back.headers["location"].endswith(f"/sso/complete?workspace={org}")
+    first = sql(
+        api,
+        "SELECT expires_at, created_at FROM refresh_tokens WHERE sso_workspace_id = :w",
+        w=uuid.UUID(org),
+    )[0]
+    lifetime = (first.expires_at - first.created_at).total_seconds()
+    assert abs(lifetime - api.settings.sso_session_hours * 3600) < 120
+    r = api.client.post("/api/v1/auth/refresh", headers={"X-CSRF-Protection": "1"})
+    assert r.status_code == 200, r.text
+    ends = {
+        row.expires_at
+        for row in sql(
+            api,
+            "SELECT expires_at FROM refresh_tokens WHERE sso_workspace_id = :w",
+            w=uuid.UUID(org),
+        )
+    }
+    assert ends == {first.expires_at}  # rotated, but the end doesn't move

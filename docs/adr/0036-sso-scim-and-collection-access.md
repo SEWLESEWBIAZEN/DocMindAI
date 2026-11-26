@@ -51,6 +51,28 @@ Larger customers buy only if:
     workspaces still apply their own 2FA rules.
   - Step-up checks for sensitive actions still apply.
 
+### Google Workspace
+
+Google is the first provider offered by name. Its issuer `https://accounts.google.com` is filled
+in, and the settings show the Google Cloud steps.
+- **Workspace accounts only:** Google's `hd` (hosted domain) claim must be one of the
+  organization's domains. A personal Google account registered with a work address is
+  refused: it keeps that address after the person leaves the company. The authorization
+  request also sends `hd` so Google offers only matching accounts.
+- **Issuer check:** Google's ID tokens may give the issuer as `accounts.google.com` without
+  the scheme. Both forms are accepted for Google only.
+- **No provisioning:** Google doesn't send SCIM to custom apps, so nobody tells DocuMind when
+  someone leaves. This is why SSO sessions don't slide (next section). Admins remove leavers
+  under Members.
+
+### Session length
+
+- Sessions started with SSO end after `SSO_SESSION_HOURS` (12 by default), however active the
+  person is. Refreshing the session doesn't extend that end, so people sign in through
+  their provider again.
+- A person suspended at their provider is out within that time, even where there is no SCIM
+  to tell DocuMind. Password sessions keep their sliding 14 days.
+
 ### SCIM 2.0 provisioning
 
 - **Endpoint:** `/api/v1/scim/v2/Users`, authenticated by a bearer token. The token is created
@@ -84,8 +106,9 @@ Larger customers buy only if:
 
 - **Removing a member** from a restricted collection takes effect on their next request; nothing
   is cached per user.
-- **Tests:** SSO was tested with a fake OIDC provider that signs real RS256 tokens. It hasn't been
-  run against a live provider from this sandbox.
+- **Tests:** SSO was tested with a fake OIDC provider that signs real RS256 tokens, including
+  Google-style tokens. Google's real discovery document and signing keys load through the
+  client. A full sign-in with a real Google account still needs a Google OAuth client.
 - **SAML** isn't supported. Most providers offer OIDC; SAML can be added behind the same
   connection model.
 - **SCIM groups** aren't mapped to collections yet. People are added to collections in the app.

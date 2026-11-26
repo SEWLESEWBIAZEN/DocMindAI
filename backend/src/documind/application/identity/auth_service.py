@@ -170,6 +170,7 @@ class AuthService:
         user: User,
         family_id: uuid.UUID | None = None,
         sso_workspace_id: uuid.UUID | None = None,
+        expires_at: datetime | None = None,
     ) -> tuple[RefreshToken, str]:
         raw = generate_token()
         token = RefreshToken(
@@ -177,7 +178,8 @@ class AuthService:
             user_id=user.id,
             family_id=family_id or uuid.uuid4(),
             token_hash=hash_token(raw),
-            expires_at=utcnow() + timedelta(days=self._settings.refresh_token_ttl_days),
+            expires_at=expires_at
+            or utcnow() + timedelta(days=self._settings.refresh_token_ttl_days),
             user_agent=(self._meta.user_agent or "")[:255] or None,
             ip_address=self._meta.ip_address,
             sso_workspace_id=sso_workspace_id,
@@ -518,8 +520,13 @@ class AuthService:
             await self._session.commit()
             raise invalid
 
+        # SSO sessions don't slide: they end when the first one does, so people sign
+        # in with their identity provider again and leavers are caught (ADR 0036).
         replacement, raw = self._start_session(
-            user, family_id=current.family_id, sso_workspace_id=current.sso_workspace_id
+            user,
+            family_id=current.family_id,
+            sso_workspace_id=current.sso_workspace_id,
+            expires_at=current.expires_at if current.sso_workspace_id else None,
         )
         await self._session.flush()
         current.revoked_at = now
@@ -568,7 +575,11 @@ class AuthService:
 
     async def sso_session(self, user: User, workspace_id: uuid.UUID) -> AuthResult:
         """A session after signing in with an organization's SSO (ADR 0036)."""
-        refresh, raw = self._start_session(user, sso_workspace_id=workspace_id)
+        refresh, raw = self._start_session(
+            user,
+            sso_workspace_id=workspace_id,
+            expires_at=utcnow() + timedelta(hours=self._settings.sso_session_hours),
+        )
         self._audit.record(
             "auth.login_sso",
             actor_user_id=user.id,

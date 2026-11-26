@@ -55,7 +55,7 @@ from documind.infrastructure.database.models import (
 )
 from documind.infrastructure.database.repositories.identity import AuditLogRepository
 from documind.infrastructure.security.vault import EnvelopeCipher
-from documind.infrastructure.sso.oidc import OidcClient, OidcError
+from documind.infrastructure.sso.oidc import OidcClient, OidcError, is_google
 
 STATE_TTL_SECONDS = 600
 NONCE_COOKIE = "documind_sso_nonce"
@@ -348,6 +348,7 @@ class SsoService:
             nonce=nonce,
             code_challenge=challenge,
             login_hint=email,
+            hosted_domain=domain_of(email) if is_google(row.issuer) else None,
         )
         return SsoStart(url, browser)
 
@@ -390,6 +391,11 @@ class SsoService:
             await self._s.commit()
             return SsoFinish("/login?sso_error=failed")
         if domain_of(identity.email) not in row.domains:
+            return SsoFinish("/login?sso_error=domain")
+        # Google: only accounts managed by the organization's Google Workspace. A
+        # personal Google account can be registered with a work address, and it
+        # keeps that address after the person leaves the company.
+        if is_google(row.issuer) and identity.hosted_domain not in row.domains:
             return SsoFinish("/login?sso_error=domain")
         user = await self.provision(row, identity.email, identity.name)
         if not user.is_active:

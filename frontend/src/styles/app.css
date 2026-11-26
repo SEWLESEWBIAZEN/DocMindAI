@@ -2771,3 +2771,16 @@ mark.reading-highlight {
     align-items: stretch;
   }
 }
+
+/* Numbered setup instructions (e.g. single sign-on with Google). */
+.steps {
+  margin: 0;
+  padding-left: 1.4em;
+  list-style: decimal;
+  display: grid;
+  gap: 6px;
+}
+
+.steps code {
+  overflow-wrap: anywhere;
+}

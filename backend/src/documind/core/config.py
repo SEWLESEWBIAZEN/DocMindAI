@@ -252,6 +252,8 @@ class Settings(BaseSettings):
     jwt_audience: str = "documind-api"
     access_token_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     refresh_token_ttl_days: int = Field(default=14, ge=1, le=90)
+    # ADR 0036: sessions started with SSO end after this, however active (no sliding).
+    sso_session_hours: int = Field(default=12, ge=1, le=720)
     refresh_cookie_name: str = "documind_refresh"
     # Secure cookies are required in production; browsers also accept them on
     # http://localhost, so this stays on in development too.

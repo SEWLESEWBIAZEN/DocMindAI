@@ -276,6 +276,19 @@ No environment variables are needed. Organizations on Business or Enterprise set
 - **SCIM base URL:** `{PUBLIC_APP_URL}/api/v1/scim/v2`, with the token from "New SCIM token" as
   the bearer token.
 
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SSO_SESSION_HOURS` | `12` | Sessions started with SSO end after this, however active the person is. |
+
+**Google Workspace** (the default choice in the settings):
+1. In the Google Cloud console, set the OAuth consent screen to **Internal**.
+2. Create an **OAuth client ID** of type **Web application** with the redirect URI above.
+3. Enter its client ID and secret with the Workspace domains.
+
+Only accounts managed by that Google Workspace can sign in: Google's `hd` claim must match a
+domain. Google doesn't support SCIM for custom apps, so admins remove leavers under Members.
+Leavers' sessions end within `SSO_SESSION_HOURS` either way.
+
 A new or changed connection waits for an operator to verify domain ownership. See
 `runbooks/incident-response.md`, "Verifying an SSO domain". Issuers on private networks are
 refused unless they are listed in `INFRASTRUCTURE_ALLOWED_PRIVATE_HOSTS`.
