@@ -57,6 +57,7 @@ class FakeStripe:
         self.subscriptions: dict[str, SubscriptionState] = {}
         self.checkouts: list[dict[str, Any]] = []
         self.updates: list[dict[str, Any]] = []
+        self.cancelled: list[str] = []
         self.fail = False
 
     async def create_customer(self, *, email: str, name: str, workspace_id: uuid.UUID) -> str:
@@ -69,7 +70,7 @@ class FakeStripe:
     async def checkout_url(self, **kwargs: Any) -> str:
         if self.fail:
             raise BillingGatewayError("down")
-        self.checkouts.append(kwargs)
+        self.checkouts.append({**kwargs, "status": "open"})
         return f"https://checkout.stripe.test/c/{len(self.checkouts)}"
 
     async def portal_url(self, *, customer_id: str, return_url: str) -> str:
@@ -77,6 +78,18 @@ class FakeStripe:
 
     async def subscription(self, subscription_id: str) -> SubscriptionState:
         return self.subscriptions[subscription_id]
+
+    async def expire_open_checkouts(self, customer_id: str) -> int:
+        open_ = [
+            c for c in self.checkouts if c["customer_id"] == customer_id and c["status"] == "open"
+        ]
+        for c in open_:
+            c["status"] = "expired"
+        return len(open_)
+
+    async def cancel_subscription(self, subscription_id: str) -> None:
+        self.cancelled.append(subscription_id)
+        self.set(subscription_id, status="canceled")
 
     async def customer_subscriptions(self, customer_id: str) -> list[SubscriptionState]:
         if self.fail:
@@ -109,6 +122,9 @@ class FakeStripe:
 
     def complete(self, n: int = -1, status: str | None = None) -> SubscriptionState:
         checkout = self.checkouts[n]
+        # Like Stripe: an expired Checkout page can't be paid.
+        assert checkout["status"] == "open", "this checkout page has expired"
+        checkout["status"] = "complete"
         trial = checkout.get("trial_days")
         status = status or ("trialing" if trial else "active")
         sid = f"sub_{uuid.uuid4().hex[:10]}"
@@ -300,6 +316,43 @@ def test_sync_applies_a_paid_subscription_without_any_webhook(bapi: Api, fake: F
     assert bapi.client.post(billing(w, "/sync"), headers=member).status_code == 404
     fake.fail = True
     assert bapi.client.post(billing(w, "/sync"), headers=h).status_code == 503
+
+
+def test_no_double_subscriptions(bapi: Api, fake: FakeStripe) -> None:
+    h = bapi.signup("owner@example.com")
+    w = ws(bapi, h)
+    body = {"plan": "business", "interval": "month"}
+
+    # Two checkout pages (double click, two tabs): only the newest can be paid.
+    assert bapi.client.post(billing(w, "/checkout"), json=body, headers=h).status_code == 201
+    assert bapi.client.post(billing(w, "/checkout"), json=body, headers=h).status_code == 201
+    assert [c["status"] for c in fake.checkouts] == ["expired", "open"]
+    with pytest.raises(AssertionError, match="expired"):
+        fake.complete(0)
+
+    # Paid, but the webhook hasn't arrived: a new checkout is refused, and the
+    # subscription Stripe already has is applied instead.
+    first = fake.complete(1, status="active")
+    again = bapi.client.post(billing(w, "/checkout"), json=body, headers=h)
+    assert again.status_code == 409
+    assert again.json()["code"] == "subscription_exists"
+    assert len(fake.checkouts) == 2
+    assert plan_of(bapi, w) == ("business", "stripe")
+
+    # If a second live subscription appears anyway, it's cancelled and owners are told.
+    fake.checkouts.append({**fake.checkouts[1], "status": "open"})
+    second = fake.complete(status="active")
+    r = webhook(bapi, "customer.subscription.created", {"id": second.id})
+    assert r.json() == {"result": "duplicate_cancelled"}
+    assert fake.cancelled == [second.id]
+    assert fake.subscriptions[first.id].status == "active"
+    assert plan_of(bapi, w) == ("business", "stripe")
+    assert "a second subscription was cancelled" in bapi.mail.to("owner@example.com")[-1].subject
+    actions = {r.action for r in sql(bapi, "SELECT action FROM audit_logs")}
+    assert "billing.duplicate_cancelled" in actions
+    # Its own cancellation event later changes nothing.
+    r = webhook(bapi, "customer.subscription.deleted", {"id": second.id})
+    assert plan_of(bapi, w) == ("business", "stripe")
 
 
 def test_webhook_signature_is_required(bapi: Api) -> None:

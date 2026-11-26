@@ -316,12 +316,17 @@ class SubscriptionService:
         plan = self._self_serve(plan_key)
         period = BillingInterval(interval)
         ws = ctx.workspace_id
-        row = await self._s.get(BillingSubscription, ws)
-        if row is not None and row.status in LIVE:
-            raise ConflictError(
-                "This workspace already has a subscription. Change the plan instead.",
-                code="subscription_exists",
+        # Locked until this request commits: two checkouts for one workspace can't
+        # interleave (double click, two tabs).
+        row = (
+            await self._s.execute(
+                select(BillingSubscription)
+                .where(BillingSubscription.workspace_id == ws)
+                .with_for_update()
             )
+        ).scalar_one_or_none()
+        if row is not None and row.status in LIVE:
+            raise _subscription_exists()
         current, _, _ = await BillingService(self._s).plan(ws)
         if await self._managed_by(ws, current) == "contract":
             raise ConflictError(
@@ -334,6 +339,17 @@ class SubscriptionService:
             raise ServiceUnavailableError("This price isn't configured.", code="billing_disabled")
         trial_days = await self._trial_days(ctx, row) if plan.key is TRIAL_PLAN else 0
         try:
+            if row is not None and row.customer_id:
+                # Stripe may know of a paid subscription whose webhook hasn't arrived:
+                # apply it and stop, rather than charging twice.
+                found = await gateway.customer_subscriptions(row.customer_id)
+                live = next((x for x in found if x.status in LIVE), None)
+                if live is not None:
+                    await self._apply(row, live)
+                    await self._s.commit()
+                    raise _subscription_exists()
+                # Only the newest Checkout page can be paid.
+                await gateway.expire_open_checkouts(row.customer_id)
             if row is None:
                 user = await self._s.get(User, ctx.user_id)
                 workspace = await self._s.get(Workspace, ws)
@@ -344,7 +360,22 @@ class SubscriptionService:
                 )
                 row = BillingSubscription(workspace_id=ws, customer_id=customer, status="none")
                 self._s.add(row)
-                await self._s.commit()
+                try:
+                    await self._s.commit()
+                except IntegrityError:
+                    # Another checkout for this workspace started at the same moment.
+                    await self._s.rollback()
+                    raise ConflictError(
+                        "A checkout for this workspace is already starting. Try again.",
+                        code="checkout_in_progress",
+                    ) from None
+                row = (
+                    await self._s.execute(
+                        select(BillingSubscription)
+                        .where(BillingSubscription.workspace_id == ws)
+                        .with_for_update()
+                    )
+                ).scalar_one()
             url = await gateway.checkout_url(
                 customer_id=row.customer_id,
                 price_id=price,
@@ -441,8 +472,15 @@ class SubscriptionService:
                 found = await self._gateway.customer_subscriptions(row.customer_id)
             except BillingGatewayError as exc:
                 raise _unavailable() from exc
-            # The live one wins; otherwise the newest (Stripe lists newest first).
-            state = next((x for x in found if x.status in LIVE), found[0] if found else None)
+            # The live one we already know wins, then any live one, then the newest
+            # (Stripe lists newest first). Extra live ones are duplicates.
+            live = [x for x in found if x.status in LIVE]
+            state = next((x for x in live if x.id == row.subscription_id), None) or next(
+                iter(live), found[0] if found else None
+            )
+            for extra in live:
+                if state is not None and extra.id != state.id:
+                    await self._cancel_duplicate(row, extra)
             if state is not None and state.customer_id == row.customer_id:
                 await self._apply(row, state)
                 self._audit.record(
@@ -457,7 +495,10 @@ class SubscriptionService:
         return await self.overview(ctx)
 
     async def handle_webhook(self, payload: bytes, signature: str | None) -> str:
-        """Apply a Stripe event. Returns ``applied``, ``ignored`` or ``duplicate``."""
+        """Apply a Stripe event.
+
+        Returns ``applied``, ``ignored``, ``duplicate`` or ``duplicate_cancelled``.
+        """
         gateway = self._require_gateway()
         try:
             event = gateway.verify_event(payload, signature or "")
@@ -495,6 +536,14 @@ class SubscriptionService:
             ):
                 # An old subscription ending while a newer one is live: nothing to do.
                 workspace_id = row.workspace_id
+            elif (
+                row.subscription_id not in (None, state.id)
+                and row.status in LIVE
+                and state.status in LIVE
+            ):
+                # A second live subscription for the same workspace: never bill twice.
+                await self._cancel_duplicate(row, state)
+                workspace_id, outcome = row.workspace_id, "duplicate_cancelled"
             else:
                 await self._apply(row, state)
                 workspace_id, outcome = row.workspace_id, "applied"
@@ -507,6 +556,27 @@ class SubscriptionService:
             await self._s.rollback()
             return "duplicate"
         return outcome
+
+    async def _cancel_duplicate(self, row: BillingSubscription, extra: SubscriptionState) -> None:
+        """Cancel an accidental second subscription and tell the owners."""
+        gateway = self._require_gateway()
+        try:
+            await gateway.cancel_subscription(extra.id)
+        except BillingGatewayError as exc:
+            raise _unavailable() from exc
+        logger.warning(
+            "duplicate stripe subscription cancelled",
+            extra={"workspace_id": str(row.workspace_id), "subscription": extra.id},
+        )
+        self._audit.record(
+            "billing.duplicate_cancelled",
+            actor_user_id=None,
+            workspace_id=row.workspace_id,
+            target_type="subscription",
+            target_id=extra.id,
+            details={"kept": row.subscription_id},
+        )
+        await self._notify(row.workspace_id, _duplicate_email, [extra.id])
 
     async def _row_for(self, state: SubscriptionState) -> BillingSubscription | None:
         row = (
@@ -632,6 +702,13 @@ class SubscriptionService:
                 logger.warning("billing notice not sent", exc_info=True)
 
 
+def _subscription_exists() -> ConflictError:
+    return ConflictError(
+        "This workspace already has a subscription. Change the plan instead.",
+        code="subscription_exists",
+    )
+
+
 def _unavailable() -> ServiceUnavailableError:
     return ServiceUnavailableError(
         "The payment service is unavailable. Please try again shortly.",
@@ -664,6 +741,23 @@ def _downgraded_email(
             "Nothing has been deleted and your documents keep working, but you can't change "
             "that setup until you subscribe again or move the data back to DocuMind on the "
             "Infrastructure page.",
+        ],
+        url,
+    )
+
+
+def _duplicate_email(
+    to: str, name: str, workspace: str, url: str, features: list[str]
+) -> EmailMessage:
+    return _mail(
+        to,
+        f"{workspace}: a second subscription was cancelled",
+        "We cancelled a duplicate subscription",
+        [
+            f"Hi {name},",
+            f"{workspace} was subscribed twice, probably from two checkout pages. We cancelled "
+            f"the extra subscription ({', '.join(features)}) so you aren't billed twice. If it "
+            "was already charged, contact us and we'll refund it.",
         ],
         url,
     )

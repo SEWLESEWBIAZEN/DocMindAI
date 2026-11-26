@@ -92,6 +92,14 @@ docker run --rm -it --network documind_default stripe/stripe-cli listen \
 - **Webhook missed or late:** coming back from Checkout, the Billing page reads the
   subscription from Stripe (`POST /workspaces/{id}/billing/sync`), so the plan changes even
   without the webhook. Owners can also click **Refresh from Stripe**.
+- **No double billing:**
+  - Starting a checkout locks the workspace's billing record.
+  - The checkout first asks Stripe whether the customer already has a live subscription. If so, it
+    applies that subscription and refuses with `409 subscription_exists`.
+  - Earlier unpaid Checkout pages are expired, so only the newest can be paid.
+  - If a second live subscription still appears, it is cancelled at once, audited
+    (`billing.duplicate_cancelled`) and the owners are emailed. Refund its first payment in
+    Stripe if it was already charged. Cancelling stops future charges but doesn't refund.
 - **Replays are safe:** handled event ids are stored in `billing_events`, and each event re-reads
   the subscription's current state from Stripe, so order doesn't matter.
 - **Find a workspace's subscription:**

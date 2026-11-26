@@ -86,7 +86,7 @@ class RedirectResponse(BaseModel):
 
 
 class WebhookResponse(BaseModel):
-    result: Literal["applied", "ignored", "duplicate"]
+    result: Literal["applied", "ignored", "duplicate", "duplicate_cancelled"]
 
 
 def _overview(o: BillingOverview) -> BillingOverviewResponse:

@@ -161,6 +161,24 @@ class StripeGateway:
             raise _error(exc) from exc
         return [subscription_state(sub) for sub in _get(page, "data", []) or []]
 
+    async def expire_open_checkouts(self, customer_id: str) -> int:
+        try:
+            page = await self._client.v1.checkout.sessions.list_async(
+                {"customer": customer_id, "status": "open", "limit": 20}
+            )
+            sessions = list(_get(page, "data", []) or [])
+            for session in sessions:
+                await self._client.v1.checkout.sessions.expire_async(str(_get(session, "id")))
+        except stripe.StripeError as exc:
+            raise _error(exc) from exc
+        return len(sessions)
+
+    async def cancel_subscription(self, subscription_id: str) -> None:
+        try:
+            await self._client.v1.subscriptions.cancel_async(subscription_id)
+        except stripe.StripeError as exc:
+            raise _error(exc) from exc
+
     async def update_subscription(
         self, subscription_id: str, *, price_id: str | None = None, seats: int | None = None
     ) -> SubscriptionState:

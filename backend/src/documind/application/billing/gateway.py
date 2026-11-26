@@ -54,6 +54,14 @@ class BillingGateway(Protocol):
         """The customer's subscriptions, newest first."""
         ...
 
+    async def expire_open_checkouts(self, customer_id: str) -> int:
+        """Expire the customer's unpaid Checkout pages, so they can't be paid. Returns how many."""
+        ...
+
+    async def cancel_subscription(self, subscription_id: str) -> None:
+        """Cancel at once (used for an accidental second subscription)."""
+        ...
+
     async def update_subscription(
         self, subscription_id: str, *, price_id: str | None = None, seats: int | None = None
     ) -> SubscriptionState: ...

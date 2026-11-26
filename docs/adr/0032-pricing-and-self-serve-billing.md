@@ -58,6 +58,18 @@ Prices are per member (seat), in US dollars. Yearly billing charges ten months:
 - **Seat sync:** a worker task runs hourly and sets each subscription's quantity to the member
   count.
 
+### One subscription per workspace
+
+A workspace must never be billed twice. Webhooks can lag, and people double-click or open two
+tabs, so DocuMind doesn't rely on webhooks alone:
+- **Checkout:** the workspace's billing record is locked while a checkout starts. Stripe is
+  asked for live subscriptions first; one found is applied and a new checkout is refused.
+  Earlier unpaid Checkout pages are expired.
+- **Coming back from Checkout:** the Billing page reads the subscription from Stripe, so the
+  plan changes without waiting for the webhook.
+- **Safety net:** a second live subscription arriving later, by webhook or sync, is cancelled
+  at Stripe and reported to the owners. Its refund, if needed, is done in Stripe.
+
 ### Custom infrastructure and plan changes
 
 - **Online plan changes:** refused (`409 plan_lacks_infrastructure`) when the workspace uses a
