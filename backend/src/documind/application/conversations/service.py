@@ -16,6 +16,7 @@ from datetime import timedelta
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from documind.application.conversations.feedback import clean_feedback
 from documind.application.conversations.streaming import (
     ReplyCompleted,
     ReplyEvent,
@@ -55,6 +56,7 @@ from documind.infrastructure.database.repositories.conversations import (
     ConversationRepository,
     MessageRepository,
 )
+from documind.infrastructure.database.repositories.feedback import FeedbackRepository
 from documind.infrastructure.database.repositories.retrieval import RetrievalRepository
 from documind.infrastructure.database.repositories.visibility import viewer_of
 
@@ -116,6 +118,7 @@ class ConversationService:
         self._conversations = ConversationRepository(session)
         self._messages = MessageRepository(session)
         self._retrieval = RetrievalRepository(session)
+        self._feedback = FeedbackRepository(session)
         self._audit = AuditRecorder(audit_repository(session), meta)
         self._orchestrator = orchestrator
         self._runner = runner
@@ -180,9 +183,17 @@ class ConversationService:
     async def _with_citations(
         self, ctx: WorkspaceContext, rows: list[Message]
     ) -> list[MessageInfo]:
-        citations = await self._messages.citations(ctx.workspace_id, [m.id for m in rows])
+        ids = [m.id for m in rows]
+        citations = await self._messages.citations(ctx.workspace_id, ids)
+        rated = await self._feedback.for_messages(
+            ctx.workspace_id, [m.id for m in rows if m.role == "assistant"]
+        )
         return [
-            message_info(m, tuple(citation_info(c, ok) for c, ok in citations.get(m.id, [])))
+            message_info(
+                m,
+                tuple(citation_info(c, ok) for c, ok in citations.get(m.id, [])),
+                rated.get(m.id),
+            )
             for m in rows
         ]
 
@@ -302,6 +313,54 @@ class ConversationService:
         if message is None:
             raise NotFoundError("Message not found.")
         return (await self._with_citations(ctx, [message]))[0]
+
+    # ----------------------------------------------------------------- feedback
+
+    async def _rateable(
+        self, ctx: WorkspaceContext, conversation_id: uuid.UUID, message_id: uuid.UUID
+    ) -> Message:
+        conversation = await self._require(ctx, conversation_id)
+        message = await self._messages.get(ctx.workspace_id, conversation.id, message_id)
+        if message is None or message.role != "assistant":
+            raise NotFoundError("Answer not found.")
+        if message.status != "completed":
+            raise ValidationFailedError("Only finished answers can be rated.")
+        return message
+
+    async def rate(
+        self,
+        ctx: WorkspaceContext,
+        conversation_id: uuid.UUID,
+        message_id: uuid.UUID,
+        *,
+        rating: str,
+        reasons: Sequence[str] = (),
+        comment: str | None = None,
+        shared: bool = False,
+    ) -> MessageInfo:
+        """Rate an answer (ADR 0038); rating again replaces the earlier rating."""
+        message = await self._rateable(ctx, conversation_id, message_id)
+        kept, text = clean_feedback(rating, reasons, comment)
+        await self._feedback.upsert(
+            {
+                "message_id": message.id,
+                "workspace_id": ctx.workspace_id,
+                "user_id": ctx.user_id,
+                "rating": rating,
+                "reasons": kept,
+                "comment": text,
+                "shared": shared,
+            }
+        )
+        await self._session.commit()
+        return (await self._with_citations(ctx, [message]))[0]
+
+    async def unrate(
+        self, ctx: WorkspaceContext, conversation_id: uuid.UUID, message_id: uuid.UUID
+    ) -> None:
+        message = await self._rateable(ctx, conversation_id, message_id)
+        await self._feedback.delete(ctx.workspace_id, message.id)
+        await self._session.commit()
 
     async def _sources(self, conversation: Conversation) -> tuple[list[uuid.UUID] | None, ...]:
         if conversation.scope == "all":

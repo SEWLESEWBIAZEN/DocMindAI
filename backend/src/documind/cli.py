@@ -8,6 +8,8 @@ Commands:
   process JOB_ID      Run one processing job synchronously (debugging).
   reindex             Queue documents embedded with a different model than the
                       configured one (or --all) for re-processing.
+  eval WORKSPACE_ID   Ask a fixed set of questions and score the answers (ADR 0038);
+                      exit 1 when the pass rate is below --min-pass.
 """
 
 from __future__ import annotations
@@ -213,6 +215,90 @@ async def _plan_assign(
         container.entitlements.invalidate(workspace_id)
     _print({"workspace_id": workspace_id, "plan": row.plan_key, "overrides": row.overrides})
     return 0
+
+
+async def _eval(
+    container: Container,
+    workspace_id: uuid.UUID,
+    source: str,
+    as_email: str | None,
+    json_out: str | None,
+    markdown_out: str | None,
+    min_pass: float,
+) -> int:
+    """Answer-quality checks against one workspace's documents (ADR 0038).
+
+    Runs as a member of the workspace (the owner unless ``--as``), with the
+    workspace's own AI settings, without saving conversations.
+    """
+    from pathlib import Path
+
+    from documind.application.identity.common import RequestMeta
+    from documind.application.identity.workspace_service import WorkspaceService
+    from documind.application.quality.evaluation import (
+        CaseResult,
+        Observed,
+        load_set,
+        markdown,
+        run_set,
+    )
+    from documind.application.rag import factory as rag_factory
+    from documind.infrastructure.database.models import Role, User, WorkspaceMember
+
+    evals = load_set(source)
+    async with container.session_factory() as session:
+        if as_email:
+            user = (
+                await session.execute(select(User).where(User.email == as_email.strip().lower()))
+            ).scalar_one_or_none()
+        else:
+            user = (
+                await session.execute(
+                    select(User)
+                    .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
+                    .join(Role, Role.id == WorkspaceMember.role_id)
+                    .where(WorkspaceMember.workspace_id == workspace_id, Role.key == "owner")
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        if user is None:
+            print("No such user in that workspace.", file=sys.stderr)  # noqa: T201
+            return 2
+        ctx = await WorkspaceService(
+            session,
+            RequestMeta(),
+            mfa_grace_days=container.settings.mfa_enforcement_grace_days,
+            mfa_step_up_seconds=container.settings.mfa_step_up_ttl_seconds,
+        ).resolve_context(user, workspace_id)
+        ai = await container.ai_resolver().resolve(workspace_id, user_id=user.id)
+        infra = await container.infrastructure().resolve(workspace_id)
+        async with infra.data_plane.sessions() as data:
+            retrieval = rag_factory.retrieval_service(data, container.settings, ai)
+            orchestrator = rag_factory.rag_orchestrator(retrieval, container.settings, ai)
+
+            async def ask(question: str) -> Observed:
+                result = await orchestrator.answer(ctx, question)
+                return Observed(
+                    answer=result.answer,
+                    status=str(result.status),
+                    cited_documents=tuple(c.document_name for c in result.citations),
+                    latency_ms=result.latency_ms,
+                    model=result.model,
+                )
+
+            def progress(r: CaseResult) -> None:
+                mark = "PASS" if r.passed else "FAIL"
+                print(f"{mark}  {r.id}", file=sys.stderr)  # noqa: T201
+
+            report = await run_set(evals, ask, on_case=progress)
+
+    if json_out:
+        body = json.dumps(report.to_dict(), indent=2, default=str) + "\n"
+        await asyncio.to_thread(Path(json_out).write_text, body)
+    if markdown_out:
+        await asyncio.to_thread(Path(markdown_out).write_text, markdown(report))
+    print(markdown(report))  # noqa: T201
+    return 0 if report.pass_rate >= min_pass else 1
 
 
 def _offsite_client(settings: Any) -> Any:
@@ -563,6 +649,23 @@ def main(argv: list[str] | None = None) -> int:
         help="entitlement override, e.g. --override max_members=100 (repeatable)",
     )
     assign.add_argument("--note", default=None)
+    ev = sub.add_parser("eval", help="score answers on a fixed set of questions (ADR 0038)")
+    ev.add_argument("workspace_id", type=uuid.UUID)
+    ev.add_argument(
+        "--set",
+        dest="eval_set",
+        default="samples",
+        help='built-in set ("samples", for the sample documents) or a JSON file',
+    )
+    ev.add_argument("--as", dest="as_email", default=None, help="member email (default: owner)")
+    ev.add_argument("--json", dest="json_out", default=None, help="write the full report here")
+    ev.add_argument("--markdown", dest="markdown_out", default=None, help="write a summary here")
+    ev.add_argument(
+        "--min-pass",
+        type=float,
+        default=0.8,
+        help="exit 1 below this pass rate, 0 to 1 (default 0.8)",
+    )
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -623,6 +726,22 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(
             _with_container(
                 lambda c: _plan_assign(c, args.workspace_id, args.plan, args.override, args.note)
+            )
+        )
+    if args.command == "eval":
+        if not 0 <= args.min_pass <= 1:
+            parser.error("--min-pass is between 0 and 1")
+        return asyncio.run(
+            _with_container(
+                lambda c: _eval(
+                    c,
+                    args.workspace_id,
+                    args.eval_set,
+                    args.as_email,
+                    args.json_out,
+                    args.markdown_out,
+                    args.min_pass,
+                )
             )
         )
     if args.command == "process":

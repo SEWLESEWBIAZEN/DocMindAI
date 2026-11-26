@@ -193,6 +193,7 @@ live database. Data written after the backup is lost, so compare the audit log b
 | Stuck or failed processing jobs | `documind-manage jobs --status failed`, then `documind-manage sweep` |
 | Re-run one job | `documind-manage process <job_id> [--workspace <id>]` |
 | Re-index after an embedding model change | `documind-manage reindex --workspace <id>` |
+| Check answer quality (before a release, after a model or prompt change) | Load the sample documents into a test workspace, then `documind-manage eval <workspace_id> --min-pass 0.9 --markdown eval.md`; exit code 1 means a regression ([ADR 0038](../adr/0038-answer-feedback-and-quality-checks.md)) |
 | Rotate the credential key ring | Add the new key **first** in `CREDENTIAL_ENCRYPTION_KEYS`, restart, then run `documind-manage credentials rewrap`. Keep the old key while backups need it ([`disaster-recovery.md`](disaster-recovery.md#key-rotation)) |
 | Infrastructure migrations | `documind-manage migrations list`, then `run <id>` or `abort <id>` ([`incident-response.md`](incident-response.md#migration-stuck)) |
 | Certificates | Automatic. Force a renewal with `docker compose --profile letsencrypt run --rm --entrypoint certbot certbot renew --force-renewal` |

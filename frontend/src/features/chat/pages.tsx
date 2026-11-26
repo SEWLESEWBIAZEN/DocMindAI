@@ -45,6 +45,7 @@ import {
 import { friendlyDictationError, startDictation, type Dictation } from '../voice/dictation'
 import { answerToSpeech, completedSentences, sourcesSummary, splitSentences, withoutMarkers } from '../voice/text'
 import { useVoice } from '../voice/VoiceContext'
+import { AnswerFeedback } from './AnswerFeedback'
 import { AnswerMarkdown } from './AnswerMarkdown'
 import { CitationCard } from './CitationCard'
 
@@ -442,6 +443,9 @@ export function ChatPage() {
                   onRegenerate={() => void regenerateLatest(message)}
                   activeCitation={activeCitation?.message === message.id ? activeCitation.n : null}
                   onCitation={(n) => setActiveCitation({ message: message.id, n })}
+                  onUpdated={(updated) =>
+                    persist(updated.conversation_id, (items) => items.map((m) => (m.id === updated.id ? updated : m)))
+                  }
                 />
               ),
             )}
@@ -624,12 +628,14 @@ function AssistantMessage({
   onRegenerate,
   activeCitation,
   onCitation,
+  onUpdated,
 }: {
   message: ChatMessage
   canRegenerate: boolean
   onRegenerate: () => void
   activeCitation: number | null
   onCitation: (n: number) => void
+  onUpdated: (message: ChatMessage) => void
 }) {
   const toast = useToast()
   const voice = useVoice()
@@ -734,6 +740,11 @@ function AssistantMessage({
             <Button size="sm" variant="ghost" icon="refresh" onClick={onRegenerate}>
               Regenerate
             </Button>
+          )}
+          {message.status === 'completed' && (
+            <span className="msg__feedback">
+              <AnswerFeedback message={message} onChange={onUpdated} />
+            </span>
           )}
         </div>
       </div>

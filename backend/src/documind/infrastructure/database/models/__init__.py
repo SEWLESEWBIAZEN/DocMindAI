@@ -17,6 +17,7 @@ from documind.infrastructure.database.models.conversations import (
     ConversationDocument,
     Message,
     MessageCitation,
+    MessageFeedback,
 )
 from documind.infrastructure.database.models.credentials import (
     Credential,
@@ -100,6 +101,7 @@ __all__ = [
     "Invitation",
     "Message",
     "MessageCitation",
+    "MessageFeedback",
     "MfaRecoveryCode",
     "MfaResetRequest",
     "Organization",

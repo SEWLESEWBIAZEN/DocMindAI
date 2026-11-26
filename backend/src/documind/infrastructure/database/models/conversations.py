@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -31,6 +32,15 @@ from documind.infrastructure.database.base import Base
 
 TZ = DateTime(timezone=True)
 MESSAGE_STATUSES = ("streaming", "completed", "failed", "cancelled")
+#: Why an answer was rated down (ADR 0038). Kept short and fixed so they can be counted.
+FEEDBACK_REASONS = (
+    "incorrect",
+    "incomplete",
+    "bad_citation",
+    "missed_document",
+    "unclear",
+    "other",
+)
 
 
 def _conversation_fk(name: str) -> ForeignKeyConstraint:
@@ -220,3 +230,37 @@ class MessageCitation(Base):
     excerpt: Mapped[str] = mapped_column(Text)
     label: Mapped[str] = mapped_column(String(400))
     spoken_label: Mapped[str] = mapped_column(String(400))
+
+
+class MessageFeedback(Base):
+    """A member's rating of one of their answers (ADR 0038).
+
+    One row per answer: rating again replaces it. ``shared`` is the member's
+    explicit consent for workspace admins to read the question and answer;
+    without it admins only ever see counts (conversations stay private, ADR 0016).
+    """
+
+    __tablename__ = "message_feedback"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["message_id", "workspace_id"],
+            ["messages.id", "messages.workspace_id"],
+            ondelete="CASCADE",
+            name="fk_message_feedback_message_workspace",
+        ),
+        CheckConstraint("rating IN ('up', 'down')", name="rating_valid"),
+        Index("ix_message_feedback_workspace_id_created_at", "workspace_id", "created_at"),
+        Index("ix_message_feedback_user_id", "user_id"),
+    )
+
+    message_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    workspace_id: Mapped[uuid.UUID] = mapped_column()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    rating: Mapped[str] = mapped_column(String(4))
+    reasons: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=sql_text("'[]'::jsonb")
+    )
+    comment: Mapped[str | None] = mapped_column(Text)
+    shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sql_text("false"))
+    created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now(), onupdate=func.now())

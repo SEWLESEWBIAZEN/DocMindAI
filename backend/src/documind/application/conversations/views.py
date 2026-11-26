@@ -7,7 +7,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from documind.infrastructure.database.models import Conversation, Message, MessageCitation
+from documind.infrastructure.database.models import (
+    Conversation,
+    Message,
+    MessageCitation,
+    MessageFeedback,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +29,25 @@ class CitationInfo:
     spoken_label: str
     # False once the document is deleted or archived (the snapshot stays readable).
     document_available: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FeedbackInfo:
+    rating: str
+    reasons: tuple[str, ...]
+    comment: str | None
+    shared: bool
+    updated_at: datetime
+
+
+def feedback_info(f: MessageFeedback) -> FeedbackInfo:
+    return FeedbackInfo(
+        rating=f.rating,
+        reasons=tuple(f.reasons or ()),
+        comment=f.comment,
+        shared=f.shared,
+        updated_at=f.updated_at,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +73,8 @@ class MessageInfo:
     created_at: datetime
     completed_at: datetime | None
     citations: tuple[CitationInfo, ...] = field(default_factory=tuple)
+    # The asking member's own rating (ADR 0038), if any.
+    feedback: FeedbackInfo | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,7 +128,11 @@ def citation_info(c: MessageCitation, available: bool) -> CitationInfo:
     )
 
 
-def message_info(m: Message, citations: tuple[CitationInfo, ...] = ()) -> MessageInfo:
+def message_info(
+    m: Message,
+    citations: tuple[CitationInfo, ...] = (),
+    feedback: MessageFeedback | None = None,
+) -> MessageInfo:
     return MessageInfo(
         id=m.id,
         conversation_id=m.conversation_id,
@@ -125,6 +155,7 @@ def message_info(m: Message, citations: tuple[CitationInfo, ...] = ()) -> Messag
         created_at=m.created_at,
         completed_at=m.completed_at,
         citations=citations,
+        feedback=feedback_info(feedback) if feedback is not None else None,
     )
 
 

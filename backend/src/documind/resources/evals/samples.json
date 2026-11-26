@@ -1,0 +1,22 @@
+{
+  "name": "Sample documents",
+  "description": "Questions over DocuMind's three sample documents (Try sample documents). Load them into a test workspace before running.",
+  "cases": [
+    {"id": "msa-non-renewal", "question": "How much notice is needed for non-renewal of the services agreement?", "documents": ["Sample: Master Services Agreement"], "must_include": ["90 days"]},
+    {"id": "msa-term", "question": "How long is the initial term of the services agreement?", "documents": ["Sample: Master Services Agreement"], "must_include": ["24 months"]},
+    {"id": "msa-payment", "question": "Within how many days are invoices payable under the services agreement?", "documents": ["Sample: Master Services Agreement"], "must_include": ["30 days"]},
+    {"id": "msa-breach", "question": "How quickly must a personal-data breach be notified?", "documents": ["Sample: Master Services Agreement"], "must_include": ["72 hours"]},
+    {"id": "msa-availability", "question": "What availability do the dashboards have to meet each month?", "documents": ["Sample: Master Services Agreement"], "must_include": ["99.5"]},
+    {"id": "msa-fee", "question": "What is the monthly fee in the services agreement?", "documents": ["Sample: Master Services Agreement"], "must_include": [["18,500", "18500"]]},
+    {"id": "handbook-leave", "question": "How many days of paid annual leave do full-time employees get?", "documents": ["Sample: Employee Handbook"], "must_include": ["25 days"]},
+    {"id": "handbook-carry-over", "question": "How many unused leave days can be carried over into the next year?", "documents": ["Sample: Employee Handbook"], "must_include": [["5 unused days", "five unused days", "5 days"]]},
+    {"id": "handbook-remote", "question": "How many days per week can employees work remotely?", "documents": ["Sample: Employee Handbook"], "must_include": [["3 days", "three days"]]},
+    {"id": "handbook-expenses", "question": "Within how many days must expense claims be submitted?", "documents": ["Sample: Employee Handbook"], "must_include": ["30 days"]},
+    {"id": "faq-reset", "question": "How do I do a factory reset of the Aurora thermostat?", "documents": ["Sample: Aurora Thermostat FAQ"], "must_include": ["10 seconds"]},
+    {"id": "faq-warranty", "question": "How long is the Aurora warranty?", "documents": ["Sample: Aurora Thermostat FAQ"], "must_include": [["2-year", "2 years", "two years"]]},
+    {"id": "faq-eco", "question": "By how much does Eco mode lower the temperature?", "documents": ["Sample: Aurora Thermostat FAQ"], "must_include": [["3 °C", "3°C", "3 degrees"]]},
+    {"id": "none-ceo-salary", "question": "What is the salary of Brightline's chief executive?", "answerable": false},
+    {"id": "none-mars", "question": "What is the boiling point of water on Mars?", "answerable": false},
+    {"id": "none-parking", "question": "Where do visitors park at the Harbor & Pine head office?", "answerable": false}
+  ]
+}

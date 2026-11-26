@@ -164,6 +164,7 @@ function Sidebar({
     { to: `${base}/members`, label: 'Members', icon: 'users', permission: 'members.read' },
     { to: `${base}/organization`, label: 'Organizations', icon: 'building' },
     { to: `${base}/usage`, label: 'Usage', icon: 'chart', permission: 'usage.read' },
+    { to: `${base}/answer-quality`, label: 'Answer quality', icon: 'thumbsUp', permission: 'usage.read' },
     { to: `${base}/billing`, label: 'Billing', icon: 'scale', permission: 'billing.manage' },
     { to: `${base}/ai-providers`, label: 'AI providers', icon: 'key', permission: 'ai_providers.manage' },
     { to: `${base}/connectors`, label: 'Connectors', icon: 'refresh', permission: 'workspace.update' },

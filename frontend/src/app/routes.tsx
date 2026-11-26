@@ -32,6 +32,7 @@ const extraction = () => import('../features/extraction/pages')
 const deadlines = () => import('../features/extraction/DeadlinesPage')
 const connectors = () => import('../features/connectors/ConnectorsPage')
 const integrations = () => import('../features/integrations/IntegrationsPage')
+const quality = () => import('../features/quality/AnswerQualityPage')
 
 function Public({ children }: { children: ReactNode }) {
   return <RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
@@ -80,6 +81,7 @@ export const routes: RouteObject[] = [
           { path: 'settings', element: page(admin, 'SettingsPage') },
           { path: 'profile', element: page(admin, 'ProfilePage') },
           { path: 'usage', element: page(admin, 'UsagePage') },
+          { path: 'answer-quality', element: page(quality, 'AnswerQualityPage') },
           { path: 'ai-providers', element: page(aiProviders, 'AIProvidersPage') },
           { path: 'infrastructure', element: page(infrastructure, 'InfrastructurePage') },
           { path: 'billing', element: page(billing, 'BillingPage') },

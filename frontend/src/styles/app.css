@@ -1895,8 +1895,24 @@ mark.cite-highlight {
 
 .msg__actions {
   display: flex;
+  align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+.msg__feedback {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.feedback-btn {
+  color: var(--color-text-muted);
+}
+
+.feedback-btn--on {
+  color: var(--color-accent);
+  background: var(--color-selected);
 }
 
 .msg__notice {
@@ -3015,4 +3031,76 @@ mark.reading-highlight {
 
 .steps code {
   overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- answer quality (ADR 0038) */
+
+.bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.bar-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.88rem;
+}
+
+.bar-list__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+
+.bar-list__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+}
+
+.bar-list__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  min-width: 2ch;
+  text-align: right;
+}
+
+.feedback-item {
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.feedback-item:last-child {
+  border-bottom: none;
+}
+
+.feedback-item__q {
+  font-weight: 500;
+}
+
+.feedback-item__a {
+  color: var(--color-text-soft);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feedback-item__comment {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-text-soft);
+  font-size: 0.9rem;
 }

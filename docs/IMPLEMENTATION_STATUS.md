@@ -420,6 +420,8 @@ ADRs: 0020 (plans, usage, quotas), 0021 (infrastructure profiles and data planes
 | Workspace API keys (Pro and up): scopes, expiry, shown once and stored hashed, 2FA to create, limited to document/search/answer routes, never admin permissions | [x] | ADR 0037; `test_keys_are_scoped_to_their_workspace_routes_and_scopes`, `test_integrations.py`, `e2e/integrations.spec.ts` |
 | MCP server (Streamable HTTP): search, ask, list and read documents, list collections, with the same permissions and quotas | [x] | ADR 0037; `test_mcp_server_tools`; checked with the official MCP Python SDK |
 | Slack app: signed requests, install (2FA), account linking by code, private slash-command answers, in-thread answers from unrestricted documents only | [x] | ADR 0037; `test_slack_api.py` (2). Fake Slack API; not yet run against a live Slack workspace. |
+| Answer feedback: thumbs up/down with reasons and comment; sharing the question and answer with admins only by explicit choice; admin "Answer quality" page (helpful rate, reasons, per model, shared examples) | [x] | ADR 0038; `test_answer_feedback.py`, privacy paths in `test_conversations_are_private_and_workspace_scoped`, `e2e/feedback.spec.ts` |
+| Repeatable quality checks: `documind-manage eval` with a built-in 16-question set over the sample documents (13 answerable, 3 must decline), JSON/Markdown report, exit code for CI | [x] | ADR 0038; `test_evaluation.py`, `test_eval_command_scores_the_sample_set`. 16/16 with the local model; **not yet run with the real model** |
 | Available on every plan (entitlement) | [x] | `byok=True` on all plans (`test_byok_is_on_every_plan`) |
 | AI providers page | [x] | `features/saas/AIProvidersPage.tsx` (Playwright, axe clean, 390 px) |
 

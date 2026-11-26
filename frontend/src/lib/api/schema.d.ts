@@ -813,6 +813,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/answer-quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How members rate answers (admins)
+         * @description Counts for the whole workspace. Questions and answers appear only where the member chose to share them.
+         */
+        get: operations["answer_quality_api_v1_workspaces__workspace_id__answer_quality_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/api-keys": {
         parameters: {
             query?: never;
@@ -1236,6 +1256,27 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/conversations/{conversation_id}/messages/{message_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rate an answer (thumbs up or down)
+         * @description Rating again replaces your earlier rating. Only finished answers can be rated.
+         */
+        put: operations["rate_message_api_v1_workspaces__workspace_id__conversations__conversation_id__messages__message_id__feedback_put"];
+        post?: never;
+        /** Remove your rating */
+        delete: operations["unrate_message_api_v1_workspaces__workspace_id__conversations__conversation_id__messages__message_id__feedback_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2184,6 +2225,41 @@ export interface components {
             query_embedding_tokens: number;
             /** Questions */
             questions: number;
+        };
+        /** AnswerQualityResponse */
+        AnswerQualityResponse: {
+            /**
+             * Answers
+             * @description Completed answers in the period.
+             */
+            answers: number;
+            /** Days */
+            days: number;
+            /** Down */
+            down: number;
+            /**
+             * Insufficient Context
+             * @description Answers that said the documents don't cover the question.
+             */
+            insufficient_context: number;
+            /** Models */
+            models: components["schemas"]["ModelRatingResponse"][];
+            /** Rated */
+            rated: number;
+            /**
+             * Reasons
+             * @description How often each reason was given (thumbs down).
+             */
+            reasons: {
+                [key: string]: number;
+            };
+            /**
+             * Shared
+             * @description Ratings members chose to share with admins, newest first (at most 50).
+             */
+            shared: components["schemas"]["SharedFeedbackResponse"][];
+            /** Up */
+            up: number;
         };
         /** AnswerResponse */
         AnswerResponse: {
@@ -3312,6 +3388,46 @@ export interface components {
             /** Spoken Label */
             spoken_label: string;
         };
+        /** MessageFeedbackRequest */
+        MessageFeedbackRequest: {
+            /** Comment */
+            comment?: string | null;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "up" | "down";
+            /**
+             * Reasons
+             * @description Why the answer was poor (thumbs down only; ignored for thumbs up).
+             */
+            reasons?: ("incorrect" | "incomplete" | "bad_citation" | "missed_document" | "unclear" | "other")[];
+            /**
+             * Shared
+             * @description Let workspace admins read this question and answer to improve answers. Without it they only see counts.
+             * @default false
+             */
+            shared: boolean;
+        };
+        /** MessageFeedbackResponse */
+        MessageFeedbackResponse: {
+            /** Comment */
+            comment: string | null;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "up" | "down";
+            /** Reasons */
+            reasons: string[];
+            /** Shared */
+            shared: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** MessagePageResponse */
         MessagePageResponse: {
             /**
@@ -3555,6 +3671,15 @@ export interface components {
              * @description approved: queued to run; the workspace locks while it runs
              */
             status: string;
+        };
+        /** ModelRatingResponse */
+        ModelRatingResponse: {
+            /** Down */
+            down: number;
+            /** Model */
+            model: string;
+            /** Up */
+            up: number;
         };
         /** NewApiKeyResponse */
         NewApiKeyResponse: {
@@ -4305,6 +4430,40 @@ export interface components {
             /** Content */
             content: string;
         };
+        /** SharedFeedbackResponse */
+        SharedFeedbackResponse: {
+            /** Answer */
+            answer: string;
+            /** Answer Status */
+            answer_status: string | null;
+            /** Citation Count */
+            citation_count: number;
+            /** Comment */
+            comment: string | null;
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /** Model */
+            model: string | null;
+            /** Prompt Version */
+            prompt_version: string | null;
+            /** Question */
+            question: string;
+            /**
+             * Rated At
+             * Format: date-time
+             */
+            rated_at: string;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "up" | "down";
+            /** Reasons */
+            reasons: string[];
+        };
         /** SlackStatus */
         SlackStatus: {
             /**
@@ -4819,6 +4978,8 @@ export interface components {
             created_at: string;
             /** Error Code */
             error_code: string | null;
+            /** @description Your own rating of this answer. */
+            feedback?: components["schemas"]["MessageFeedbackResponse"] | null;
             /**
              * Id
              * Format: uuid
@@ -6389,6 +6550,39 @@ export interface operations {
             };
         };
     };
+    answer_quality_api_v1_workspaces__workspace_id__answer_quality_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerQualityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_keys_api_v1_workspaces__workspace_id__api_keys_get: {
         parameters: {
             query?: never;
@@ -7539,6 +7733,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MessageCitationResponse"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rate_message_api_v1_workspaces__workspace_id__conversations__conversation_id__messages__message_id__feedback_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["documind__api__schemas__conversations__MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unrate_message_api_v1_workspaces__workspace_id__conversations__conversation_id__messages__message_id__feedback_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

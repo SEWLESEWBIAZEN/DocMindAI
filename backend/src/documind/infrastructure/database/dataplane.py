@@ -42,6 +42,7 @@ DATA_PLANE_TABLES: tuple[str, ...] = (
     "conversation_collections",
     "messages",
     "message_citations",
+    "message_feedback",
     "extraction_runs",
     "extraction_results",
     "deadlines",

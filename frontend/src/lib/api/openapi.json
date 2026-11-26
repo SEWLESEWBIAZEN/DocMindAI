@@ -131,6 +131,72 @@
         "title": "AiUsageResponse",
         "type": "object"
       },
+      "AnswerQualityResponse": {
+        "properties": {
+          "answers": {
+            "description": "Completed answers in the period.",
+            "title": "Answers",
+            "type": "integer"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "down": {
+            "title": "Down",
+            "type": "integer"
+          },
+          "insufficient_context": {
+            "description": "Answers that said the documents don't cover the question.",
+            "title": "Insufficient Context",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelRatingResponse"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "rated": {
+            "title": "Rated",
+            "type": "integer"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "How often each reason was given (thumbs down).",
+            "title": "Reasons",
+            "type": "object"
+          },
+          "shared": {
+            "description": "Ratings members chose to share with admins, newest first (at most 50).",
+            "items": {
+              "$ref": "#/components/schemas/SharedFeedbackResponse"
+            },
+            "title": "Shared",
+            "type": "array"
+          },
+          "up": {
+            "title": "Up",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "answers",
+          "insufficient_context",
+          "rated",
+          "up",
+          "down",
+          "reasons",
+          "models",
+          "shared"
+        ],
+        "title": "AnswerQualityResponse",
+        "type": "object"
+      },
       "AnswerResponse": {
         "properties": {
           "answer": {
@@ -3284,6 +3350,107 @@
         "title": "MessageCitationResponse",
         "type": "object"
       },
+      "MessageFeedbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "rating": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "reasons": {
+            "description": "Why the answer was poor (thumbs down only; ignored for thumbs up).",
+            "items": {
+              "enum": [
+                "incorrect",
+                "incomplete",
+                "bad_citation",
+                "missed_document",
+                "unclear",
+                "other"
+              ],
+              "type": "string"
+            },
+            "maxItems": 6,
+            "title": "Reasons",
+            "type": "array"
+          },
+          "shared": {
+            "default": false,
+            "description": "Let workspace admins read this question and answer to improve answers. Without it they only see counts.",
+            "title": "Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rating"
+        ],
+        "title": "MessageFeedbackRequest",
+        "type": "object"
+      },
+      "MessageFeedbackResponse": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "rating": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rating",
+          "reasons",
+          "comment",
+          "shared",
+          "updated_at"
+        ],
+        "title": "MessageFeedbackResponse",
+        "type": "object"
+      },
       "MessagePageResponse": {
         "properties": {
           "has_more": {
@@ -3894,6 +4061,29 @@
           "queued"
         ],
         "title": "MigrationStarted",
+        "type": "object"
+      },
+      "ModelRatingResponse": {
+        "properties": {
+          "down": {
+            "title": "Down",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "up": {
+            "title": "Up",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model",
+          "up",
+          "down"
+        ],
+        "title": "ModelRatingResponse",
         "type": "object"
       },
       "NewApiKeyResponse": {
@@ -5769,6 +5959,106 @@
         "title": "SendMessageRequest",
         "type": "object"
       },
+      "SharedFeedbackResponse": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "answer_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Status"
+          },
+          "citation_count": {
+            "title": "Citation Count",
+            "type": "integer"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "prompt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Version"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "rated_at": {
+            "format": "date-time",
+            "title": "Rated At",
+            "type": "string"
+          },
+          "rating": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Rating",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message_id",
+          "rating",
+          "reasons",
+          "comment",
+          "question",
+          "answer",
+          "answer_status",
+          "citation_count",
+          "model",
+          "prompt_version",
+          "rated_at"
+        ],
+        "title": "SharedFeedbackResponse",
+        "type": "object"
+      },
       "SlackStatus": {
         "properties": {
           "available": {
@@ -7109,6 +7399,17 @@
               }
             ],
             "title": "Error Code"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageFeedbackResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your own rating of this answer."
           },
           "id": {
             "format": "uuid",
@@ -9380,6 +9681,67 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/answer-quality": {
+      "get": {
+        "description": "Counts for the whole workspace. Questions and answers appear only where the member chose to share them.",
+        "operationId": "answer_quality_api_v1_workspaces__workspace_id__answer_quality_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerQualityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "How members rate answers (admins)",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/api-keys": {
       "get": {
         "operationId": "list_keys_api_v1_workspaces__workspace_id__api_keys_get",
@@ -11530,6 +11892,144 @@
           }
         ],
         "summary": "Get Message Citations",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/conversations/{conversation_id}/messages/{message_id}/feedback": {
+      "delete": {
+        "operationId": "unrate_message_api_v1_workspaces__workspace_id__conversations__conversation_id__messages__message_id__feedback_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove your rating",
+        "tags": [
+          "conversations"
+        ]
+      },
+      "put": {
+        "description": "Rating again replaces your earlier rating. Only finished answers can be rated.",
+        "operationId": "rate_message_api_v1_workspaces__workspace_id__conversations__conversation_id__messages__message_id__feedback_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documind__api__schemas__conversations__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rate an answer (thumbs up or down)",
         "tags": [
           "conversations"
         ]

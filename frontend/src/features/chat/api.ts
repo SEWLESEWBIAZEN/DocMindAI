@@ -143,3 +143,24 @@ export function regenerate(
 }
 
 export type { Conversation }
+
+export type FeedbackReason = NonNullable<Schemas['MessageFeedbackRequest']['reasons']>[number]
+export type AnswerQuality = Schemas['AnswerQualityResponse']
+
+/** Thumbs up or down on an answer (ADR 0038); rating again replaces it. */
+export async function rateAnswer(
+  ws: string,
+  conversationId: string,
+  messageId: string,
+  body: Schemas['MessageFeedbackRequest'],
+): Promise<ChatMessage> {
+  return (await apiClient.put<ChatMessage>(`${base(ws)}/${conversationId}/messages/${messageId}/feedback`, body)).data
+}
+
+export async function clearRating(ws: string, conversationId: string, messageId: string): Promise<void> {
+  await apiClient.delete(`${base(ws)}/${conversationId}/messages/${messageId}/feedback`)
+}
+
+export async function getAnswerQuality(ws: string, days: number): Promise<AnswerQuality> {
+  return (await apiClient.get<AnswerQuality>(`/workspaces/${ws}/answer-quality`, { params: { days } })).data
+}

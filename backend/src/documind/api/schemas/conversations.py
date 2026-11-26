@@ -8,11 +8,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from documind.application.conversations.feedback import (
+    MAX_COMMENT,
+    QualitySummary,
+    SharedFeedback,
+)
 from documind.application.conversations.service import MAX_SOURCES, TITLE_MAX
 from documind.application.conversations.views import (
     CitationInfo,
     ConversationDetail,
     ConversationInfo,
+    FeedbackInfo,
     MessageInfo,
 )
 from documind.application.rag.retrieval import MAX_QUERY_CHARS
@@ -157,6 +163,46 @@ class MessageUsageResponse(BaseModel):
     embedding_tokens: int
 
 
+FeedbackReason = Literal[
+    "incorrect", "incomplete", "bad_citation", "missed_document", "unclear", "other"
+]
+
+
+class MessageFeedbackRequest(_Strict):
+    rating: Literal["up", "down"]
+    reasons: list[FeedbackReason] = Field(
+        default_factory=list,
+        max_length=6,
+        description="Why the answer was poor (thumbs down only; ignored for thumbs up).",
+    )
+    comment: str | None = Field(default=None, max_length=MAX_COMMENT)
+    shared: bool = Field(
+        default=False,
+        description=(
+            "Let workspace admins read this question and answer to improve answers. "
+            "Without it they only see counts."
+        ),
+    )
+
+
+class MessageFeedbackResponse(BaseModel):
+    rating: Literal["up", "down"]
+    reasons: list[str]
+    comment: str | None
+    shared: bool
+    updated_at: datetime
+
+    @classmethod
+    def of(cls, f: FeedbackInfo) -> MessageFeedbackResponse:
+        return cls(
+            rating=f.rating,
+            reasons=list(f.reasons),
+            comment=f.comment,
+            shared=f.shared,
+            updated_at=f.updated_at,
+        )
+
+
 class MessageResponse(BaseModel):
     id: uuid.UUID
     conversation_id: uuid.UUID
@@ -177,6 +223,9 @@ class MessageResponse(BaseModel):
     latency_ms: int | None
     created_at: datetime
     completed_at: datetime | None
+    feedback: MessageFeedbackResponse | None = Field(
+        default=None, description="Your own rating of this answer."
+    )
 
     @classmethod
     def of(cls, m: MessageInfo) -> MessageResponse:
@@ -204,6 +253,7 @@ class MessageResponse(BaseModel):
             latency_ms=m.latency_ms,
             created_at=m.created_at,
             completed_at=m.completed_at,
+            feedback=MessageFeedbackResponse.of(m.feedback) if m.feedback else None,
         )
 
 
@@ -218,3 +268,69 @@ class ReplyResponse(BaseModel):
 
     user_message: MessageResponse | None
     assistant_message: MessageResponse
+
+
+class ModelRatingResponse(BaseModel):
+    model: str
+    up: int
+    down: int
+
+
+class SharedFeedbackResponse(BaseModel):
+    message_id: uuid.UUID
+    rating: Literal["up", "down"]
+    reasons: list[str]
+    comment: str | None
+    question: str
+    answer: str
+    answer_status: str | None
+    citation_count: int
+    model: str | None
+    prompt_version: str | None
+    rated_at: datetime
+
+    @classmethod
+    def of(cls, f: SharedFeedback) -> SharedFeedbackResponse:
+        return cls(
+            message_id=f.message_id,
+            rating=f.rating,
+            reasons=list(f.reasons),
+            comment=f.comment,
+            question=f.question,
+            answer=f.answer,
+            answer_status=f.answer_status,
+            citation_count=f.citation_count,
+            model=f.model,
+            prompt_version=f.prompt_version,
+            rated_at=f.rated_at,
+        )
+
+
+class AnswerQualityResponse(BaseModel):
+    days: int
+    answers: int = Field(description="Completed answers in the period.")
+    insufficient_context: int = Field(
+        description="Answers that said the documents don't cover the question."
+    )
+    rated: int
+    up: int
+    down: int
+    reasons: dict[str, int] = Field(description="How often each reason was given (thumbs down).")
+    models: list[ModelRatingResponse]
+    shared: list[SharedFeedbackResponse] = Field(
+        description="Ratings members chose to share with admins, newest first (at most 50)."
+    )
+
+    @classmethod
+    def of(cls, q: QualitySummary) -> AnswerQualityResponse:
+        return cls(
+            days=q.days,
+            answers=q.answers,
+            insufficient_context=q.insufficient_context,
+            rated=q.rated,
+            up=q.up,
+            down=q.down,
+            reasons=q.reasons,
+            models=[ModelRatingResponse(model=m.model, up=m.up, down=m.down) for m in q.models],
+            shared=[SharedFeedbackResponse.of(f) for f in q.shared],
+        )

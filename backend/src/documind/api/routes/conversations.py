@@ -9,17 +9,20 @@ from fastapi import APIRouter, Depends, Header, Query, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from documind.api.dependencies import (
+    AnswerQualityServiceDep,
     ConversationServiceDep,
     WorkspaceCtx,
     admit_answer,
     limit_ai_requests,
 )
 from documind.api.schemas.conversations import (
+    AnswerQualityResponse,
     ConversationDetailResponse,
     ConversationPageResponse,
     ConversationResponse,
     CreateConversationRequest,
     MessageCitationResponse,
+    MessageFeedbackRequest,
     MessagePageResponse,
     MessageResponse,
     RenameConversationRequest,
@@ -31,6 +34,7 @@ from documind.api.sse import event_stream, wants_event_stream
 from documind.application.conversations.service import StartedReply, collect
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/conversations", tags=["conversations"])
+quality_router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["conversations"])
 
 _STREAM_DOC = (
     "Send `Accept: text/event-stream` to stream the answer as Server-Sent Events "
@@ -224,3 +228,60 @@ async def cancel_message(
     conversations: ConversationServiceDep,
 ) -> MessageResponse:
     return MessageResponse.of(await conversations.cancel(ctx, conversation_id, message_id))
+
+
+@router.put(
+    "/{conversation_id}/messages/{message_id}/feedback",
+    response_model=MessageResponse,
+    summary="Rate an answer (thumbs up or down)",
+    description="Rating again replaces your earlier rating. Only finished answers can be rated.",
+)
+async def rate_message(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: MessageFeedbackRequest,
+    ctx: WorkspaceCtx,
+    conversations: ConversationServiceDep,
+) -> MessageResponse:
+    message = await conversations.rate(
+        ctx,
+        conversation_id,
+        message_id,
+        rating=body.rating,
+        reasons=body.reasons,
+        comment=body.comment,
+        shared=body.shared,
+    )
+    return MessageResponse.of(message)
+
+
+@router.delete(
+    "/{conversation_id}/messages/{message_id}/feedback",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove your rating",
+)
+async def unrate_message(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    ctx: WorkspaceCtx,
+    conversations: ConversationServiceDep,
+) -> Response:
+    await conversations.unrate(ctx, conversation_id, message_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@quality_router.get(
+    "/answer-quality",
+    response_model=AnswerQualityResponse,
+    summary="How members rate answers (admins)",
+    description=(
+        "Counts for the whole workspace. Questions and answers appear only where the "
+        "member chose to share them."
+    ),
+)
+async def answer_quality(
+    ctx: WorkspaceCtx,
+    quality: AnswerQualityServiceDep,
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+) -> AnswerQualityResponse:
+    return AnswerQualityResponse.of(await quality.summary(ctx, days=days))

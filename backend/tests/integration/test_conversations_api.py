@@ -431,6 +431,8 @@ def test_conversations_are_private_and_workspace_scoped(chat: Api) -> None:
         ("post", f"{base(org)}/{cid}/messages", {"content": "hi"}),
         ("post", f"{base(org)}/{cid}/messages/{mid}/regenerate", None),
         ("post", f"{base(org)}/{cid}/messages/{mid}/cancel", None),
+        ("put", f"{base(org)}/{cid}/messages/{mid}/feedback", {"rating": "up"}),
+        ("delete", f"{base(org)}/{cid}/messages/{mid}/feedback", None),
     ]
     for who in (colleague, outsider):
         for method, path, body in paths:

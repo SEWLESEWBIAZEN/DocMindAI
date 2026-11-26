@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from documind.application.ai.resolver import UnavailableEmbeddings, WorkspaceAI
 from documind.application.billing.service import BillingService
 from documind.application.billing.subscriptions import SubscriptionService
+from documind.application.conversations.feedback import AnswerQualityService
 from documind.application.conversations.finalizer import ReplyFinalizer
 from documind.application.conversations.service import ConversationService
 from documind.application.conversations.streaming import ReplyRunner, StreamOptions
@@ -597,6 +598,13 @@ async def limit_outbound_checks(ctx: WorkspaceCtx, container: ContainerDep) -> N
 # --------------------------------------------------------------------------- #
 # Conversations
 # --------------------------------------------------------------------------- #
+
+
+def get_answer_quality_service(session: DataSessionDep) -> AnswerQualityService:
+    return AnswerQualityService(session)
+
+
+AnswerQualityServiceDep = Annotated[AnswerQualityService, Depends(get_answer_quality_service)]
 
 
 def get_conversation_service(
