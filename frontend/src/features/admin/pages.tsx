@@ -89,6 +89,7 @@ export function MembersPage() {
   })
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('member')
+  const [memberQuery, setMemberQuery] = useState('')
   const invite = useMutation({
     mutationFn: async () => apiClient.post(`/workspaces/${ws}/invitations`, { email: email.trim(), role }),
     onSuccess: async () => {
@@ -199,9 +200,20 @@ export function MembersPage() {
         )}
 
         <section aria-labelledby="members-heading" className="stack stack--sm">
-          <h2 id="members-heading" className="section-title">
-            Members {members.data && `(${members.data.length})`}
-          </h2>
+          <div className="members-head">
+            <h2 id="members-heading" className="section-title">
+              Members {members.data && `(${members.data.length})`}
+            </h2>
+            {(members.data?.length ?? 0) > 5 && (
+              <div className="library-bar__search members-head__search">
+                <Icon name="search" size={16} />
+                <label htmlFor="member-search" className="sr-only">
+                  Search members
+                </label>
+                <input id="member-search" type="search" placeholder="Search members…" value={memberQuery} onChange={(e) => setMemberQuery(e.target.value)} />
+              </div>
+            )}
+          </div>
           {members.isLoading ? (
             <Loading lines={4} />
           ) : members.error ? (
@@ -211,27 +223,33 @@ export function MembersPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th scope="col">Name</th>
+                    <th scope="col">Member</th>
                     <th scope="col">Role</th>
-                    <th scope="col">Joined</th>
                     {showMfa && <th scope="col">Two-factor</th>}
+                    {showMfa && <th scope="col">Last active</th>}
+                    <th scope="col">Joined</th>
                     <th scope="col">
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {members.data?.map((m) => {
+                  {members.data?.filter((m) => matchesMember(m, memberQuery)).map((m) => {
                     const self = m.user_id === user.id
                     const editable = can('members.manage') && !self && RANK[m.role] <= RANK[workspace.role]
                     return (
                       <tr key={m.id}>
                         <td>
-                          <div className="stack stack--sm" style={{ gap: 2 }}>
-                            <strong>
-                              {m.display_name} {self && <Badge>You</Badge>}
-                            </strong>
-                            <span className="table__sub">{m.email}</span>
+                          <div className="table__primary">
+                            <span className="avatar" aria-hidden="true">
+                              {initials(m.display_name)}
+                            </span>
+                            <div className="stack stack--sm" style={{ gap: 2, minWidth: 0 }}>
+                              <strong>
+                                {m.display_name} {self && <Badge>You</Badge>}
+                              </strong>
+                              <span className="table__sub truncate">{m.email}</span>
+                            </div>
                           </div>
                         </td>
                         <td>
@@ -252,7 +270,6 @@ export function MembersPage() {
                             <Badge tone={m.role === 'owner' ? 'accent' : 'neutral'}>{ROLE_LABELS[m.role]}</Badge>
                           )}
                         </td>
-                        <td>{formatDate(m.joined_at)}</td>
                         {showMfa && (
                           <td>
                             {m.mfa_enabled ? (
@@ -264,6 +281,12 @@ export function MembersPage() {
                             )}
                           </td>
                         )}
+                        {showMfa && (
+                          <td title={m.last_active_at ? formatDate(m.last_active_at) : undefined}>
+                            {m.last_active_at ? formatRelative(m.last_active_at) : <span className="muted">Never</span>}
+                          </td>
+                        )}
+                        <td>{formatDate(m.joined_at)}</td>
                         <td className="table__actions">
                           {editable && (
                             <Button size="sm" variant="ghost" icon="trash" label={`Remove ${m.display_name}`} onClick={() => void remove(m)} />
@@ -1475,4 +1498,14 @@ function DailyChart({ daily }: { daily: UsageSummary['daily'] }) {
       </details>
     </figure>
   )
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? '?') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+
+function matchesMember(m: { display_name: string; email: string }, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  return !q || m.display_name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
 }

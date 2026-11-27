@@ -82,6 +82,7 @@ class MemberInfo:
     joined_at: datetime
     mfa_enabled: bool | None = None  # only shown to members who manage members
     mfa_method: str | None = None
+    last_active_at: datetime | None = None  # last sign-in; only for those who manage members
 
 
 def _slugify(name: str) -> str:
@@ -341,6 +342,7 @@ class WorkspaceService:
                 # Counted as this workspace counts it (email may not be allowed here).
                 mfa_enabled=m.user.mfa_allowed_in(allow_email) if show_mfa else None,
                 mfa_method=m.user.mfa_method if show_mfa else None,
+                last_active_at=m.user.last_login_at if show_mfa else None,
             )
             for m in await self._workspaces.list_members(ctx.workspace_id)
         ]

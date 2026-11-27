@@ -164,6 +164,9 @@ class MemberResponse(BaseModel):
         default=None, description="Shown only to members who can manage members"
     )
     mfa_method: Literal["passkey", "authenticator", "email"] | None = None
+    last_active_at: datetime | None = Field(
+        default=None, description="Last sign-in. Shown only to members who can manage members"
+    )
 
 
 class MfaRequirementRequest(_In):

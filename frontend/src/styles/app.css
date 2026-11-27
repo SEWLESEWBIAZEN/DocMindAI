@@ -4130,3 +4130,19 @@ mark.reading-highlight {
   color: var(--color-accent-strong);
   border-bottom-color: var(--color-accent);
 }
+
+.members-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.members-head__search {
+  flex: 0 1 280px;
+}
+
+.table__primary .avatar {
+  flex: none;
+}

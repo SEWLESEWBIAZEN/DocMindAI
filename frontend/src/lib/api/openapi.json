@@ -3381,6 +3381,19 @@
             "title": "Joined At",
             "type": "string"
           },
+          "last_active_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last sign-in. Shown only to members who can manage members",
+            "title": "Last Active At"
+          },
           "mfa_enabled": {
             "anyOf": [
               {

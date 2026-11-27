@@ -171,6 +171,7 @@ async def list_members(ctx: WorkspaceCtx, workspaces: WorkspaceServiceDep) -> li
             joined_at=m.joined_at,
             mfa_enabled=m.mfa_enabled,
             mfa_method=m.mfa_method,
+            last_active_at=m.last_active_at,
         )
         for m in await workspaces.list_members(ctx)
     ]

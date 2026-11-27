@@ -433,6 +433,19 @@ def test_viewer_and_member_cannot_manage_members(api: Api) -> None:
     )
 
 
+def test_last_sign_in_is_shown_only_to_member_managers(api: Api) -> None:
+    ada = api.signup("ada@example.com")
+    org = api.create_org(ada)
+    member = api.add_member(org["id"], ada, "mia@example.com", "member")
+    seen_by_owner = {
+        m["email"]: m for m in api.client.get(f"{WS}/{org['id']}/members", headers=ada).json()
+    }
+    assert seen_by_owner["mia@example.com"]["last_active_at"] is not None  # signed in to join
+    assert seen_by_owner["ada@example.com"]["last_active_at"] is not None
+    seen_by_member = api.client.get(f"{WS}/{org['id']}/members", headers=member).json()
+    assert all(m["last_active_at"] is None for m in seen_by_member)
+
+
 # --- audit ---
 
 

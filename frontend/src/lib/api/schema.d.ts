@@ -3526,6 +3526,11 @@ export interface components {
              */
             joined_at: string;
             /**
+             * Last Active At
+             * @description Last sign-in. Shown only to members who can manage members
+             */
+            last_active_at?: string | null;
+            /**
              * Mfa Enabled
              * @description Shown only to members who can manage members
              */

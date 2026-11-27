@@ -31,6 +31,10 @@ test('settings pages share tabs and extraction has start and history tabs', asyn
   await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible()
   const orgTabs = page.getByRole('navigation', { name: 'Organization settings' })
   await expect(orgTabs.getByRole('link', { name: 'Members' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('columnheader', { name: 'Last active' })).toBeVisible()
+  const me = page.getByRole('row', { name: /Sam Settings/ })
+  await expect(me.getByText('SS', { exact: true })).toBeVisible() // avatar initials
+  await expect(me.getByText(/ago|now/)).toBeVisible() // signed in moments ago
   await page.screenshot({ path: 'test-results/settings-tabs.png' })
 
   const org = page.url().replace(/\/members.*$/, '')
