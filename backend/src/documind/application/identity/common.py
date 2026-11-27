@@ -25,6 +25,8 @@ class Principal:
     sso_workspace_id: uuid.UUID | None = None
     #: Set when the caller used a workspace API key instead of a session (ADR 0037).
     api_key: ApiKeyGrant | None = None
+    #: The signed-in session (refresh-token family) the access token belongs to.
+    session_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -420,3 +420,61 @@ def test_seeded_roles_match_code_catalog(api: Api) -> None:
         ranks[role] = rank
     assert db == {role.value: {p.value for p in perms} for role, perms in ROLE_PERMISSIONS.items()}
     assert ranks == {role.value: rank for role, rank in ROLE_RANK.items()}
+
+
+def test_signing_out_ends_that_devices_access_token_at_once(api: Api) -> None:
+    """Production readiness F2: no 15-minute window after signing out of one device."""
+    api.signup("ada@example.com")
+    sessions = []
+    for _ in range(2):  # two devices
+        r = api.login("ada@example.com")
+        assert r.status_code == 200
+        sessions.append(
+            (r.json()["access_token"], str(r.cookies[api.settings.refresh_cookie_name]))
+        )
+    (laptop, laptop_cookie), (phone, _) = sessions
+    me = "/api/v1/me"
+    assert api.client.get(me, headers={"Authorization": f"Bearer {laptop}"}).status_code == 200
+
+    # A step-up (elevated) token belongs to the same session.
+    secret, _ = api.enable_mfa({"Authorization": f"Bearer {laptop}"})
+    elevated = api.step_up({"Authorization": f"Bearer {laptop}"}, secret)
+
+    api.use_refresh_cookie(laptop_cookie)
+    out = api.client.post("/api/v1/auth/logout", headers={"X-CSRF-Protection": "1"})
+    assert out.status_code == 204
+
+    # The laptop's tokens stop working now; the phone keeps its session.
+    assert api.client.get(me, headers={"Authorization": f"Bearer {laptop}"}).status_code == 401
+    assert api.client.get(me, headers=elevated).status_code == 401
+    assert api.client.get(me, headers={"Authorization": f"Bearer {phone}"}).status_code == 200
+
+
+def test_refreshing_keeps_the_session_and_old_tokens_still_expire_normally(api: Api) -> None:
+    import uuid
+
+    from documind.infrastructure.security.jwt_tokens import JwtAccessTokenService
+
+    h = api.signup("bob@example.com")
+    # Rotating the refresh token keeps the session (family) alive.
+    r = api.refresh()
+    assert r.status_code == 200
+    assert api.client.get("/api/v1/me", headers=h).status_code == 200
+    assert (
+        api.client.get(
+            "/api/v1/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}
+        ).status_code
+        == 200
+    )
+    # A token issued before the session claim existed still works until it expires:
+    # deploying this change signs nobody out.
+    me = api.client.get("/api/v1/me", headers=h).json()
+    s = api.settings
+    legacy = JwtAccessTokenService(
+        secret=s.jwt_secret_key.get_secret_value(),
+        issuer=s.jwt_issuer,
+        audience=s.jwt_audience,
+        ttl_seconds=60,
+    ).issue(uuid.UUID(me["id"]), 1)
+    ok = api.client.get("/api/v1/me", headers={"Authorization": f"Bearer {legacy.token}"})
+    assert ok.status_code == 200

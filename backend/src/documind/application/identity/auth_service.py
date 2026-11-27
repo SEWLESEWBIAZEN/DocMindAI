@@ -202,6 +202,7 @@ class AuthService:
             mfa_verified_at=mfa_verified_at,
             mfa_method=mfa_method,
             sso_workspace_id=refresh.sso_workspace_id,
+            session_id=refresh.family_id,
         )
         return AuthResult(
             user=user,
@@ -613,11 +614,18 @@ class AuthService:
         user = await self._users.get(claims.user_id)
         if user is None or not user.is_active or user.auth_version != claims.auth_version:
             raise AuthenticationError("Your session is no longer valid. Please sign in again.")
+        # Signing out of this device revokes its session: its access tokens stop now,
+        # not when they expire.
+        if claims.session_id is not None and not await self._refresh.family_active(
+            claims.session_id, user.id, utcnow()
+        ):
+            raise AuthenticationError("Your session is no longer valid. Please sign in again.")
         return Principal(
             user=user,
             mfa_verified_at=claims.mfa_verified_at,
             mfa_method=claims.mfa_method,
             sso_workspace_id=claims.sso_workspace_id,
+            session_id=claims.session_id,
         )
 
     async def sso_session(self, user: User, workspace_id: uuid.UUID) -> AuthResult:

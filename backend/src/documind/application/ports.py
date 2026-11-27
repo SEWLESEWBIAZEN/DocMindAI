@@ -37,6 +37,9 @@ class AccessTokenClaims:
     mfa_method: str | None = None
     # Signed in through this organization's SSO (ADR 0036).
     sso_workspace_id: UUID | None = None
+    # The session (refresh-token family) it belongs to: signing out ends it at once.
+    # None on tokens issued before this claim existed (they expire within the TTL).
+    session_id: UUID | None = None
 
 
 class AccessTokenService(Protocol):
@@ -48,6 +51,7 @@ class AccessTokenService(Protocol):
         mfa_verified_at: datetime | None = None,
         mfa_method: str | None = None,
         sso_workspace_id: UUID | None = None,
+        session_id: UUID | None = None,
     ) -> IssuedAccessToken: ...
 
     def decode(self, token: str) -> AccessTokenClaims:

@@ -206,6 +206,20 @@ class RefreshTokenRepository:
             stmt = stmt.with_for_update()
         return (await self._s.execute(stmt)).scalar_one_or_none()
 
+    async def family_active(self, family_id: uuid.UUID, user_id: uuid.UUID, now: datetime) -> bool:
+        """Whether this session still has a usable refresh token (indexed by family_id)."""
+        stmt = (
+            select(RefreshToken.id)
+            .where(
+                RefreshToken.family_id == family_id,
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+                RefreshToken.expires_at > now,
+            )
+            .limit(1)
+        )
+        return (await self._s.execute(stmt)).first() is not None
+
     async def revoke_family(self, family_id: uuid.UUID, reason: str, now: datetime) -> None:
         await self._s.execute(
             update(RefreshToken)

@@ -11,6 +11,7 @@ from documind.api.dependencies import (
     AccountServiceDep,
     AuthServiceDep,
     ContainerDep,
+    CurrentPrincipal,
     CurrentUser,
     MfaServiceDep,
     SettingsDep,
@@ -264,13 +265,20 @@ async def reset_password(body: ResetPasswordRequest, auth: AuthServiceDep) -> Re
 async def mfa_verify(
     body: MfaSecondFactorRequest,
     response: Response,
-    user: CurrentUser,
+    principal: CurrentPrincipal,
     mfa: MfaServiceDep,
     container: ContainerDep,
 ) -> StepUpResponse:
+    user = principal.user
     verified = await mfa.verify(user, body.code, body.recovery_code, body.email_code, body.passkey)
+    # Same session as the caller: signing out ends the elevated token too.
     issued = container.access_tokens.issue(
-        user.id, user.auth_version, mfa_verified_at=verified.at, mfa_method=verified.method
+        user.id,
+        user.auth_version,
+        mfa_verified_at=verified.at,
+        mfa_method=verified.method,
+        sso_workspace_id=principal.sso_workspace_id,
+        session_id=principal.session_id,
     )
     response.headers["Cache-Control"] = "no-store"
     return StepUpResponse(

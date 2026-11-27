@@ -29,6 +29,7 @@ class JwtAccessTokenService:
         mfa_verified_at: datetime | None = None,
         mfa_method: str | None = None,
         sso_workspace_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> IssuedAccessToken:
         now = datetime.now(UTC)
         claims: dict[str, object] = {
@@ -44,6 +45,8 @@ class JwtAccessTokenService:
         }
         if sso_workspace_id is not None:
             claims["sso"] = str(sso_workspace_id)
+        if session_id is not None:
+            claims["sid"] = str(session_id)
         if mfa_verified_at is not None:
             claims["mfa"] = int(mfa_verified_at.timestamp())
             if mfa_method is not None:
@@ -74,6 +77,7 @@ class JwtAccessTokenService:
                 else None,
                 mfa_method=str(claims["mfm"]) if mfa is not None and "mfm" in claims else None,
                 sso_workspace_id=uuid.UUID(str(claims["sso"])) if "sso" in claims else None,
+                session_id=uuid.UUID(str(claims["sid"])) if "sid" in claims else None,
             )
         except AuthenticationError:
             raise
