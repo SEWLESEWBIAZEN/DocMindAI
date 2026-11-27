@@ -247,6 +247,9 @@ function NewExtraction() {
 export function ExtractionsPage() {
   useTitle('Extract')
   const { workspace, base, can } = useWorkspace()
+  const [params] = useSearchParams()
+  const canStart = can('conversations.use')
+  const tab: 'new' | 'history' = params.get('tab') === 'history' || !canStart ? 'history' : 'new'
   const runs = useQuery({
     queryKey: extractionKeys.runs(workspace.id),
     queryFn: () => listRuns(workspace.id),
@@ -263,8 +266,19 @@ export function ExtractionsPage() {
           </Link>
         }
       />
+      <nav className="tabs tabs--page" aria-label="Extraction views">
+        {canStart && (
+          <Link className="tabs__tab" to={{ search: '' }} aria-current={tab === 'new' ? 'page' : undefined} replace>
+            Extract from documents
+          </Link>
+        )}
+        <Link className="tabs__tab" to={{ search: '?tab=history' }} aria-current={tab === 'history' ? 'page' : undefined} replace>
+          Extraction history{runs.data?.length ? ` (${runs.data.length})` : ''}
+        </Link>
+      </nav>
       <div className="stack" style={{ gap: 24 }}>
-        {can('conversations.use') && <NewExtraction />}
+        {tab === 'new' && <NewExtraction />}
+        {tab === 'history' && (
         <section className="panel" aria-labelledby="past-extractions">
           <header className="panel__header">
             <h2 id="past-extractions">Extractions</h2>
@@ -279,7 +293,7 @@ export function ExtractionsPage() {
             </div>
           ) : !runs.data?.length ? (
             <div className="panel__body">
-              <EmptyState icon="flask" title="No extractions yet" description="Start one above. Results stay here for the whole workspace." />
+              <EmptyState icon="flask" title="No extractions yet" description="Start one under “Extract from documents”. Results stay here for the whole workspace." />
             </div>
           ) : (
             <ul className="list">
@@ -305,6 +319,7 @@ export function ExtractionsPage() {
             </ul>
           )}
         </section>
+        )}
       </div>
     </>
   )

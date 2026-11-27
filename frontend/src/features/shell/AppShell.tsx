@@ -19,6 +19,7 @@ import { UploadTray } from '../documents/UploadTray'
 import { Logo } from '../landing/components/Logo'
 import { VoiceProvider } from '../voice/VoiceContext'
 import { MfaGate } from './MfaGate'
+import { SettingsTabs } from './SettingsTabs'
 
 /** `/app`: send the user to their default workspace. */
 export function AppHome() {
@@ -140,6 +141,7 @@ function Shell() {
         <main id="main" className="shell__main" ref={main}>
           <ErrorBoundary resetKey={location.pathname}>
             <MfaGate>
+              <SettingsTabs />
               <Outlet />
             </MfaGate>
           </ErrorBoundary>

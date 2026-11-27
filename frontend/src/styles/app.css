@@ -4105,3 +4105,28 @@ mark.reading-highlight {
 .citation-card__links {
   gap: 14px;
 }
+
+/* ---------------------------------------------------------------- settings tabs */
+
+.settings-tabs {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.settings-tabs__title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.settings-tabs .tabs--page {
+  margin: 0;
+}
+
+.tabs__tab.active {
+  color: var(--color-accent-strong);
+  border-bottom-color: var(--color-accent);
+}
