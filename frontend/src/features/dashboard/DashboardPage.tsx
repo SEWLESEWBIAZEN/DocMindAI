@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { Alert, Button, EmptyState, ErrorState, Icon, Loading, PageHeader } from '../../components/ui'
+import { Alert, Button, EmptyState, ErrorState, Icon, Loading } from '../../components/ui'
 import { useWorkspace } from '../../lib/workspace/WorkspaceContext'
 import { ROLE_LABELS } from '../../lib/workspace/permissions'
 import { useUser } from '../auth/AuthProvider'
@@ -69,11 +69,6 @@ export function DashboardPage() {
     enabled: can('documents.read'),
     refetchInterval: (q) => (q.state.data?.items.some((d) => d.status === 'pending' || d.status === 'processing') ? 3000 : false),
   })
-  const ready = useQuery({
-    queryKey: documentKeys.list(ws, { status: 'ready', limit: 1 }),
-    queryFn: () => listDocuments(ws, { status: 'ready', limit: 1 }),
-    enabled: can('documents.read'),
-  })
   const failed = useQuery({
     queryKey: documentKeys.list(ws, { status: 'failed', limit: 5 }),
     queryFn: () => listDocuments(ws, { status: 'failed', limit: 5 }),
@@ -91,38 +86,69 @@ export function DashboardPage() {
     enabled: workspace.kind === 'organization' && can('members.read'),
   })
 
-  const stats = [
-    { label: 'Documents', value: recent.data?.total, hint: 'in this workspace', to: `${base}/documents` },
-    { label: 'Ready to ask', value: ready.data?.total, hint: 'processed and searchable', to: `${base}/documents?status=ready` },
-    { label: 'Collections', value: collections.data?.length, hint: 'groups of documents', to: `${base}/collections` },
-    { label: 'Conversations', value: conversations.data?.total, hint: 'yours', to: `${base}/conversations` },
-  ]
+  const [question, setQuestion] = useState('')
+  const askNow = (e: FormEvent) => {
+    e.preventDefault()
+    const q = question.trim()
+    if (!q) return
+    navigate(`${base}/chat`, { state: { fresh: Date.now(), ask: q } })
+  }
+  const collectionName = (ids: string[]) => (collections.data ?? []).find((c) => ids.includes(c.id))?.name
+  const actions = [
+    { label: 'Summarize a document', icon: 'sparkles' as const, to: `${base}/documents`, show: can('documents.read') },
+    { label: 'Compare documents', icon: 'layers' as const, to: `${base}/extract`, show: can('documents.read') },
+    { label: 'Extract information', icon: 'flask' as const, to: `${base}/extract`, show: can('documents.read') },
+    { label: 'Find deadlines', icon: 'clock' as const, to: `${base}/deadlines`, show: can('documents.read') },
+  ].filter((a) => a.show)
 
   return (
     <>
-      <PageHeader
-        title={`${greeting()}, ${user.display_name.split(' ')[0]}`}
-        description={
-          <>
+      <MfaOffer />
+      <section className="home-hero" aria-labelledby="home-greeting">
+        <h1 id="home-greeting" className="home-hero__title">
+          {greeting()}, {user.display_name.split(' ')[0]}
+        </h1>
+        <p className="home-hero__lead">
+          Ask a question, find information, or analyze your documents.
+          <span className="home-hero__context">
+            {' '}
             {workspace.name} · {workspace.kind === 'personal' ? 'Personal workspace' : 'Organization'} · {ROLE_LABELS[workspace.role]}
-          </>
-        }
-        actions={
-          <>
+          </span>
+        </p>
+        {can('conversations.use') && (
+          <form className="home-ask" role="search" aria-label="Ask your documents" onSubmit={askNow}>
+            <Icon name="search" size={18} />
+            <label htmlFor="home-ask" className="sr-only">
+              Ask anything about your documents
+            </label>
+            <input
+              id="home-ask"
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask anything about your documents…"
+              autoComplete="off"
+            />
             {can('documents.write') && (
-              <Link className="btn btn--secondary btn--md" to={`${base}/upload`}>
-                <Icon name="upload" size={17} /> Upload
+              <Link to={`${base}/upload`} className="home-ask__attach" aria-label="Upload documents" title="Upload documents">
+                <Icon name="upload" size={17} />
               </Link>
             )}
-            {can('conversations.use') && (
-              <Button variant="primary" icon="message" onClick={() => navigate(`${base}/chat`, { state: { fresh: Date.now() } })}>
-                Ask a question
-              </Button>
-            )}
-          </>
-        }
-      />
-      <MfaOffer />
+            <Button type="submit" variant="primary" icon="send" label="Ask" disabled={!question.trim()} />
+          </form>
+        )}
+        {actions.length > 0 && (
+          <ul className="home-actions" aria-label="Quick actions">
+            {actions.map((a) => (
+              <li key={a.label}>
+                <Link to={a.to} className="home-chip">
+                  <Icon name={a.icon} size={14} /> {a.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <div className="stack" style={{ gap: 24 }}>
         <GettingStarted
           documents={recent.data?.total}
@@ -136,16 +162,6 @@ export function DashboardPage() {
             deleting documents. <Link to={`${base}/profile#security`}>Set up 2FA</Link>
           </Alert>
         )}
-        <div className="stat-grid">
-          {stats.map((s) => (
-            <Link key={s.label} to={s.to} className="stat card-link" style={{ gap: 4 }}>
-              <span className="stat__label">{s.label}</span>
-              <span className="stat__value">{s.value ?? '–'}</span>
-              <span className="stat__hint">{s.hint}</span>
-            </Link>
-          ))}
-        </div>
-
         {failed.data && failed.data.total > 0 && (
           <Alert>
             {failed.data.total} {failed.data.total === 1 ? 'document' : 'documents'} failed to process:{' '}
@@ -159,7 +175,7 @@ export function DashboardPage() {
           </Alert>
         )}
 
-        <div className="grid-2">
+        <div className="grid-2 home-lists">
           <section className="panel" aria-labelledby="recent-docs">
             <header className="panel__header">
               <h2 id="recent-docs">Recent documents</h2>
@@ -195,15 +211,14 @@ export function DashboardPage() {
               <ul className="list">
                 {recent.data.items.map((d) => (
                   <li key={d.id} className="list-row">
-                    <span className="file-icon" aria-hidden="true">
-                      <Icon name="file" size={16} />
-                    </span>
+                    <FileTile format={d.format} />
                     <div className="list-row__main">
                       <Link to={`${base}/documents/${d.id}`} className="list-row__title truncate">
                         {d.title}
                       </Link>
                       <span className="list-row__meta">
-                        {formatBytes(d.size_bytes)} · {formatRelative(d.created_at)}
+                        Updated {formatRelative(d.updated_at ?? d.created_at)}
+                        {collectionName(d.collection_ids) ? ` · ${collectionName(d.collection_ids)}` : ` · ${formatBytes(d.size_bytes)}`}
                       </span>
                     </div>
                     <StatusBadge status={d.status} />
@@ -216,7 +231,7 @@ export function DashboardPage() {
           {can('conversations.use') && (
             <section className="panel" aria-labelledby="recent-conv">
               <header className="panel__header">
-                <h2 id="recent-conv">Recent conversations</h2>
+                <h2 id="recent-conv">Continue your work</h2>
                 <Link to={`${base}/conversations`}>View all</Link>
               </header>
               {conversations.isLoading ? (
@@ -236,15 +251,16 @@ export function DashboardPage() {
                 <ul className="list">
                   {conversations.data.items.map((c) => (
                     <li key={c.id} className="list-row">
-                      <span className="file-icon" aria-hidden="true">
+                      <span className="file-icon file-icon--chat" aria-hidden="true">
                         <Icon name="message" size={16} />
                       </span>
                       <div className="list-row__main">
                         <Link to={`${base}/chat/${c.id}`} className="list-row__title truncate">
                           {c.title}
                         </Link>
-                        <span className="list-row__meta">{formatRelative(c.last_message_at)}</span>
+                        <span className="list-row__meta">You asked {formatRelative(c.last_message_at)}</span>
                       </div>
+                      <Icon name="chevronRight" size={16} />
                     </li>
                   ))}
                 </ul>
@@ -254,5 +270,16 @@ export function DashboardPage() {
         </div>
       </div>
     </>
+  )
+}
+
+const FORMAT_TILE: Record<string, string> = { pdf: 'PDF', docx: 'DOC', md: 'MD', txt: 'TXT' }
+
+/** A small tile naming the file type, like the icons in a file manager. */
+function FileTile({ format }: { format: string }) {
+  return (
+    <span className={`file-tile file-tile--${format}`} aria-hidden="true">
+      {FORMAT_TILE[format] ?? format.slice(0, 4).toUpperCase()}
+    </span>
   )
 }

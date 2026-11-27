@@ -327,6 +327,16 @@ export function ChatPage() {
     await runStream(id, (options) => regenerate(ws, id, message.id, options))
   }
 
+  // A question handed over from elsewhere (the home page's ask box) is sent once.
+  const handedOver = useRef<string | null>((location.state as { ask?: string } | null)?.ask ?? null)
+  useEffect(() => {
+    const question = handedOver.current
+    if (!question || routeId) return
+    handedOver.current = null
+    void ask(question)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId])
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
