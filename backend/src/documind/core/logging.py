@@ -51,8 +51,12 @@ def _extra_fields(record: logging.LogRecord) -> dict[str, Any]:
 _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     # Provider API keys (OpenAI style), including masked forms from provider errors.
     (re.compile(r"\bsk-[A-Za-z0-9_*\-]{8,}"), "sk-[REDACTED]"),
-    # DocuMind customer-worker tokens.
-    (re.compile(r"\bdmw_[A-Za-z0-9_\-]{10,}"), "dmw_[REDACTED]"),
+    # DocuMind tokens: customer workers, workspace API keys, SCIM.
+    (re.compile(r"\b(dmw|dmk|dmscim)_[A-Za-z0-9_\-]{10,}"), r"\1_[REDACTED]"),
+    # Stripe secret and restricted keys, webhook signing secrets; Slack tokens.
+    (re.compile(r"\b(sk|rk)_(live|test)_[A-Za-z0-9]{8,}"), r"\1_\2_[REDACTED]"),
+    (re.compile(r"\bwhsec_[A-Za-z0-9]{8,}"), "whsec_[REDACTED]"),
+    (re.compile(r"\bxox[abposr]-[A-Za-z0-9\-]{8,}"), "xox-[REDACTED]"),
     # Bearer tokens and JWTs.
     (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=\-]+"), "Bearer [REDACTED]"),
     (re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]+"), "[REDACTED_JWT]"),
@@ -61,7 +65,8 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     # Explicit key/secret/password assignments.
     (
         re.compile(
-            r"(?i)\b(password|passwd|secret_access_key|api_key|secret)"
+            r"(?i)\b(password|passwd|secret_access_key|api_key|secret|client_secret"
+            r"|access_token|refresh_token|token)"
             r"(['\"]?\s*[:=]\s*['\"]?)[^\s,;'\"}&]+"
         ),
         r"\1\2[REDACTED]",

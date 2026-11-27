@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from documind.application.ai.metering import usage_source
@@ -184,6 +185,19 @@ class ProcessingOrchestrator:
             )
             return JobOutcome("unavailable")
         async with sessions() as session:
+            if workspace_id is not None:
+                # The message's workspace chose the data plane and the storage. Every later
+                # read uses the job row's own workspace, so the two must agree, or a forged
+                # message could pair one tenant's job with another tenant's bucket.
+                owner = await session.scalar(
+                    select(ProcessingJob.workspace_id).where(ProcessingJob.id == job_id)
+                )
+                if owner is not None and owner != workspace_id:
+                    logger.error(
+                        "Job message names another workspace; refused",
+                        extra={"job_id": str(job_id), "workspace_id": str(workspace_id)},
+                    )
+                    return JobOutcome("skipped")
             jobs = ProcessingJobRepository(session)
             job = await jobs.claim(
                 job_id, utcnow(), self._settings.processing_lease_seconds, self._worker

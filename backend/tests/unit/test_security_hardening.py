@@ -26,6 +26,14 @@ from tests.conftest import PRODUCTION, SettingsFactory
         ("Incorrect API key provided: sk-proj-abcDEF1234567890xyz", "abcDEF1234567890"),
         ("masked by the provider: sk-proj-********************7f3e", "7f3e"),
         ("worker token dmw_AbCdEfGhIjKlMnOpQrStUv", "AbCdEfGhIjKl"),
+        ("api key dmk_Zq9xYwVuTsRqPoNmLkJi", "Zq9xYwVuTsRq"),
+        ("scim dmscim_Zq9xYwVuTsRqPoNmLkJi", "Zq9xYwVuTsRq"),
+        ("stripe said: Invalid API Key provided: sk_test_51AbCdEfGhIjKlMn", "51AbCdEfGh"),
+        ("restricted rk_live_51AbCdEfGhIjKlMn", "51AbCdEfGh"),
+        ("webhook secret whsec_AbCdEfGhIjKlMnOp", "AbCdEfGhIj"),
+        ("slack xoxb-123456789012-abcdefghijkl", "123456789012"),
+        ("refresh_token=Qm9vZ2xlUmVmcmVzaA&grant_type=refresh_token", "Qm9vZ2xl"),
+        ('{"client_secret": "GOCSPX-abcdefghijkl"}', "GOCSPX-abc"),
         ("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl", "eyJhbGci"),
         ("postgresql+asyncpg://dm_app:S3cr3t-Passw0rd@db.example.com:5432/docs", "S3cr3t-Passw0rd"),
         ("password=hunter2-very-secret&user=x", "hunter2"),
@@ -37,7 +45,10 @@ def test_redact_masks_credentials(raw: str, secret: str) -> None:
 
 
 def test_redact_keeps_ordinary_text() -> None:
-    text = "Processing succeeded job_id=1234 pages=3 model=text-embedding-3-small"
+    text = (
+        "Processing succeeded job_id=1234 pages=3 model=text-embedding-3-small "
+        "input_tokens=812 output_tokens=120 tokens=932 sk_count=2"
+    )
     assert redact(text) == text
 
 
