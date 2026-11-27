@@ -49,7 +49,7 @@ For disaster scenarios and key rotation, see [`disaster-recovery.md`](disaster-r
 ## Take a backup
 
 ```bash
-export PGURL=postgresql://documind:...@db-host:5432/documind      # libpq form (no +asyncpg)
+export PGURL=postgresql://documind:...@db-host:5432/documind      # libpq form; optional: derived from DATABASE_URL
 export BACKUP_DIR=/var/backups/documind
 export BACKUP_PASSPHRASE_FILE=/run/secrets/backup_passphrase        # >= 16 characters
 export DATAPLANE_PGURLS="postgresql://dm_abc_app:...@dedicated-host:5432/dm_abc"   # optional
@@ -78,7 +78,10 @@ the DocuMind bucket.
    - run a search;
    - for a workspace with its own AI key, confirm that **AI providers** shows it as active.
 
-Run a restore drill at least quarterly, and after every change to the backup scripts.
+Run a restore drill at least quarterly, and after every change to the backup scripts. The last
+drill (2026-11-27, production stack on clean volumes: 59 s from empty to a healthy API, 70 s to
+verified) is in
+[`../production-readiness/04-operational-verification.md`](../production-readiness/04-operational-verification.md).
 
 ## Key ring rotation and backups
 

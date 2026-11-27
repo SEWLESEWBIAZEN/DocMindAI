@@ -1,6 +1,6 @@
 # Sandbox fallback only: when base images can't be pulled to rebuild documind-backend:runtime,
-# Paths are relative to deploy/production (the first Compose file's directory).
 # run the current source on the last built image (same dependencies). Not for real deployments.
+# Paths are relative to deploy/production (the first Compose file's directory).
 x-source: &source
   - ../../backend/src/documind:/opt/venv/lib/python3.12/site-packages/documind:ro
   - ../../backend/alembic:/app/alembic:ro
@@ -12,6 +12,7 @@ services:
   api: { volumes: *source }
   worker: { volumes: *source }
   beat: { volumes: *source }
+  backup: { volumes: *source }
   openai-stub:
     volumes:
       - ../../backend/src/documind:/opt/venv/lib/python3.12/site-packages/documind:ro

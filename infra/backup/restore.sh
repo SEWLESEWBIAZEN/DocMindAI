@@ -4,6 +4,7 @@
 # Usage: restore.sh <archive>
 # Required:
 #   PGURL                    libpq URL of the (empty) control database to restore into
+#                            (default: derived from DATABASE_URL, as in backup.sh)
 #   BACKUP_PASSPHRASE_FILE   the archive passphrase
 #   S3_BUCKET (and S3_*)     the (empty) bucket objects are restored into, via documind-manage
 # Optional:
@@ -15,7 +16,11 @@
 set -euo pipefail
 
 archive=${1:?usage: restore.sh <archive>}
-: "${PGURL:?set PGURL}"
+if [ -z "${PGURL:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+  PGURL=$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+asyncpg:#postgresql:#; s#([?&])ssl=#\1sslmode=#')
+  echo "PGURL not set: using DATABASE_URL" >&2
+fi
+: "${PGURL:?set PGURL (or DATABASE_URL)}"
 : "${BACKUP_PASSPHRASE_FILE:?set BACKUP_PASSPHRASE_FILE}"
 MANAGE=${DOCUMIND_MANAGE:-documind-manage}
 

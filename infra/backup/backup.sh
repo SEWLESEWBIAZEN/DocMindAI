@@ -3,7 +3,10 @@
 # in one encrypted, checksummed archive (Phase 9; scheduling and offsite copy: Phase 10).
 #
 # Required:
-#   PGURL                    libpq URL of the control database (postgresql://user:pass@host/db)
+#   PGURL                    libpq URL of the control database (postgresql://user:pass@host/db).
+#                            If unset, it is derived from the app's DATABASE_URL (the
+#                            "+asyncpg" driver removed, asyncpg's ssl= turned into sslmode=),
+#                            so a password rotation can't leave backups on a stale copy.
 #   BACKUP_DIR               where archives are written
 #   BACKUP_PASSPHRASE_FILE   file holding the archive passphrase (>= 16 characters)
 # Optional:
@@ -17,7 +20,11 @@
 # ring up separately (see docs/runbooks/backup-and-restore.md).
 set -euo pipefail
 
-: "${PGURL:?set PGURL}"
+if [ -z "${PGURL:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+  PGURL=$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgresql\+asyncpg:#postgresql:#; s#([?&])ssl=#\1sslmode=#')
+  echo "PGURL not set: using DATABASE_URL" >&2
+fi
+: "${PGURL:?set PGURL (or DATABASE_URL)}"
 : "${BACKUP_DIR:?set BACKUP_DIR}"
 : "${BACKUP_PASSPHRASE_FILE:?set BACKUP_PASSPHRASE_FILE (backups are always encrypted)}"
 MANAGE=${DOCUMIND_MANAGE:-documind-manage}

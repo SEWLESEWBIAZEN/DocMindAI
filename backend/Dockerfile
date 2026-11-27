@@ -87,6 +87,9 @@ RUN apt-get update \
 # Scripts come from infra/backup via a named build context:
 #   docker build --build-context backup-scripts=infra/backup --target backup backend
 COPY --chmod=0755 --from=backup-scripts backup.sh restore.sh schedule.sh /usr/local/bin/
+# The archive directory must exist, owned by the backup user: otherwise Docker creates the
+# "backups" volume's mount point as root and every run fails with "Permission denied".
+RUN install -d -o documind -g documind -m 0700 /backups
 USER documind
 HEALTHCHECK NONE
 ENTRYPOINT ["/usr/local/bin/schedule.sh"]
