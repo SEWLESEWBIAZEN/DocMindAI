@@ -55,6 +55,7 @@ import { findExcerpt } from './highlight'
 import { useVoice } from '../voice/VoiceContext'
 import { ReadingControls, type ReadingPosition } from '../voice/ReadingMode'
 import { useCollections } from './hooks'
+import { DocumentIntelligence, type PanelTab } from './DocumentIntelligence'
 import { StepUpDialog } from './StepUpDialog'
 import { CollectionAccess } from './CollectionAccess'
 import { useUploads } from './UploadManager'
@@ -700,6 +701,11 @@ export function DocumentViewerPage() {
   const voice = useVoice()
   const [listening, setListening] = useState(false)
   const [reading, setReading] = useState<ReadingPosition | null>(null)
+  const [intelOpen, setIntelOpen] = useStoredFlag('documind.viewer.intel', true)
+  const [askSignal, setAskSignal] = useState(0)
+  const [panelTab, setPanelTab] = useState<PanelTab>('insights')
+  const [textSize, setTextSize] = useStoredNumber('documind.viewer.textSize', 1, 0.85, 1.3)
+  const [visiblePage, setVisiblePage] = useState<number | null>(null)
 
   useEffect(() => {
     // When processing finishes, refresh lists that show this document.
@@ -731,14 +737,30 @@ export function DocumentViewerPage() {
   const d = doc.data
   const targetPage = Number(params.get('page') ?? 0) || null
   const excerpt = params.get('q') ?? ''
+  const pageList = pages.data ?? []
+  const numbered = pageList.some((p) => p.page_number !== null)
+  const canAsk = ready && !d.archived_at && can('conversations.use')
+  const showIntel = canAsk && intelOpen
+  const ocrPages = pageList.filter((p) => p.ocr).length
+  const thumbs = numbered && pageList.length > 1
+  const current = visiblePage ?? targetPage ?? 1
+  const goTo = (page: number) => {
+    setVisiblePage(page)
+    setParams({ page: String(page) }, { replace: true })
+  }
+  const indexState = d.needs_reindex ? 'Needs re-index' : ready ? 'Ready' : isBusy(d.status) ? 'Building' : 'Not indexed'
 
   return (
     <>
       <PageHeader
         back={
-          <Link to={`${base}/documents`} className="back-link">
-            <Icon name="arrowLeft" size={14} /> Documents
-          </Link>
+          <nav aria-label="Breadcrumb" className="breadcrumb">
+            <Link to={`${base}/documents`}>Documents</Link>
+            <Icon name="chevronRight" size={13} />
+            <span aria-current="page" className="truncate">
+              {d.title}
+            </span>
+          </nav>
         }
         title={d.title}
         description={
@@ -748,7 +770,7 @@ export function DocumentViewerPage() {
             {d.archived_at && <Badge tone="warning">Archived</Badge>}
             <span>
               {FORMAT_LABEL[d.format]} · {formatBytes(d.size_bytes)}
-              {d.page_count ? ` · ${d.page_count} pages` : ''}
+              {d.page_count ? ` · ${d.page_count} pages` : ''} · Uploaded {formatDate(d.created_at)}
             </span>
           </span>
         }
@@ -759,31 +781,69 @@ export function DocumentViewerPage() {
                 Listen
               </Button>
             )}
-            {ready && !d.archived_at && can('conversations.use') && (
-              <Button variant="primary" icon="message" onClick={() => navigate(`${base}/chat?documents=${d.id}`)}>
-                Ask about this
+            {canAsk && (
+              <Button
+                variant="primary"
+                icon="sparkles"
+                onClick={() => {
+                  setIntelOpen(true)
+                  setPanelTab('insights')
+                  setAskSignal((n) => n + 1)
+                }}
+              >
+                Ask about this document
               </Button>
             )}
-            <Button icon="download" onClick={() => void download()}>
-              Download
-            </Button>
+            {!intelOpen && !canAsk && (
+              <Button icon="info" onClick={() => { setIntelOpen(true); setPanelTab('metadata') }}>
+                Details
+              </Button>
+            )}
             <input ref={setVersionInput} type="file" accept={ACCEPT} hidden onChange={(e) => { void replaceVersion(e.target.files?.[0]); e.target.value = '' }} />
             <Menu
               label="More document actions"
               trigger={<Icon name="more" />}
               triggerClassName="btn btn--secondary btn--md btn--icon"
-              items={actions(
-                d,
-                can('documents.write') && !d.archived_at
-                  ? [{ label: 'Upload new version', icon: 'upload', onSelect: () => versionInput?.click() }]
-                  : [],
-              )}
+              items={actions(d, [
+                ...(canAsk ? [{ label: 'Open in chat', icon: 'message' as const, onSelect: () => navigate(`${base}/chat?documents=${d.id}`) }] : []),
+                { label: 'Download', icon: 'download' as const, onSelect: () => void download() },
+                ...(can('documents.write') && !d.archived_at
+                  ? [{ label: 'Upload new version', icon: 'upload' as const, onSelect: () => versionInput?.click() }]
+                  : []),
+              ])}
             />
           </>
         }
       />
-      <div className="viewer">
-        <div className="viewer__pages">
+      <div className={`docview${showIntel ? ' docview--panel' : ''}${thumbs ? ' docview--rail' : ''}`}>
+        {thumbs && (
+          <nav className="docview__rail" aria-label="Pages">
+            <ol>
+              {pageList.map((page) => {
+                const n = page.page_number ?? page.position + 1
+                const current = (visiblePage ?? targetPage ?? 1) === n
+                return (
+                  <li key={page.position}>
+                    <button
+                      type="button"
+                      className="thumb"
+                      aria-current={current ? 'page' : undefined}
+                      aria-label={`Page ${n}`}
+                      onClick={() => goTo(n)}
+                    >
+                      <span className="thumb__sheet" aria-hidden="true">
+                        {page.headings[0] && <strong>{page.headings[0]}</strong>}
+                        {page.text.slice(0, 160)}
+                      </span>
+                      <span className="thumb__num">{n}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ol>
+          </nav>
+        )}
+        <div className="docview__main">
           {d.status === 'failed' && (
             <Alert>
               Processing failed: {d.processing_error ?? 'unknown error'}.{' '}
@@ -808,69 +868,156 @@ export function DocumentViewerPage() {
               <Spinner /> {d.status === 'pending' ? 'Waiting to be processed…' : `Processing${processing.data?.jobs[0]?.stage ? ` (${processing.data.jobs[0].stage})` : ''}…`} This page updates by itself.
             </div>
           )}
-          {ready &&
-            (pages.isLoading ? (
-              <Loading label="Loading pages" lines={10} />
-            ) : pages.error ? (
-              <ErrorState error={pages.error} onRetry={() => void pages.refetch()} />
-            ) : (
-              <>
-                {listening && voice.ttsEngine && (
-                  <ReadingControls
-                    title={d.title}
-                    documentId={d.id}
-                    pages={pages.data ?? []}
-                    position={reading}
-                    onPosition={setReading}
-                    onClose={() => {
-                      setListening(false)
-                      setReading(null)
-                    }}
-                  />
+          <section className="panel reader" aria-label="Document text" style={{ ['--reader-size' as string]: `${textSize}rem` }}>
+            <div className="reader__toolbar" role="toolbar" aria-label="Viewer">
+              <div className="row reader__group">
+                {numbered && pageList.length > 1 ? (
+                  <>
+                    <Button variant="ghost" size="sm" icon="arrowLeft" label="Previous page" disabled={current <= 1} onClick={() => goTo(current - 1)} />
+                    <span className="reader__position" aria-live="polite">
+                      <span className="sr-only">Page </span>
+                      {current} / {pageList.length}
+                    </span>
+                    <Button variant="ghost" size="sm" icon="arrowRight" label="Next page" disabled={current >= pageList.length} onClick={() => goTo(current + 1)} />
+                    <PageJump count={pageList.length} onJump={goTo} />
+                  </>
+                ) : (
+                  <span className="reader__position">{ready ? 'Full text' : 'Text appears when processing finishes'}</span>
                 )}
-                <PageList
-                  pages={pages.data ?? []}
-                  targetPage={targetPage}
-                  excerpt={excerpt}
-                  reading={listening ? reading : null}
-                  onJump={(page) => setParams({ page: String(page) }, { replace: true })}
-                />
-              </>
-            ))}
+              </div>
+              <div className="row reader__group">
+                <div className="segmented" role="group" aria-label="Zoom">
+                  <Button variant="ghost" size="sm" aria-label="Smaller text" title="Smaller text" disabled={textSize <= 0.85} onClick={() => setTextSize(textSize - 0.05)}>
+                    −
+                  </Button>
+                  <span className="segmented__value" aria-live="polite">
+                    {Math.round(textSize * 100)}%
+                  </span>
+                  <Button variant="ghost" size="sm" aria-label="Larger text" title="Larger text" disabled={textSize >= 1.3} onClick={() => setTextSize(textSize + 0.05)}>
+                    +
+                  </Button>
+                </div>
+                {!showIntel && (
+                  <Button variant="ghost" size="sm" icon="panelLeft" onClick={() => setIntelOpen(true)}>
+                    Show panel
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="reader__pages">
+              {ready &&
+                (pages.isLoading ? (
+                  <Loading label="Loading pages" lines={10} />
+                ) : pages.error ? (
+                  <ErrorState error={pages.error} onRetry={() => void pages.refetch()} />
+                ) : (
+                  <>
+                    {listening && voice.ttsEngine && (
+                      <ReadingControls
+                        title={d.title}
+                        documentId={d.id}
+                        pages={pageList}
+                        position={reading}
+                        onPosition={setReading}
+                        onClose={() => {
+                          setListening(false)
+                          setReading(null)
+                        }}
+                      />
+                    )}
+                    <PageList
+                      pages={pageList}
+                      targetPage={targetPage}
+                      excerpt={excerpt}
+                      reading={listening ? reading : null}
+                      onVisible={setVisiblePage}
+                    />
+                  </>
+                ))}
+            </div>
+          </section>
         </div>
-        <aside className="viewer__side" aria-label="Document details">
-          <section className="panel">
-            <header className="panel__header">
-              <h2>Details</h2>
-            </header>
-            <div className="panel__body">
-              <dl className="meta-list">
+        {showIntel && (
+          <aside className="docview__panel" aria-label="Document panel">
+            <DocumentIntelligence
+              workspaceId={ws}
+              documentId={d.id}
+              chatHref={`${base}/chat?documents=${d.id}`}
+              canAsk={canAsk}
+              tab={panelTab}
+              onTab={setPanelTab}
+              focusSignal={askSignal}
+              onClose={() => setIntelOpen(false)}
+              onCite={(page, quote) => {
+                const next: Record<string, string> = { q: quote.slice(0, 300) }
+                if (page) next.page = String(page)
+                setParams(next, { replace: true })
+              }}
+            >
+              <dl className="stat-strip stat-strip--2">
+                <div>
+                  <dt>Size</dt>
+                  <dd>{formatBytes(d.size_bytes)}</dd>
+                </div>
+                <div>
+                  <dt>Type</dt>
+                  <dd>{FORMAT_LABEL[d.format]}</dd>
+                </div>
+                <div>
+                  <dt>Pages</dt>
+                  <dd>{d.page_count ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    <StatusBadge status={d.status} />
+                  </dd>
+                </div>
+              </dl>
+              <dl className="meta-list meta-list--wide">
                 <dt>File</dt>
                 <dd>{d.original_filename}</dd>
                 <dt>Uploaded</dt>
                 <dd>{formatDateTime(d.created_at)}</dd>
                 <dt>Processed</dt>
                 <dd>{formatDateTime(d.processed_at)}</dd>
-                <dt>Passages</dt>
-                <dd>{d.chunk_count ?? '—'}</dd>
                 <dt>Versions</dt>
                 <dd>{d.version_count}</dd>
               </dl>
-            </div>
-          </section>
-          {processing.data && processing.data.extraction_warnings.length > 0 && (
-            <Alert tone="warning">
-              <strong>Extraction notes</strong>
-              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-                {processing.data.extraction_warnings.map((w) => (
-                  <li key={w}>{describeWarning(w)}</li>
-                ))}
-              </ul>
-            </Alert>
-          )}
-          <DocumentCollections doc={d} />
-          <Versions documentId={d.id} />
-        </aside>
+              <h3 className="intel__subhead">Processing</h3>
+              <dl className="stat-strip stat-strip--2">
+                <div>
+                  <dt>Pages with text</dt>
+                  <dd>{ready ? pageList.filter((p) => p.text.trim()).length : '—'}</dd>
+                </div>
+                <div>
+                  <dt>Read with OCR</dt>
+                  <dd>{ready ? ocrPages : '—'}</dd>
+                </div>
+                <div>
+                  <dt>Passages indexed</dt>
+                  <dd>{d.chunk_count ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Search index</dt>
+                  <dd className={d.needs_reindex ? 'text-warning' : ready ? 'text-success' : undefined}>{indexState}</dd>
+                </div>
+              </dl>
+              {processing.data && processing.data.extraction_warnings.length > 0 && (
+                <Alert tone="warning">
+                  <strong>Extraction notes</strong>
+                  <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                    {processing.data.extraction_warnings.map((w) => (
+                      <li key={w}>{describeWarning(w)}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+              <DocumentCollections doc={d} />
+              <Versions documentId={d.id} />
+            </DocumentIntelligence>
+          </aside>
+        )}
       </div>
       {dialogs}
     </>
@@ -882,13 +1029,13 @@ function PageList({
   targetPage,
   excerpt,
   reading = null,
-  onJump,
+  onVisible,
 }: {
   pages: ExtractedPage[]
   targetPage: number | null
   excerpt: string
   reading?: ReadingPosition | null
-  onJump: (page: number) => void
+  onVisible?: (page: number) => void
 }) {
   // Keep the sentence being read in view.
   useEffect(() => {
@@ -896,9 +1043,29 @@ function PageList({
     document.querySelector('mark.reading-highlight')?.scrollIntoView({ block: 'center' })
   }, [reading])
 
-  const [jump, setJump] = useState('')
   const refs = useRef(new Map<number, HTMLElement>())
   const numbered = pages.some((p) => p.page_number !== null)
+
+  // "Page X of N" follows the page nearest the top of the screen.
+  useEffect(() => {
+    if (!onVisible || !numbered || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // At the very bottom the last page can't reach the top band: report it anyway.
+        const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+        if (atBottom) {
+          const last = Math.max(...Array.from(refs.current.keys()))
+          if (Number.isFinite(last)) return onVisible(last)
+        }
+        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+        const n = Number((top?.target as HTMLElement | undefined)?.dataset.page)
+        if (n) onVisible(n)
+      },
+      { rootMargin: '-120px 0px -60% 0px' },
+    )
+    refs.current.forEach((node) => observer.observe(node))
+    return () => observer.disconnect()
+  }, [pages, numbered, onVisible])
 
   useEffect(() => {
     if (!targetPage) return
@@ -915,25 +1082,6 @@ function PageList({
 
   return (
     <>
-      {numbered && pages.length > 1 && (
-        <form
-          className="page-jump"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const n = Number(jump)
-            if (n >= 1) onJump(n)
-          }}
-        >
-          <label htmlFor="page-jump" className="muted">
-            Go to page
-          </label>
-          <TextInput id="page-jump" type="number" min={1} max={pages.length} value={jump} onChange={(e) => setJump(e.target.value)} style={{ width: 90 }} />
-          <Button type="submit" size="sm">
-            Go
-          </Button>
-          <span className="muted">of {pages.length}</span>
-        </form>
-      )}
       {pages.map((page, pageIndex) => {
         const number = page.page_number ?? page.position + 1
         const isTarget = targetPage === number || (!numbered && targetPage === null && Boolean(excerpt))
@@ -949,6 +1097,7 @@ function PageList({
               if (node) refs.current.set(number, node)
             }}
             tabIndex={-1}
+            data-page={number}
             aria-label={page.page_number !== null ? `Page ${page.page_number}` : 'Document text'}
           >
             <header className="page-card__header">
@@ -1265,4 +1414,73 @@ export function CollectionDetailPage() {
       {editing && <CollectionDialog collection={collection} onClose={() => setEditing(false)} />}
     </>
   )
+}
+
+
+function PageJump({ count, onJump }: { count: number; onJump: (page: number) => void }) {
+  const [jump, setJump] = useState('')
+  return (
+    <form
+      className="page-jump"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const n = Number(jump)
+        if (n >= 1 && n <= count) onJump(n)
+      }}
+    >
+      <label htmlFor="page-jump" className="sr-only">
+        Go to page
+      </label>
+      <TextInput id="page-jump" type="number" min={1} max={count} placeholder="Page" value={jump} onChange={(e) => setJump(e.target.value)} style={{ width: 76 }} />
+      <Button type="submit" size="sm" variant="ghost">
+        Go
+      </Button>
+    </form>
+  )
+}
+
+function readStored(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Private mode or blocked storage: the choice lasts for this page only.
+  }
+}
+
+function useStoredFlag(key: string, initial: boolean): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState(() => {
+    const stored = readStored(key)
+    return stored === null ? initial : stored === '1'
+  })
+  return [
+    value,
+    (v: boolean) => {
+      setValue(v)
+      writeStored(key, v ? '1' : '0')
+    },
+  ]
+}
+
+function useStoredNumber(key: string, initial: number, min: number, max: number): [number, (v: number) => void] {
+  const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v * 100) / 100))
+  const [value, setValue] = useState(() => {
+    const stored = Number(readStored(key))
+    return stored ? clamp(stored) : initial
+  })
+  return [
+    value,
+    (v: number) => {
+      const next = clamp(v)
+      setValue(next)
+      writeStored(key, String(next))
+    },
+  ]
 }

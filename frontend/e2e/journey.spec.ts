@@ -70,7 +70,7 @@ test('complete journey: sign up, upload, ask with citations, team, 2FA', async (
   await shot(page, '04-viewer')
 
   // --- chat: stream, citations, source navigation -----------------------------
-  await page.getByRole('button', { name: 'Ask about this' }).click()
+  await page.getByRole('region', { name: 'Document intelligence' }).getByRole('link', { name: 'Open in chat' }).click()
   await expect(page.getByRole('button', { name: /Sources: vendor-policy/ })).toBeVisible()
   const composer = page.getByLabel('Ask a question about your documents')
   await composer.fill('How much notice is needed to terminate the agreement?')
