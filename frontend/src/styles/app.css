@@ -3847,7 +3847,7 @@ mark.reading-highlight {
   color: var(--color-accent-strong);
 }
 
-.file-tile--md,
+.file-tile--markdown,
 .file-tile--txt {
   background: var(--color-ok-bg);
   color: var(--color-ok-strong);
@@ -3855,4 +3855,114 @@ mark.reading-highlight {
 
 .file-icon--chat {
   color: var(--color-accent-strong);
+}
+
+/* ---------------------------------------------------------------- document library */
+
+.tabs--page {
+  margin: -4px 0 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tabs--page .tabs__tab {
+  text-decoration: none;
+  margin-bottom: -1px;
+}
+
+.tabs__tab[aria-current='page'] {
+  color: var(--color-accent-strong);
+  border-bottom-color: var(--color-accent);
+}
+
+.library-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.library-bar__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: 420px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.library-bar__search:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-selected);
+}
+
+.library-bar__search input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.library-bar__select {
+  width: auto;
+  min-width: 140px;
+}
+
+.library-bar__view {
+  margin-left: auto;
+}
+
+.segmented .btn[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.doc-card:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.doc-card__top,
+.doc-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.doc-card__title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }

@@ -9,6 +9,7 @@ import { useUser } from '../auth/AuthProvider'
 import { conversationKeys, listConversations } from '../chat/api'
 import { documentKeys, listDocuments } from '../documents/api'
 import { formatBytes, formatRelative } from '../documents/format'
+import { FileTile } from '../documents/FileTile'
 import { useCollections } from '../documents/hooks'
 import { StatusBadge } from '../documents/pages'
 import { GettingStarted, LoadSamplesButton } from '../onboarding/samples'
@@ -270,16 +271,5 @@ export function DashboardPage() {
         </div>
       </div>
     </>
-  )
-}
-
-const FORMAT_TILE: Record<string, string> = { pdf: 'PDF', docx: 'DOC', md: 'MD', txt: 'TXT' }
-
-/** A small tile naming the file type, like the icons in a file manager. */
-function FileTile({ format }: { format: string }) {
-  return (
-    <span className={`file-tile file-tile--${format}`} aria-hidden="true">
-      {FORMAT_TILE[format] ?? format.slice(0, 4).toUpperCase()}
-    </span>
   )
 }

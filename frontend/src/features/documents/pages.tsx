@@ -55,6 +55,7 @@ import { findExcerpt } from './highlight'
 import { useVoice } from '../voice/VoiceContext'
 import { ReadingControls, type ReadingPosition } from '../voice/ReadingMode'
 import { useCollections } from './hooks'
+import { FileTile } from './FileTile'
 import { DocumentIntelligence, type PanelTab } from './DocumentIntelligence'
 import { StepUpDialog } from './StepUpDialog'
 import { CollectionAccess } from './CollectionAccess'
@@ -343,20 +344,32 @@ function AddToCollectionDialog({ doc, onClose }: { doc: DocumentItem; onClose: (
 
 // ---------------------------------------------------------------- library
 
+const LIBRARY_TABS = [
+  { id: 'all', label: 'All', filter: {} },
+  { id: 'ready', label: 'Ready', filter: { status: 'ready' } },
+  { id: 'processing', label: 'Processing', filter: { status: 'processing' } },
+  { id: 'failed', label: 'Failed', filter: { status: 'failed' } },
+  { id: 'archived', label: 'Archived', filter: { archived: 'only' } },
+] as const
+
 export function DocumentLibraryPage() {
   useTitle('Documents')
   const { workspace, base, can } = useWorkspace()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const { data: collections } = useCollections()
+  const tab = LIBRARY_TABS.find((t) => t.id === params.get('tab')) ?? LIBRARY_TABS[0]
+  const tabFilter: { status?: DocumentStatus; archived?: DocumentFilters['archived'] } = tab.filter
   const filters: DocumentFilters = {
     q: params.get('q') ?? '',
-    status: (params.get('status') as DocumentStatus | null) ?? '',
-    archived: (params.get('archived') as DocumentFilters['archived']) ?? 'exclude',
+    status: tabFilter.status ?? (params.get('status') as DocumentStatus | null) ?? '',
+    archived: tabFilter.archived ?? (params.get('archived') as DocumentFilters['archived']) ?? 'exclude',
     collectionId: params.get('collection') ?? '',
+    format: params.get('format') ?? '',
     offset: Number(params.get('offset') ?? 0) || 0,
     limit: 25,
   }
+  const [view, setView] = useStoredChoice('documind.library.view', ['list', 'grid'] as const, 'list')
   const [search, setSearch] = useState(filters.q ?? '')
   const [syncedQ, setSyncedQ] = useState(filters.q ?? '')
   if ((filters.q ?? '') !== syncedQ) {
@@ -382,8 +395,33 @@ export function DocumentLibraryPage() {
     setParams(next, { replace: true })
   }
 
-  const filtered = Boolean(filters.q || filters.status || filters.collectionId || filters.archived !== 'exclude')
+  const filtered = Boolean(filters.q || filters.collectionId || filters.format || tab.id !== 'all')
   const collectionName = (id: string) => collections?.find((c) => c.id === id)?.name
+  const collectionsOf = (doc: DocumentItem) => doc.collection_ids.map(collectionName).filter(Boolean).join(', ')
+  const menuFor = (doc: DocumentItem) => (
+    <Menu
+      label={`Actions for ${doc.title}`}
+      trigger={<Icon name="more" />}
+      triggerClassName="btn btn--ghost btn--sm btn--icon"
+      items={actions(doc, [
+        { label: 'Open', icon: 'eye', onSelect: () => navigate(`${base}/documents/${doc.id}`) },
+        ...(doc.status === 'ready' && !doc.archived_at && can('conversations.use')
+          ? [
+              { label: 'Ask about this', icon: 'message' as const, onSelect: () => navigate(`${base}/chat?documents=${doc.id}`) },
+              { label: 'Extract information', icon: 'flask' as const, onSelect: () => navigate(`${base}/extract?documents=${doc.id}`) },
+            ]
+          : []),
+      ])}
+    />
+  )
+  const badges = (doc: DocumentItem) => (
+    <div className="row">
+      <StatusBadge status={doc.status} />
+      {doc.needs_reindex && <ReindexBadge />}
+      {doc.is_sample && <Badge tone="accent">Sample</Badge>}
+      {doc.archived_at && <Badge tone="warning">Archived</Badge>}
+    </div>
+  )
 
   return (
     <>
@@ -398,50 +436,69 @@ export function DocumentLibraryPage() {
           )
         }
       />
-      <form
-        className="toolbar"
-        role="search"
-        aria-label="Filter documents"
-        onSubmit={(e) => {
-          e.preventDefault()
-          update({ q: search.trim() })
-        }}
-      >
-        <div className="toolbar__grow">
-          <Field label="Search">
-            <TextInput type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Title or filename" />
-          </Field>
+      <nav className="tabs tabs--page" aria-label="Document views">
+        {LIBRARY_TABS.map((t) => (
+          <Link
+            key={t.id}
+            className="tabs__tab"
+            aria-current={t.id === tab.id ? 'page' : undefined}
+            to={{ search: t.id === 'all' ? '' : `?tab=${t.id}` }}
+            replace
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="library-bar">
+        <form
+          className="library-bar__search"
+          role="search"
+          aria-label="Filter documents"
+          onSubmit={(e) => {
+            e.preventDefault()
+            update({ q: search.trim() })
+          }}
+        >
+          <Icon name="search" size={16} />
+          <label htmlFor="library-search" className="sr-only">
+            Search documents by title or filename
+          </label>
+          <input
+            id="library-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onBlur={() => search.trim() !== (filters.q ?? '') && update({ q: search.trim() })}
+            placeholder="Search documents…"
+          />
+        </form>
+        <label className="sr-only" htmlFor="library-type">
+          Type
+        </label>
+        <Select id="library-type" className="library-bar__select" value={filters.format} onChange={(e) => update({ format: e.target.value })}>
+          <option value="">All types</option>
+          {Object.entries(FORMAT_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+        <label className="sr-only" htmlFor="library-collection">
+          Collection
+        </label>
+        <Select id="library-collection" className="library-bar__select" value={filters.collectionId} onChange={(e) => update({ collection: e.target.value })}>
+          <option value="">All collections</option>
+          {collections?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <div className="segmented library-bar__view" role="group" aria-label="Layout">
+          <Button variant="ghost" size="sm" icon="menu" label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')} />
+          <Button variant="ghost" size="sm" icon="layers" label="Grid view" aria-pressed={view === 'grid'} onClick={() => setView('grid')} />
         </div>
-        <Field label="Status">
-          <Select value={filters.status} onChange={(e) => update({ status: e.target.value })}>
-            <option value="">Any status</option>
-            <option value="ready">Ready</option>
-            <option value="processing">Processing</option>
-            <option value="pending">Queued</option>
-            <option value="failed">Failed</option>
-          </Select>
-        </Field>
-        <Field label="Collection">
-          <Select value={filters.collectionId} onChange={(e) => update({ collection: e.target.value })}>
-            <option value="">All collections</option>
-            {collections?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Show">
-          <Select value={filters.archived} onChange={(e) => update({ archived: e.target.value === 'exclude' ? '' : e.target.value })}>
-            <option value="exclude">Active</option>
-            <option value="only">Archived</option>
-            <option value="include">All</option>
-          </Select>
-        </Field>
-        <Button type="submit" icon="search">
-          Search
-        </Button>
-      </form>
+      </div>
 
       {query.isLoading ? (
         <Loading label="Loading documents" lines={6} />
@@ -452,7 +509,7 @@ export function DocumentLibraryPage() {
           <EmptyState
             icon="search"
             title="No documents match"
-            description="Try other words or clear the filters."
+            description="Try other words, another tab or clear the filters."
             action={<Button onClick={() => setParams({}, { replace: true })}>Clear filters</Button>}
           />
         ) : (
@@ -476,73 +533,69 @@ export function DocumentLibraryPage() {
         query.data && (
           <>
             {query.data.needs_reindex_total > 0 && <ReindexBanner count={query.data.needs_reindex_total} />}
-            <div className="table-wrap">
-              <table className="table">
-                <caption className="sr-only">Documents, {query.data.total} in total</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Size</th>
-                    <th scope="col">Pages</th>
-                    <th scope="col">Updated</th>
-                    <th scope="col">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {query.data.items.map((doc) => (
-                    <tr key={doc.id}>
-                      <td>
-                        <div className="table__primary">
-                          <span className="file-icon" aria-hidden="true">
-                            <Icon name="file" size={16} />
-                          </span>
-                          <div className="stack stack--sm" style={{ gap: 2, minWidth: 0 }}>
-                            <Link to={`${base}/documents/${doc.id}`} className="truncate">
-                              {doc.title}
-                            </Link>
-                            <span className="table__sub truncate">
-                              {FORMAT_LABEL[doc.format] ?? doc.format} · {doc.original_filename}
-                              {doc.collection_ids.length > 0 &&
-                                ` · ${doc.collection_ids.map(collectionName).filter(Boolean).join(', ')}`}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="row">
-                          <StatusBadge status={doc.status} />
-                          {doc.needs_reindex && <ReindexBadge />}
-                          {doc.is_sample && <Badge tone="accent">Sample</Badge>}
-                          {doc.archived_at && <Badge tone="warning">Archived</Badge>}
-                        </div>
-                      </td>
-                      <td>{formatBytes(doc.size_bytes)}</td>
-                      <td>{doc.page_count ?? '—'}</td>
-                      <td title={formatDateTime(doc.updated_at)}>{formatRelative(doc.updated_at)}</td>
-                      <td className="table__actions">
-                        <Menu
-                          label={`Actions for ${doc.title}`}
-                          trigger={<Icon name="more" />}
-                          triggerClassName="btn btn--ghost btn--sm btn--icon"
-                          items={actions(doc, [
-                            { label: 'Open', icon: 'eye', onSelect: () => navigate(`${base}/documents/${doc.id}`) },
-                            ...(doc.status === 'ready' && !doc.archived_at && can('conversations.use')
-                              ? [
-                                  { label: 'Ask about this', icon: 'message' as const, onSelect: () => navigate(`${base}/chat?documents=${doc.id}`) },
-                                  { label: 'Extract information', icon: 'flask' as const, onSelect: () => navigate(`${base}/extract?documents=${doc.id}`) },
-                                ]
-                              : []),
-                          ])}
-                        />
-                      </td>
+            {view === 'grid' ? (
+              <ul className="doc-grid" aria-label={`Documents, ${query.data.total} in total`}>
+                {query.data.items.map((doc) => (
+                  <li key={doc.id} className="doc-card">
+                    <div className="doc-card__top">
+                      <FileTile format={doc.format} />
+                      {menuFor(doc)}
+                    </div>
+                    <Link to={`${base}/documents/${doc.id}`} className="doc-card__title">
+                      {doc.title}
+                    </Link>
+                    <span className="table__sub truncate">{collectionsOf(doc) || FORMAT_LABEL[doc.format]}</span>
+                    <div className="doc-card__foot">
+                      {badges(doc)}
+                      <span className="table__sub" title={formatDateTime(doc.updated_at)}>
+                        {formatRelative(doc.updated_at)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <caption className="sr-only">Documents, {query.data.total} in total</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Name</th>
+                      <th scope="col">Collection</th>
+                      <th scope="col">Updated</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {query.data.items.map((doc) => (
+                      <tr key={doc.id}>
+                        <td>
+                          <div className="table__primary">
+                            <FileTile format={doc.format} />
+                            <div className="stack stack--sm" style={{ gap: 2, minWidth: 0 }}>
+                              <Link to={`${base}/documents/${doc.id}`} className="truncate">
+                                {doc.title}
+                              </Link>
+                              <span className="table__sub truncate">
+                                {doc.original_filename} · {formatBytes(doc.size_bytes)}
+                                {doc.page_count ? ` · ${doc.page_count} pages` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="table__sub">{collectionsOf(doc) || '—'}</td>
+                        <td title={formatDateTime(doc.updated_at)}>{formatRelative(doc.updated_at)}</td>
+                        <td>{badges(doc)}</td>
+                        <td className="table__actions">{menuFor(doc)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <Pagination
               offset={filters.offset ?? 0}
               limit={filters.limit ?? 25}
@@ -1481,6 +1534,20 @@ function useStoredNumber(key: string, initial: number, min: number, max: number)
       const next = clamp(v)
       setValue(next)
       writeStored(key, String(next))
+    },
+  ]
+}
+
+function useStoredChoice<T extends string>(key: string, options: readonly T[], initial: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    const stored = readStored(key) as T | null
+    return stored && options.includes(stored) ? stored : initial
+  })
+  return [
+    value,
+    (v: T) => {
+      setValue(v)
+      writeStored(key, v)
     },
   ]
 }

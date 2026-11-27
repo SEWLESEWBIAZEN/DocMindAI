@@ -18,6 +18,7 @@ export interface DocumentFilters {
   status?: DocumentStatus | ''
   archived?: 'exclude' | 'include' | 'only'
   collectionId?: string
+  format?: string
   limit?: number
   offset?: number
 }
@@ -41,6 +42,7 @@ export async function listDocuments(ws: string, f: DocumentFilters): Promise<Doc
       status: f.status || undefined,
       archived: f.archived ?? 'exclude',
       collection_id: f.collectionId || undefined,
+      format: f.format || undefined,
       limit: f.limit ?? 25,
       offset: f.offset ?? 0,
     },
