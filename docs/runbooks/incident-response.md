@@ -40,8 +40,15 @@ Alert: `DocuMindDependencyDown`, with label `component` set to `postgres`, `redi
     `max_connections`.
   - While the database is down, sign-in and every page fail. Nothing is lost: uploads already stored
     have durable job rows.
-- **redis**:
-  - Rate limiting, the Celery queue and answer cancellation are affected.
+- **redis** (also alert `DocuMindRateLimiterDegraded`):
+  - The Celery queue and answer cancellation are affected.
+  - Rate limiting **stays on** with a per-process fallback, so sign-in, password-reset, 2FA
+    and sign-up limits still apply. Each API process counts on its own, so the effective limit
+    is up to `API_WORKERS` × the configured limit.
+  - **AI answers and speech are refused** with `503 rate_limiter_unavailable` until Redis is
+    back: their cost limits can't be enforced across processes.
+  - The logs show "Rate limiter degraded" once when this starts and "Rate limiter recovered"
+    when it ends.
   - Run `docker compose restart redis`. Redis uses append-only persistence.
   - Queued Celery messages can be lost; the sweeper re-dispatches queued jobs from PostgreSQL, so
     run `dm sweep`.

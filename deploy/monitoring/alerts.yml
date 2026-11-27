@@ -55,6 +55,14 @@ groups:
           summary: "No successful backup in the last 26 hours"
           runbook: docs/runbooks/backup-and-restore.md
 
+      - alert: DocuMindRateLimiterDegraded
+        expr: max(documind_rate_limiter_degraded) == 1
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Redis is down: per-process rate limits apply and AI answers are refused"
+          runbook: docs/runbooks/incident-response.md#dependency-down
+
       # TLS (Let's Encrypt renews at 30 days left; certbot retries every 12 h).
       - alert: DocuMindTLSCertificateExpiresSoon
         expr: documind_tls_certificate_expiry_timestamp > 0 and documind_tls_certificate_expiry_timestamp - time() < 14 * 86400

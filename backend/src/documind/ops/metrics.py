@@ -13,6 +13,7 @@ import time
 from datetime import timedelta
 from typing import Any
 
+from redis.exceptions import RedisError
 from sqlalchemy import func, select
 
 from documind.application.identity.common import utcnow
@@ -153,7 +154,15 @@ async def render(container: Any) -> str:
     )
     out.gauge("documind_dataplanes", "Dedicated and external data planes.", float(up), state="up")
 
-    last_backup = await container.redis.get(BACKUP_KEY)
+    try:
+        last_backup = await container.redis.get(BACKUP_KEY)
+    except (RedisError, OSError):  # Redis down: still report everything else
+        last_backup = None
+    out.gauge(
+        "documind_rate_limiter_degraded",
+        "1 while Redis is down and the per-process rate-limit fallback is in use.",
+        1.0 if getattr(container.rate_limiter, "degraded", False) else 0.0,
+    )
     out.gauge(
         "documind_backup_last_success_timestamp",
         "Unix time of the last successful backup (0: never).",
