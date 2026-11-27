@@ -351,7 +351,10 @@ def test_permanent_failure_is_not_retried(api: Api) -> None:
 def test_transient_failures_retry_then_dead_letter_then_manual_retry(
     make_api: Callable[..., Api],
 ) -> None:
-    api = make_api(processing_max_attempts=2)
+    # A long backoff: the suite's 1 s default can expire before the second run_job below
+    # (it builds a container first), which made "backoff not elapsed" flaky under load.
+    # The test moves next_attempt_at itself when it wants the job due.
+    api = make_api(processing_max_attempts=2, processing_retry_base_seconds=120)
     ada = api.signup("ada@example.com")
     w = ws(api, ada)
     doc = upload(api, w, ada, contract_pdf("retry"), "msa.pdf").json()

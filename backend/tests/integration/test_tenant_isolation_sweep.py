@@ -57,7 +57,7 @@ def victim(api: Api) -> dict[str, Any]:
         f"{base}/conversations/{conv}/messages", json={"content": "How much notice?"}, headers=h
     )
     assert sent.status_code in (200, 201), sent.text
-    messages = api.client.get(f"{base}/conversations/{conv}", headers=h).json()["messages"]
+    messages = api.client.get(f"{base}/conversations/{conv}/messages", headers=h).json()["items"]
     col = api.client.post(f"{base}/collections", json={"name": "Board"}, headers=h).json()["id"]
     inv = api.client.post(
         f"{base}/invitations", json={"email": "invitee@example.com"}, headers=elevated
@@ -66,6 +66,20 @@ def victim(api: Api) -> dict[str, Any]:
         f"{base}/api-keys", json={"name": "CI", "scopes": ["documents:read"]}, headers=elevated
     ).json()["id"]
     members = api.client.get(f"{base}/members", headers=h).json()
+    deadline = api.client.post(
+        f"{base}/deadlines", json={"title": "Renewal", "due_date": "2027-01-31"}, headers=h
+    )
+    assert deadline.status_code == 201, deadline.text
+    worker = api.client.post(
+        f"{base}/infrastructure/workers", json={"name": "on-prem"}, headers=elevated
+    )
+    assert worker.status_code == 201, worker.text
+    version = api.client.post(
+        f"{base}/infrastructure/versions",
+        json={"database": {"mode": "dedicated"}},
+        headers=elevated,
+    )
+    assert version.status_code == 201, version.text
     return {
         "workspace_id": w,
         "headers": h,
@@ -77,6 +91,9 @@ def victim(api: Api) -> dict[str, Any]:
             "invitation_id": inv,
             "key_id": key,
             "member_id": members[0]["id"],
+            "deadline_id": deadline.json()["id"],
+            "worker_id": worker.json()["id"],
+            "version_id": version.json()["id"],
             "provider": "openai",
         },
     }
@@ -92,9 +109,31 @@ def fill(path: str, ids: dict[str, str], workspace_id: str) -> str:
     return re.sub(r"\{(\w+)\}", one, path)
 
 
-def call(api: Api, method: str, path: str, headers: dict[str, str]) -> int:
+#: Valid bodies, so the request reaches the ID lookup instead of stopping at validation.
+BODIES: dict[tuple[str, str], dict[str, Any]] = {
+    ("patch", "/members/{member_id}"): {"json": {"role": "viewer"}},
+    ("patch", "/documents/{document_id}"): {"json": {"title": "Pwned"}},
+    ("post", "/documents/{document_id}/versions"): {
+        "files": {"file": ("evil.md", b"# replaced", "text/markdown")}
+    },
+    ("put", "/collections/{collection_id}/access"): {"json": {"restricted": True}},
+    ("patch", "/conversations/{conversation_id}"): {"json": {"title": "Pwned"}},
+    ("post", "/conversations/{conversation_id}/messages"): {"json": {"content": "Leak it"}},
+    ("put", "/conversations/{conversation_id}/messages/{message_id}/feedback"): {
+        "json": {"rating": "down"}
+    },
+}
+
+
+def call(api: Api, method: str, path: str, headers: dict[str, str], template: str = "") -> int:
     kwargs: dict[str, Any] = {"headers": headers}
-    if method in ("post", "put", "patch"):
+    body = next(
+        (b for (m, suffix), b in BODIES.items() if m == method and template.endswith(suffix)),
+        None,
+    )
+    if body is not None:
+        kwargs.update(body)
+    elif method in ("post", "put", "patch"):
         kwargs["json"] = {}
     return api.client.request(method.upper(), path, **kwargs).status_code
 
@@ -102,15 +141,20 @@ def call(api: Api, method: str, path: str, headers: dict[str, str]) -> int:
 def snapshot(api: Api, v: dict[str, Any]) -> dict[str, Any]:
     base, h = f"/api/v1/workspaces/{v['workspace_id']}", v["headers"]
     return {
-        "documents": api.client.get(f"{base}/documents", headers=h).json()["total"],
-        "conversation": len(
-            api.client.get(f"{base}/conversations/{v['ids']['conversation_id']}", headers=h).json()[
-                "messages"
-            ]
+        "documents": api.client.get(f"{base}/documents", headers=h).text,
+        "messages": len(
+            api.client.get(
+                f"{base}/conversations/{v['ids']['conversation_id']}/messages", headers=h
+            ).json()["items"]
         ),
         "collections": len(api.client.get(f"{base}/collections", headers=h).json()),
-        "members": len(api.client.get(f"{base}/members", headers=h).json()),
+        "members": api.client.get(f"{base}/members", headers=h).text,
+        "collection_access": [
+            c.get("restricted") for c in api.client.get(f"{base}/collections", headers=h).json()
+        ],
         "keys": len(api.client.get(f"{base}/api-keys", headers=h).json()),
+        "deadlines": api.client.get(f"{base}/deadlines", headers=h).text,
+        "infrastructure": api.client.get(f"{base}/infrastructure", headers=h).text,
     }
 
 
@@ -125,7 +169,7 @@ def test_no_workspace_route_answers_an_outsider(iapi: Api) -> None:
     leaks = []
     for method, path in ops:
         url = fill(path, v["ids"], v["workspace_id"])
-        status = call(api, method, url, attacker_elevated)
+        status = call(api, method, url, attacker_elevated, path)
         if status not in SAFE:
             leaks.append(f"{method.upper()} {path} -> {status}")
     assert leaks == []
@@ -142,13 +186,15 @@ def test_victim_ids_are_not_reachable_through_the_attackers_workspace(iapi: Api)
         for m, p in operations(api)
         if set(re.findall(r"\{(\w+)\}", p)) & (set(v["ids"]) - {"provider"})
     ]
-    assert len(with_ids) > 40
+    assert len(with_ids) > 40  # every route taking an ID the victim really has
 
     leaks = []
     for method, path in with_ids:
         url = fill(path, v["ids"], attacker_ws)
-        status = call(api, method, url, attacker_elevated)
-        if 200 <= status < 300:
+        status = call(api, method, url, attacker_elevated, path)
+        # Strict: 422 would mean the body never got past validation, so the ID check
+        # wasn't exercised. Add a body to BODIES for such a route.
+        if status not in SAFE:
             leaks.append(f"{method.upper()} {path} -> {status}")
     assert leaks == []
     assert snapshot(api, v) == before
@@ -186,7 +232,7 @@ def test_an_api_key_only_works_in_its_own_workspace(iapi: Api) -> None:
 
     leaks = []
     for method, path in operations(api):
-        status = call(api, method, fill(path, v["ids"], v["workspace_id"]), key)
+        status = call(api, method, fill(path, v["ids"], v["workspace_id"]), key, path)
         if 200 <= status < 300:
             leaks.append(f"{method.upper()} {path} -> {status}")
     mcp = api.client.post(
