@@ -304,6 +304,9 @@ class Settings(BaseSettings):
     )
     # Bearer token for GET /api/v1/metrics (Prometheus). Unset: the endpoint is off (404).
     metrics_token: SecretStr | None = None
+    #: The served TLS certificate (PEM), mounted read-only, so /metrics can report its
+    #: expiry and alerts fire before a failed renewal takes the site down.
+    tls_certificate_file: str | None = None
     dataplane_pool_size: int = Field(default=5, ge=1, le=50)
     dataplane_max_open: int = Field(default=20, ge=1, le=500)
     # How long a successful 2FA check authorizes sensitive actions (e.g. delete).

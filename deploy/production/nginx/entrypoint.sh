@@ -2,6 +2,9 @@
 # Start nginx with a temporary self-signed certificate if none exists yet, so the
 # ACME HTTP challenge can run; reload every 6 hours to pick up renewed certificates.
 set -eu
+# Only DocuMind's server blocks: the stock image's default site would answer plain HTTP
+# for "localhost" instead of redirecting (the runtime image also deletes it at build time).
+rm -f /etc/nginx/conf.d/default.conf
 live="/etc/nginx/certs/live/${SERVER_NAME}"
 if [ ! -s "$live/fullchain.pem" ]; then
   echo "No certificate for ${SERVER_NAME} yet: using a temporary self-signed one."

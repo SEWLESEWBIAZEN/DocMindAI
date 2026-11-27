@@ -21,6 +21,8 @@ x-app: &app
     AUTH_COOKIE_SECURE: "true"
     PUBLIC_APP_URL: https://${SERVER_NAME}
     CORS_ALLOWED_ORIGINS: https://${SERVER_NAME}
+    # Read-only view of the served certificate, for the expiry metric and alerts.
+    TLS_CERTIFICATE_FILE: /etc/documind/tls/live/${SERVER_NAME}/fullchain.pem
   read_only: true
   tmpfs:
     - /tmp:size=512m
@@ -94,6 +96,8 @@ services:
       - sh
       - -c
       - exec uvicorn documind.asgi:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-3} --proxy-headers --forwarded-allow-ips '*' --no-access-log --timeout-graceful-shutdown 20
+    volumes:
+      - letsencrypt:/etc/documind/tls:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -28,6 +28,7 @@ services:
       SSL_CERT_FILE: /smoke/ca.pem
     volumes:
       - ./smoke/work/ca.pem:/smoke/ca.pem:ro
+      - ./smoke/work/certs:/etc/documind/tls:ro
   worker:
     environment:
       SSL_CERT_FILE: /smoke/ca.pem

@@ -55,6 +55,37 @@ groups:
           summary: "No successful backup in the last 26 hours"
           runbook: docs/runbooks/backup-and-restore.md
 
+      # TLS (Let's Encrypt renews at 30 days left; certbot retries every 12 h).
+      - alert: DocuMindTLSCertificateExpiresSoon
+        expr: documind_tls_certificate_expiry_timestamp > 0 and documind_tls_certificate_expiry_timestamp - time() < 14 * 86400
+        labels: { severity: warning }
+        annotations:
+          summary: "The TLS certificate expires in less than 14 days: renewal is failing"
+          runbook: docs/runbooks/incident-response.md#tls-certificate
+
+      - alert: DocuMindTLSCertificateExpiresImminently
+        expr: documind_tls_certificate_expiry_timestamp > 0 and documind_tls_certificate_expiry_timestamp - time() < 3 * 86400
+        labels: { severity: critical }
+        annotations:
+          summary: "The TLS certificate expires in less than 3 days"
+          runbook: docs/runbooks/incident-response.md#tls-certificate
+
+      - alert: DocuMindTLSCertificateSelfSigned
+        expr: documind_tls_certificate_self_signed == 1
+        for: 1h
+        labels: { severity: critical }
+        annotations:
+          summary: "Still serving the temporary self-signed certificate: Let's Encrypt issuance failed"
+          runbook: docs/runbooks/incident-response.md#tls-certificate
+
+      - alert: DocuMindTLSCertificateUnreadable
+        expr: documind_tls_certificate_expiry_timestamp == 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "The API can't read the served TLS certificate to check its expiry"
+          runbook: docs/runbooks/incident-response.md#tls-certificate
+
       - alert: DocuMindInvalidAIKeys
         expr: documind_ai_keys_invalid > 0
         for: 1h

@@ -159,5 +159,32 @@ async def render(container: Any) -> str:
         "Unix time of the last successful backup (0: never).",
         float(last_backup or 0),
     )
+    tls = tls_certificate_state(container.settings.tls_certificate_file)
+    if tls is not None:
+        expiry, self_signed = tls
+        out.gauge(
+            "documind_tls_certificate_expiry_timestamp",
+            "Unix time the served TLS certificate expires (0: unreadable).",
+            expiry,
+        )
+        out.gauge(
+            "documind_tls_certificate_self_signed",
+            "1 while the temporary self-signed certificate is served (no Let's Encrypt yet).",
+            1.0 if self_signed else 0.0,
+        )
     out.gauge("documind_scrape_timestamp", "When these values were computed.", time.time())
     return out.text()
+
+
+def tls_certificate_state(path: str | None) -> tuple[float, bool] | None:
+    """(expiry as Unix time, self-signed?) of a PEM certificate; (0, False) if unreadable."""
+    if not path:
+        return None
+    from cryptography import x509
+
+    try:
+        with open(path, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+    except (OSError, ValueError):
+        return 0.0, False
+    return cert.not_valid_after_utc.timestamp(), cert.issuer == cert.subject

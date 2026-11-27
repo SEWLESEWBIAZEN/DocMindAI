@@ -205,6 +205,52 @@ everyone with an address at that domain, so check ownership first.
 If an identity provider is compromised, `dm sso disable <id>` stops SSO sign-in at once. Then
 revoke the affected sessions and follow [Security incident](#security-incident).
 
+## TLS certificate
+
+Alerts:
+- `DocuMindTLSCertificateExpiresSoon` (under 14 days left);
+- `DocuMindTLSCertificateExpiresImminently` (under 3 days);
+- `DocuMindTLSCertificateSelfSigned` (still on the temporary certificate);
+- `DocuMindTLSCertificateUnreadable`.
+
+Let's Encrypt certificates last 90 days, and certbot renews them with 30 days left, retrying
+every 12 hours. So an expiry alert means renewal has been failing for over two weeks.
+
+1. **See why it fails:**
+   ```
+   docker compose logs --tail 200 certbot | grep -iE "renew|error|challenge"
+   ```
+2. **Common causes:**
+   - Port 80 isn't reachable from the internet (firewall, load balancer): the HTTP-01
+     challenge needs it.
+   - DNS for `SERVER_NAME` no longer points here.
+   - Rate limits after many failures: wait, and test with `LETSENCRYPT_STAGING=true` first.
+   - `LETSENCRYPT_EMAIL` is unset (the certbot container exits).
+3. **Test the challenge path from outside:**
+   ```
+   curl -i http://$SERVER_NAME/.well-known/acme-challenge/probe
+   ```
+   Expect `404` from nginx, not a redirect or a timeout.
+4. **Renew now:**
+   ```
+   docker compose exec certbot certbot renew --webroot -w /var/www/acme --force-renewal
+   ```
+   Then make nginx load the new certificate without dropping connections:
+   ```
+   docker compose exec web nginx -s reload
+   ```
+   It also reloads by itself every 6 hours.
+5. **Check:** `openssl s_client -connect $SERVER_NAME:443 -servername $SERVER_NAME </dev/null | openssl x509 -noout -enddate`,
+   or run `deploy/production/smoke/tls-check.sh $SERVER_NAME 443 80 /etc/ssl/certs/ca-certificates.crt`.
+
+**Self-signed:** the first issuance failed. Fix the cause above, then
+`docker compose restart certbot`. It replaces the temporary certificate as soon as Let's
+Encrypt answers.
+
+**Unreadable:** the API reads `TLS_CERTIFICATE_FILE` from the `letsencrypt` volume, mounted
+read-only. Check that the volume is mounted and that `SERVER_NAME` matches the certificate's
+directory name.
+
 ## Security incident
 
 1. **Contain.**

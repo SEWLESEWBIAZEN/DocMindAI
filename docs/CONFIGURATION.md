@@ -499,6 +499,7 @@ Run with `make e2e` against a running stack. Each run creates accounts, so the a
 | Variable        | Default   | Description |
 | --------------- | --------- | ----------- |
 | `METRICS_TOKEN` | *(unset)* | Bearer token for `GET /api/v1/metrics` (Prometheus format). Unset: the endpoint answers 404. The production proxy never forwards it, so scrape it on the internal network. |
+| `TLS_CERTIFICATE_FILE` | *(unset)* | PEM certificate nginx serves, mounted read-only (production compose: `/etc/documind/tls/live/${SERVER_NAME}/fullchain.pem`). `/api/v1/metrics` then reports its expiry, and the TLS alerts fire before a failed renewal takes the site down. |
 
 ## Production stack (`deploy/production/.env`)
 

@@ -85,14 +85,58 @@ To unblock:
 
 ## D. Let's Encrypt / TLS
 
-| Scenario | Result |
-|---|---|
-| ACME staging directory reachable | VERIFIED (HTTP 200) |
-| Certificate issuance and renewal | BLOCKED: HTTP-01 needs a public DNS name pointing at the server, and there's no public host |
-| Nginx TLS configuration (protocols, headers, redirect) | Checked on the production stack with a local CA; see `04-operational-verification.md` |
+The real production configuration was tested:
+- `deploy/production/docker-compose.yml`;
+- `nginx/documind.conf.template` and `nginx/entrypoint.sh`;
+- the `certbot.sh` renewal loop;
+- the production environment, including the production config validation.
 
-To unblock: follow `docs/runbooks/deployment.md` §1 on a server with a DNS name. Run
-`certbot.sh` with `--staging` first, then without it.
+It ran on this host through the smoke harness (`deploy/production/smoke/run.sh up`), with a
+local CA standing in for Let's Encrypt. Reproduce:
+```
+deploy/production/smoke/run.sh up && deploy/production/smoke/run.sh tls && deploy/production/smoke/run.sh test
+```
+
+| # | Scenario | Actual | Result |
+|---|---|---|---|
+| D1 | ACME staging directory reachable | HTTP 200 | VERIFIED |
+| D2 | Chain verifies; certificate covers the host and refuses other names | Verify return code 0 for `localhost`; failure for `evil.example` | VERIFIED |
+| D3 | TLS 1.3 and 1.2 accepted; TLS 1.1 and 1.0 refused | 1.3 (`TLS_AES_256_GCM_SHA384`) and 1.2 accepted; 1.1 and 1.0 rejected **by the server** with alert 70 "protocol version", even when the client allowed them | VERIFIED |
+| D4 | No weak ciphers; forward secrecy | `AES128-SHA` (CBC/SHA1) refused; TLS 1.2 negotiates ECDHE | VERIFIED |
+| D5 | HTTP → HTTPS redirect, while the ACME path stays on HTTP | `301 https://localhost/login`; `/.well-known/acme-challenge/*` served without a redirect | VERIFIED, after the harness fix below |
+| D6 | Security headers | HSTS (2 years, subdomains), CSP `default-src 'self'`, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, COOP, Permissions-Policy; no nginx version disclosed | VERIFIED |
+| D7 | `/api/v1/metrics` not public | 404 through nginx | VERIFIED |
+| D8 | Renewal picked up without downtime | A new certificate (90 days) was written to the certificate volume and `nginx -s reload` run (what the 6-hourly loop does): the new serial was served, with **0 of 40** requests failing during the reload | VERIFIED |
+| D9 | Renewal failure is visible before expiry | **Was:** only a log line in the certbot container ("renewal attempt failed"); no metric or alert. **Now:** `/metrics` exports `documind_tls_certificate_expiry_timestamp` and `documind_tls_certificate_self_signed`, with four alerts (under 14 days, under 3 days, still self-signed, unreadable) and a runbook section | **FIXED**. Live value on the stack: `1803520178` (25 Feb 2027 01:49:38 UTC), matching the served certificate |
+| D10 | The application over HTTPS in production mode | Playwright journey and SaaS specs: **5/5 passed** (sign-up, upload, cited answer, team, 2FA, mobile layout) | VERIFIED |
+| D11 | Real Let's Encrypt issuance and the HTTP-01 challenge | Needs a public DNS name pointing at a server | BLOCKED |
+
+**Defects found by this run:**
+- **Release blocker: `httpx` was a dev-only dependency.** The OIDC sign-in, Slack and Google
+  Drive clients import it, so a clean production install crashed at startup in
+  `build_container` (`ModuleNotFoundError: httpx`). It's now a runtime dependency, and
+  `tests/unit/test_packaging.py` fails if any import isn't in the locked runtime dependency
+  set. The test was confirmed to fail on the old lock and pass on the new one.
+- **Smoke harness reused expired certificates.** Its CA and certificates last 2 days and were
+  only created once, so later runs failed verification. They're now re-issued when they
+  expire within a day.
+- **Stock nginx default site.** The smoke harness runs the stock `nginx` image, whose default
+  `server_name localhost` site answered plain HTTP instead of redirecting. The runtime image
+  already deleted it at build time; the entrypoint now deletes it too, so the configuration
+  is self-contained.
+
+**Environment notes:**
+- Docker Hub rate-limited base-image pulls (HTTP 429). The application image was therefore the
+  previous `documind-backend:runtime` with the current locked dependencies installed by uv from
+  `uv.lock`, and the current source mounted (`SMOKE_USE_SOURCE=1`). The dependency set is the
+  same as a clean build, but the image itself wasn't rebuilt from the Dockerfile. Rebuild
+  from scratch before a release (`06-release-readiness.md`).
+- Nginx ran on the stock `nginx:1.27-alpine` image with the repository's template and
+  entrypoint, as the production web image does.
+
+To unblock D11: on a server with DNS, set `LETSENCRYPT_STAGING=true`, start with
+`--profile letsencrypt`, then run `smoke/tls-check.sh <host> 443 80 <staging root CA>`. Then
+switch to production Let's Encrypt and check with the system CA bundle.
 
 ## E. Google sign-in, Google Workspace SSO, SCIM
 
@@ -145,6 +189,9 @@ depends on an eligible business and Stripe account; it's out of scope.
 | Install, signed requests, events, retries, linking, private and channel answers | Fake Slack Web API, with real HMAC signing | BLOCKED: needs a Slack app in a development workspace |
 
 ## Fixes made in this phase
+
+See also D (TLS): the `httpx` runtime dependency, the TLS expiry metrics and alerts, and two
+smoke-harness fixes.
 
 1. **Model not available (404) was treated as a transient error.** `raise_classified` and the
    embedding adapter now map `openai.NotFoundError` to `llm_misconfigured` /

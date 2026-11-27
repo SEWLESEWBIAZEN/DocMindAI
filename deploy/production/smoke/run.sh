@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Production smoke test: start the production stack in production mode on this host
 # (HTTPS on 127.0.0.1:8443 as localhost) and run the end-to-end journey against it.
-#   deploy/production/smoke/run.sh [up|test|down]
+#   deploy/production/smoke/run.sh [up|test|tls|down]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 work="$here/work"
@@ -18,7 +18,10 @@ issue() {  # name dir cert key
 
 up() {
   mkdir -p "$work/certs/live/localhost" "$work/mailpit" "$here/../secrets"
-  if [ ! -s "$work/ca.pem" ]; then
+  # Short-lived on purpose: re-issue when missing or expiring within a day.
+  if [ ! -s "$work/ca.pem" ] || ! openssl x509 -checkend 86400 -noout \
+      -in "$work/certs/live/localhost/fullchain.pem" >/dev/null 2>&1; then
+    rm -f "$work"/ca*.pem "$work"/ca.srl "$work"/*.csr
     openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=DocuMind smoke CA" \
       -keyout "$work/ca-key.pem" -out "$work/ca.pem" 2>/dev/null
     issue localhost "$work/certs/live/localhost" fullchain.pem privkey.pem
@@ -72,6 +75,7 @@ test_journey() {
 case "${1:-all}" in
   up) up ;;
   test) test_journey ;;
+  tls) "$here/tls-check.sh" ;;
   down) "${compose[@]}" down -v ;;
   all) up && test_journey ;;
 esac
