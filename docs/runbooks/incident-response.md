@@ -132,13 +132,24 @@ Symptom: an organization answers 503 `migration_in_progress` for longer than its
 1. Check that the worker running it is alive: look for `infrastructure migration` in
    `docker compose logs worker`.
 2. **Still copying:** let it finish. The time needed grows with the number of chunks and files.
-3. **The worker died mid-run:**
+   `dm migrations list` shows `heartbeat_at` and the finished `phases` (`preflight_passed`,
+   `rows_copied`, `objects_copied`, `verified`). A live run refreshes its heartbeat between
+   tables and every 25 files.
+3. **The worker died mid-run** (no heartbeat for more than 5 minutes):
    - The task is never redelivered, so the workspace stays locked.
-   - `dm migrations abort <id>` removes the partial copy at the destination, marks the migration
-     failed and unlocks the workspace on its **original** infrastructure. The source was never
-     modified.
-   - The owner can then approve a new plan, or an operator can run it in the foreground with
-     `dm migrations run <id>` after re-approval.
+   - **Preferred: `dm migrations resume <id>`.** It takes over the run and continues from the
+     last finished phase:
+     - an unfinished row copy left nothing committed (it is one transaction), so it is redone
+       from scratch;
+     - files already at the destination with the right size are skipped;
+     - the copy is verified again before the switch;
+     - if the process died after the switch, it only marks the migration completed.
+   - `resume` refuses with `migration_active` while the heartbeat is fresh, so two runners never
+     work on one migration. If the original process was only stalled, its next heartbeat finds
+     the lease gone and it stops **without** clean-up.
+   - **To give up instead:** `dm migrations abort <id>` removes the partial copy at the
+     destination, marks the migration failed and unlocks the workspace on its **original**
+     infrastructure. The source was never modified. The owner can then approve a new plan.
 4. **Failed with `already has ... rows`:** the destination holds data for this workspace, for
    example from an earlier attempt that someone restored by hand. It was not deleted. Clear it with
    the customer's agreement before retrying.

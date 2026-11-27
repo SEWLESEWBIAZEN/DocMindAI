@@ -473,6 +473,17 @@ async def _migrations(container: Container, command: str, migration_id: uuid.UUI
                         "status": m.status,
                         "moves": m.plan.get("moves", []),
                         "error": m.plan.get("error"),
+                        "heartbeat_at": m.plan.get("heartbeat_at"),
+                        "phases": [
+                            p
+                            for p in (
+                                "preflight_passed",
+                                "rows_copied",
+                                "objects_copied",
+                                "verified",
+                            )
+                            if m.plan.get(p)
+                        ],
                     }
                     for m in rows
                 ]
@@ -484,6 +495,9 @@ async def _migrations(container: Container, command: str, migration_id: uuid.UUI
         await executor.abort(migration_id)
         return 0
     try:
+        if command == "resume":
+            _print({"resumed": True, **(await executor.resume(migration_id)).as_dict()})
+            return 0
         _print((await executor.run(migration_id)).as_dict())
     except MigrationFailedError as exc:
         print(f"migration failed, the source is untouched: {exc}", file=sys.stderr)  # noqa: T201
@@ -646,7 +660,7 @@ def main(argv: list[str] | None = None) -> int:
     sso.add_argument("--operator", help="who verified domain ownership (recorded)")
     sso.add_argument("--note", help="how ownership was verified, e.g. DNS TXT record (recorded)")
     mig = sub.add_parser("migrations", help="approved infrastructure migrations (MI-8)")
-    mig.add_argument("migrations_command", choices=["list", "run", "abort"])
+    mig.add_argument("migrations_command", choices=["list", "run", "resume", "abort"])
     mig.add_argument("migration_id", nargs="?", type=uuid.UUID)
     plan = sub.add_parser("plan", help="list plans or assign one to a workspace (audited)")
     plan_sub = plan.add_subparsers(dest="plan_command", required=True)

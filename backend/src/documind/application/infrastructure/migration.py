@@ -16,6 +16,21 @@ Moves one workspace's data between data planes and/or object stores:
 
 On any failure the partial copy at the destination is removed, the source is
 untouched and the workspace is unlocked; the migration is ``failed``.
+
+**Crash recovery (production readiness F3).** A run holds a lease: ``plan.runner``
+plus ``plan.heartbeat_at``, refreshed between tables and every few files. Each phase
+is recorded when it finishes (``rows_copied``, ``objects_copied``, ``verified``). If
+the process dies, ``resume`` takes over once the heartbeat is older than the lease:
+
+* rows are copied in one destination transaction, so an unfinished row phase left
+  nothing committed; resume clears this workspace's rows at the destination (only
+  this run's copy, since preflight proved it held none) and copies again;
+* files are re-copied, skipping those already there with the right size;
+* the copy is verified again before the switch; a crash after the switch only
+  marks the migration completed.
+
+A runner that loses its lease (another process resumed it) stops without cleaning
+up, so it never deletes the copy the new runner is using.
 """
 
 from __future__ import annotations
@@ -58,6 +73,9 @@ from documind.infrastructure.database.repositories.identity import AuditLogRepos
 logger = logging.getLogger(__name__)
 
 BATCH = 500
+#: A run whose heartbeat is older than this can be resumed by another process.
+LEASE_SECONDS = 300
+_OBJECT_BEAT_EVERY = 25
 # Messages reference earlier messages (reply_to_id): copy them in conversation order.
 _ORDER = {"messages": ("conversation_id", "sequence")}
 
@@ -68,6 +86,10 @@ class MigrationFailedError(Exception):
 
 class DestinationNotEmptyError(MigrationFailedError):
     pass
+
+
+class LeaseLostError(Exception):
+    """Another process resumed this migration: stop, and leave its copy alone."""
 
 
 @dataclass(slots=True)
@@ -135,33 +157,109 @@ class MigrationExecutor:
                 raise ConflictError(
                     "Only approved migrations can run.", code="migration_not_approved"
                 )
+            runner = uuid.uuid4().hex
+            now = utcnow().isoformat()
             migration.status = "running"
-            migration.plan = {**migration.plan, "started_at": utcnow().isoformat()}
+            migration.plan = {
+                **migration.plan,
+                "started_at": now,
+                "runner": runner,
+                "heartbeat_at": now,
+            }
             ws, target_id = migration.workspace_id, migration.to_version_id
             moves = list(migration.plan.get("moves", []))
             await session.commit()
         self._resolver.invalidate(ws)
         await self._event(ws, target_id, "migration_started", None, moves=moves)
+        return await self._execute(migration_id, ws, target_id, moves, runner, {})
 
+    async def resume(
+        self, migration_id: uuid.UUID, *, lease_seconds: float = LEASE_SECONDS
+    ) -> MigrationReport:
+        """Continue a run whose process died (status ``running``, heartbeat stale)."""
+        async with self._control() as session:
+            migration = await session.get(
+                InfrastructureMigration, migration_id, with_for_update=True
+            )
+            if migration is None:
+                raise NotFoundError("Migration not found.")
+            if migration.status != "running":
+                raise ConflictError("Only a running migration can be resumed.", code="not_running")
+            beat = migration.plan.get("heartbeat_at")
+            if beat is not None:
+                from datetime import datetime
+
+                age = (utcnow() - datetime.fromisoformat(beat)).total_seconds()
+                if age < lease_seconds:
+                    raise ConflictError(
+                        f"This migration is still running (last heartbeat {int(age)} s ago).",
+                        code="migration_active",
+                    )
+            runner = uuid.uuid4().hex
+            now = utcnow().isoformat()
+            done = dict(migration.plan)
+            migration.plan = {
+                **migration.plan,
+                "runner": runner,
+                "heartbeat_at": now,
+                "resumed": int(migration.plan.get("resumed", 0)) + 1,
+                "resumed_at": now,
+            }
+            ws, target_id = migration.workspace_id, migration.to_version_id
+            moves = list(migration.plan.get("moves", []))
+            await session.commit()
+        await self._event(ws, target_id, "migration_resumed", None, moves=moves)
+        return await self._execute(migration_id, ws, target_id, moves, runner, done)
+
+    async def _execute(
+        self,
+        migration_id: uuid.UUID,
+        ws: uuid.UUID,
+        target_id: uuid.UUID,
+        moves: Sequence[str],
+        runner: str,
+        done: dict[str, Any],
+    ) -> MigrationReport:
+        """Copy, verify and switch, skipping the phases ``done`` records as finished."""
+        resuming = bool(done)
         report = MigrationReport()
         copied = False
         source: ResolvedInfrastructure | None = None
         target: ResolvedInfrastructure | None = None
         try:
+            if resuming and await self._already_switched(ws, target_id):
+                await self._finish(migration_id, "completed", report)
+                return report
             source = await self._resolver.resolve(ws, ignore_migration=True)
             target = await self._resolver.build_version(ws, target_id)
             await asyncio.sleep(self._drain)
             await self._wait_for_running_jobs(source, ws)
-            await self._preflight(source, target, ws, moves)
-            await self._note(migration_id, preflight_passed=True)
+            await self._beat(migration_id, runner)
+            if not done.get("preflight_passed"):
+                await self._preflight(source, target, ws, moves)
+                await self._note(migration_id, preflight_passed=True)
             copied = True
-            if "database" in moves:
+            if "database" in moves and not done.get("rows_copied"):
                 if target.isolated:
                     await register_tenant(target.data_plane.sessions, ws)
-                await self._copy_rows(source, target, ws, report)
-            if "storage" in moves:
-                await self._copy_objects(source, target, ws, report)
+                if resuming:  # an unfinished row phase committed nothing; make sure
+                    await self._delete_rows(target.data_plane.sessions, ws)
+                await self._copy_rows(source, target, ws, report, migration_id, runner)
+                await self._note(migration_id, rows_copied=True)
+            if "storage" in moves and not done.get("objects_copied"):
+                await self._copy_objects(
+                    source, target, ws, report, migration_id, runner, skip_existing=resuming
+                )
+                await self._note(migration_id, objects_copied=True)
+            await self._beat(migration_id, runner)
             await self._verify(source, target, ws, moves)
+            await self._note(migration_id, verified=True)
+        except LeaseLostError:
+            logger.warning(
+                "migration taken over by another runner; stopping without cleanup",
+                extra={"migration_id": str(migration_id)},
+            )
+            raise
         except Exception as exc:
             logger.exception(
                 "infrastructure migration failed", extra={"migration_id": str(migration_id)}
@@ -172,6 +270,22 @@ class MigrationExecutor:
             raise MigrationFailedError(str(exc)) from exc
         await self._switch(migration_id, ws, target_id, report)
         return report
+
+    async def _already_switched(self, ws: uuid.UUID, target_id: uuid.UUID) -> bool:
+        async with self._control() as session:
+            pin = await session.get(WorkspaceInfrastructure, ws)
+            return pin is not None and pin.version_id == target_id
+
+    async def _beat(self, migration_id: uuid.UUID, runner: str) -> None:
+        """Refresh the lease; raise LeaseLostError if another runner holds it now."""
+        async with self._control() as session:
+            migration = await session.get(
+                InfrastructureMigration, migration_id, with_for_update=True
+            )
+            if migration is None or migration.plan.get("runner") != runner:
+                raise LeaseLostError(str(migration_id))
+            migration.plan = {**migration.plan, "heartbeat_at": utcnow().isoformat()}
+            await session.commit()
 
     async def abort(self, migration_id: uuid.UUID) -> None:
         """Operator recovery for a run whose process died (status stuck at ``running``)."""
@@ -342,9 +456,13 @@ class MigrationExecutor:
         target: ResolvedInfrastructure,
         ws: uuid.UUID,
         report: MigrationReport,
+        migration_id: uuid.UUID | None = None,
+        runner: str | None = None,
     ) -> None:
         async with source.data_plane.sessions() as src, target.data_plane.sessions() as dst:
             for table in _tables():
+                if migration_id is not None and runner is not None:
+                    await self._beat(migration_id, runner)
                 columns = _insertable(table)
                 order = [table.c[c] for c in _ORDER.get(table.name, ())] or list(
                     table.primary_key.columns
@@ -396,8 +514,22 @@ class MigrationExecutor:
         target: ResolvedInfrastructure,
         ws: uuid.UUID,
         report: MigrationReport,
+        migration_id: uuid.UUID | None = None,
+        runner: str | None = None,
+        *,
+        skip_existing: bool = False,
     ) -> None:
-        for key, _ in await _object_keys(source.data_plane.sessions, ws):
+        for n, (key, size) in enumerate(await _object_keys(source.data_plane.sessions, ws)):
+            if migration_id is not None and runner is not None and n % _OBJECT_BEAT_EVERY == 0:
+                await self._beat(migration_id, runner)
+            if skip_existing:
+                try:
+                    if (await target.storage.get_metadata(key)).size == size:
+                        report.objects += 1
+                        report.object_bytes += size
+                        continue
+                except ObjectNotFoundError:
+                    pass
             meta = await source.storage.get_metadata(key)
             buffer = io.BytesIO()
             await source.storage.download_to(key, buffer)

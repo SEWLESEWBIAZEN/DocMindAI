@@ -73,9 +73,13 @@ data-plane sessions and `ObjectStorageProvider`. It works in these steps:
 - the workspace unlocks on its original infrastructure.
 
 **If the process dies mid-run:** the task is not `acks_late`, so it is never redelivered half-done.
-The migration stays `running`, and the workspace stays locked, until an operator runs
-`documind-manage migrations abort <id>`. That command removes the partial copy and marks the
-migration failed.
+The migration stays `running`, and the workspace stays locked, until an operator acts.
+
+*Amended (production readiness F3):* a run now holds a lease (`plan.runner`, `plan.heartbeat_at`)
+and records each finished phase. `documind-manage migrations resume <id>` takes over once the
+heartbeat is more than 5 minutes old and continues from the last finished phase, verifying again
+before the switch. `documind-manage migrations abort <id>` still removes the partial copy and marks
+the migration failed.
 
 ### Azure Blob Storage (MI-6)
 

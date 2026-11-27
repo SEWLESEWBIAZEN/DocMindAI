@@ -573,9 +573,10 @@ Tests at the end of Phase 10 (2026-11-24), all run locally:
   (`SMOKE_USE_SOURCE=1`). The dev image was rebuilt from cache. Build and scan the release images
   in CI before deploying.
 - **Not exercised here:** real Let's Encrypt issuance, real AWS S3, real Azure, live OpenAI.
-- **Migrations** run in one process and do not resume. A dead run needs
-  `documind-manage migrations abort`. The workspace is unavailable while a migration runs.
+- ~~Migrations do not resume~~ → lease with heartbeat, recorded phases and
+  `documind-manage migrations resume` (production readiness, F3). Resuming is an operator step:
+  nothing resumes a dead run automatically. The workspace is unavailable while a migration runs.
 - ~~No re-encryption tool for `MFA_ENCRYPTION_KEY`~~ → key ring and `documind-manage mfa rewrap` (production readiness, F4).
-  There is no operator tool to move a dedicated data plane to another host.
+- There is no operator tool to move a dedicated data plane to another host.
 - **Still open from Phase 9:** manual screen-reader tests, sessions with blind and low-vision
   users, and an independent penetration test.
