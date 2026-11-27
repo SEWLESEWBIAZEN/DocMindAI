@@ -115,6 +115,25 @@ class RedisRateLimiter:
             retry_after = window_seconds - int(time.time()) % window_seconds
             raise RateLimitedError(retry_after_seconds=max(1, retry_after))
 
+    async def probe(self) -> bool:
+        """While degraded, check Redis (at most every ``retry_seconds``); True if usable.
+
+        Recovery is otherwise noticed on the next rate-limited request, so a process
+        with no such traffic would keep reporting an outage that has ended.
+        """
+        if not self.degraded:
+            return True
+        now = time.monotonic()
+        if now - self._last_attempt < self._retry:
+            return False
+        self._last_attempt = now
+        try:
+            await self._client.ping()
+        except (RedisError, OSError):
+            return False
+        self._leave_degraded()
+        return True
+
     async def _redis_count(self, key: str, window_seconds: int) -> int | None:
         """The shared count, or None when Redis can't be used right now."""
         now = time.monotonic()

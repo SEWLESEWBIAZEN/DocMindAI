@@ -47,3 +47,34 @@ def test_rate_limits_hold_and_ai_is_refused_while_redis_is_down(make_api: Any) -
 
     # Reading documents keeps working.
     assert api.client.get(f"/api/v1/workspaces/{w}/documents", headers=h).status_code == 200
+
+
+def test_metrics_keep_answering_and_report_recovery(make_api: Any) -> None:
+    """Found in the Phase 5 drill: /metrics answered 500 while Redis was down (queue
+    depth read), and a quiet process kept reporting the outage after it ended."""
+    from pydantic import SecretStr
+
+    token = "metrics-token-for-tests-0123456789"
+    api: Api = make_api(metrics_token=SecretStr(token))
+    container = api.client.app.state.container  # type: ignore[attr-defined]
+    healthy_redis = container.redis
+    dead = Redis.from_url("redis://127.0.0.1:1/0", socket_connect_timeout=0.5)
+    limiter = RedisRateLimiter(dead, retry_seconds=0.0)
+    container.rate_limiter = limiter
+    container.redis = dead
+    auth = {"Authorization": f"Bearer {token}"}
+
+    api.client.post("/api/v1/auth/login", json={"email": "x@example.com", "password": "nope-nope"})
+    assert limiter.degraded
+    down = api.client.get("/api/v1/metrics", headers=auth)
+    assert down.status_code == 200
+    assert "documind_rate_limiter_degraded 1.0" in down.text
+    assert "documind_queue_depth" not in down.text  # unknown, not a misleading 0
+
+    # Redis is back; no sign-in traffic reaches this process, only scrapes.
+    limiter._client = healthy_redis  # the same client, reachable again
+    container.redis = healthy_redis
+    up = api.client.get("/api/v1/metrics", headers=auth)
+    assert up.status_code == 200
+    assert "documind_rate_limiter_degraded 0.0" in up.text
+    assert "documind_queue_depth" in up.text

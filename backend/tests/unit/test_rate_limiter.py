@@ -23,6 +23,12 @@ class FlakyRedis:
     def pipeline(self, transaction: bool = True) -> Any:
         return _Pipe(self)
 
+    async def ping(self) -> bool:
+        self.calls += 1
+        if not self.up:
+            raise RedisConnectionError("down")
+        return True
+
 
 class _Pipe:
     def __init__(self, redis: FlakyRedis) -> None:
@@ -115,3 +121,29 @@ def test_local_counter_stays_bounded() -> None:
             counter.incr(f"rl:login:{who}:{window}")
     assert len(counter) <= 10
     assert counter.incr("rl:login:0:4") == 2  # the current window survived pruning
+
+
+async def test_probe_clears_degraded_mode_without_rate_limited_traffic() -> None:
+    """/metrics probes, so a process with no sign-ins stops reporting a finished outage."""
+    redis = FlakyRedis()
+    limiter = RedisRateLimiter(redis, retry_seconds=0.0)  # type: ignore[arg-type]
+    assert await limiter.probe() is True  # healthy: nothing to do
+    redis.up = False
+    await limiter.hit("login:ip", "203.0.113.9", 10, 60)
+    assert limiter.degraded
+    assert await limiter.probe() is False
+    assert limiter.degraded
+    redis.up = True
+    assert await limiter.probe() is True
+    assert not limiter.degraded
+
+
+async def test_probe_respects_the_retry_interval() -> None:
+    redis = FlakyRedis()
+    limiter = RedisRateLimiter(redis, retry_seconds=60.0)  # type: ignore[arg-type]
+    redis.up = False
+    await limiter.hit("login:ip", "203.0.113.9", 10, 60)
+    calls = redis.calls
+    redis.up = True
+    assert await limiter.probe() is False  # asked moments ago: don't ask again yet
+    assert redis.calls == calls

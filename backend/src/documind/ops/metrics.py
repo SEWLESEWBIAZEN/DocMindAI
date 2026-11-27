@@ -72,8 +72,12 @@ async def render(container: Any) -> str:
             component=c.name,
         )
 
-    depth = await container.redis.llen(QUEUE)
-    out.gauge("documind_queue_depth", "Messages waiting in the processing queue.", float(depth))
+    try:
+        depth: int | None = await container.redis.llen(QUEUE)
+    except (RedisError, OSError):  # Redis down: dependency_up says so; report the rest
+        depth = None
+    if depth is not None:
+        out.gauge("documind_queue_depth", "Messages waiting in the processing queue.", float(depth))
 
     now = utcnow()
     since = now - timedelta(hours=24)
@@ -171,6 +175,9 @@ async def render(container: Any) -> str:
         last_backup = await container.redis.get(BACKUP_KEY)
     except (RedisError, OSError):  # Redis down: still report everything else
         last_backup = None
+    probe = getattr(container.rate_limiter, "probe", None)
+    if probe is not None:
+        await probe()  # a quiet process must not report an outage that has ended
     out.gauge(
         "documind_rate_limiter_degraded",
         "1 while Redis is down and the per-process rate-limit fallback is in use.",

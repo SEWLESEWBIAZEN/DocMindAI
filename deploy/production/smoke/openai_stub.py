@@ -23,6 +23,12 @@ app = FastAPI()
 llm = LocalExtractiveLLM()
 
 
+@app.get("/v1/models/{model}")
+async def model(model: str) -> JSONResponse:
+    """The start-up model check (documind-manage ai check): every model is "available"."""
+    return JSONResponse({"id": model, "object": "model", "created": 0, "owned_by": "smoke-stub"})
+
+
 @app.post("/v1/embeddings")
 async def embeddings(request: Request) -> JSONResponse:
     body = await request.json()
