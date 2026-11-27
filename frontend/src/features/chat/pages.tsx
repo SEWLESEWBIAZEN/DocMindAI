@@ -48,6 +48,7 @@ import { useVoice } from '../voice/VoiceContext'
 import { AnswerFeedback } from './AnswerFeedback'
 import { AnswerMarkdown } from './AnswerMarkdown'
 import { CitationCard } from './CitationCard'
+import { SourcePreview } from './SourcePreview'
 
 const MAX_CHARS = 2000
 
@@ -409,8 +410,12 @@ export function ChatPage() {
   }
 
   const empty = messages.length === 0 && !live
+  const previewed =
+    activeCitation &&
+    messages.find((m) => m.id === activeCitation.message)?.citations.find((c) => c.number === activeCitation.n)
 
   return (
+    <div className={`chat-layout${previewed ? ' chat-layout--preview' : ''}`}>
     <div className="chat">
       <header className="chat__header">
         <h1 className="chat__title truncate">{activeId ? detail.data?.title ?? 'Conversation' : 'New conversation'}</h1>
@@ -537,6 +542,12 @@ export function ChatPage() {
           }}
         />
       )}
+    </div>
+    {previewed && (
+      <aside className="chat-layout__preview">
+        <SourcePreview citation={previewed} onClose={() => setActiveCitation(null)} />
+      </aside>
+    )}
     </div>
   )
 }
@@ -695,7 +706,7 @@ function AssistantMessage({
         {message.citations.length > 0 && (
           <div className="citations" ref={cards} aria-label="Sources">
             {message.citations.map((c) => (
-              <CitationCard key={c.number} citation={c} active={activeCitation === c.number} />
+              <CitationCard key={c.number} citation={c} active={activeCitation === c.number} onPreview={() => onCitation(c.number)} />
             ))}
           </div>
         )}
