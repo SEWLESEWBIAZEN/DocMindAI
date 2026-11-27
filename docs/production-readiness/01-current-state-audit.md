@@ -8,6 +8,10 @@
 - Not done: penetration testing, real production traffic, or anything on a live deployment
   (there is none).
 
+> **Outcome:** every failure scenario below (F1–F12) and every finding has a final status in
+> [`06-release-readiness.md`](06-release-readiness.md). This document records the state at the
+> start of the engagement.
+
 CI/CD is out of scope. GitHub Actions fails because of an account billing issue, which is an
 external item, not an application defect. All verification here runs locally.
 
