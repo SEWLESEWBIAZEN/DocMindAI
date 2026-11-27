@@ -30,6 +30,10 @@ x-backend-environment: &backend-environment
   DEDICATED_DATABASE_ADMIN_URL: ${DEDICATED_DATABASE_ADMIN_URL:-}
   DEDICATED_DATABASE_SSLMODE: ${DEDICATED_DATABASE_SSLMODE:-disable}
   AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+  # Development only: the browser test suite signs up and signs in dozens of accounts from
+  # one IP within minutes. Production keeps the defaults (10 sign-ups, 20 sign-ins per IP).
+  RATE_LIMIT_AUTH_PER_IP: ${RATE_LIMIT_AUTH_PER_IP:-200}
+  RATE_LIMIT_LOGIN_PER_IP: ${RATE_LIMIT_LOGIN_PER_IP:-200}
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
   EMAIL_FROM: ${EMAIL_FROM:-DocuMind AI <no-reply@documind.local>}

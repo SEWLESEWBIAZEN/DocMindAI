@@ -29,7 +29,7 @@ test('try DocuMind with sample documents, then remove them', async ({ page, base
   await expect(page.getByText(/90 days/).first()).toBeVisible({ timeout: 60_000 })
   await expect(page.locator('.citations').first()).toContainText('Sample: Master Services Agreement')
 
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click()
   await expect(checklist).toContainText('2 of 3 done')
   await checklist.getByRole('button', { name: 'Remove them' }).click()
   await expect(page.getByText('Removed 3 sample documents.')).toBeVisible()

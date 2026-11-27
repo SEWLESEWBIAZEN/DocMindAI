@@ -36,7 +36,7 @@ test('ask from the home page and pick up where you left off', async ({ page, bas
   await expect(page.getByRole('article', { name: 'Answer' }).last()).toBeVisible({ timeout: 60_000 })
 
   // Back home, the conversation is under "Continue your work".
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click()
   await expect(page.getByRole('region', { name: 'Continue your work' }).getByText(/You asked/)).toBeVisible()
 
   await page.setViewportSize({ width: 390, height: 844 })

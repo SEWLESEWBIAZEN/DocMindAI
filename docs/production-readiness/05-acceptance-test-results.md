@@ -56,7 +56,7 @@
 
 | Run | Failure | Cause | Outcome |
 |---|---|---|---|
-| Playwright, full run | 3 tests: the `journey.spec.ts` complete journey and mobile layout, and `integrations.spec.ts`, timed out after sign-up | The sign-up form answered **"Too many requests"**. The suite registers about 25 accounts from one IP in 13 minutes. Sign-up shares the auth limit of 10 per IP per 10 minutes, so the specs late in the run hit it | Not a product defect: the limit is working as designed. After clearing the **dev** Redis's `rl:*` counters (22 keys), the 3 tests passed. Recommendation: give the dev stack a higher `RATE_LIMIT_AUTH_PER_IP`, or reset the counters in a Playwright global setup. Never raise it in production |
+| Playwright, full run | 3 tests: the `journey.spec.ts` complete journey and mobile layout, and `integrations.spec.ts`, timed out after sign-up | The sign-up form answered **"Too many requests"**. The suite registers about 25 accounts from one IP in 13 minutes. Sign-up shares the auth limit of 10 per IP per 10 minutes, so the specs late in the run hit it | Not a product defect: the limit is working as designed. After clearing the **dev** Redis's `rl:*` counters (22 keys), the 3 tests passed. Since fixed: the development compose file now sets `RATE_LIMIT_AUTH_PER_IP` and `RATE_LIMIT_LOGIN_PER_IP` to 200. Never raise them in production |
 | Integration, run before the Phase 4 fix | `test_transient_failures_retry_then_dead_letter_then_manual_retry` | Test timing (doc 03, P4-3) | Fixed; passed in this run |
 
 No other failures. No test was skipped, disabled or weakened to get a green result. The two

@@ -164,11 +164,11 @@ function Sidebar({
   const { base, can, workspace } = useWorkspace()
   const navigate = useNavigate()
   const primary: NavItem[] = [
-    { to: `${base}/dashboard`, label: 'Dashboard', icon: 'home' },
+    { to: `${base}/dashboard`, label: 'Home', icon: 'home' },
     { to: `${base}/chat`, label: 'Ask', icon: 'message', permission: 'conversations.use', end: true },
-    { to: `${base}/conversations`, label: 'Conversations', icon: 'history', permission: 'conversations.use' },
     { to: `${base}/documents`, label: 'Documents', icon: 'file', permission: 'documents.read' },
     { to: `${base}/collections`, label: 'Collections', icon: 'layers', permission: 'documents.read' },
+    { to: `${base}/conversations`, label: 'Conversations', icon: 'history', permission: 'conversations.use' },
     { to: `${base}/upload`, label: 'Upload', icon: 'upload', permission: 'documents.write' },
     { to: `${base}/extract`, label: 'Extract', icon: 'flask', permission: 'documents.read' },
     { to: `${base}/deadlines`, label: 'Deadlines', icon: 'clock', permission: 'documents.read' },
@@ -210,7 +210,6 @@ function Sidebar({
           </Link>
           <Button className="sidebar__close" variant="ghost" size="sm" icon="x" label="Close navigation" onClick={onClose} />
         </div>
-        <WorkspaceSwitcher />
         {can('conversations.use') && (
           <Button
             variant="primary"
@@ -227,13 +226,14 @@ function Sidebar({
         <nav aria-label="Main" className="sidebar__nav">
           <ul>{visible(primary).map(link)}</ul>
           <p className="sidebar__section">
-            <span className="sidebar__label">Workspace</span>
+            <span className="sidebar__label">{workspace.kind === 'organization' ? 'Organization' : 'Workspace'}</span>
           </p>
           <ul>{visible(admin).filter((item) => showMembers || !item.to.endsWith('/members')).map(link)}</ul>
         </nav>
         {can('conversations.use') && <RecentConversations />}
       </div>
       <div className="sidebar__foot">
+        <WorkspaceSwitcher />
         <button
           type="button"
           className="nav-link sidebar__collapse"

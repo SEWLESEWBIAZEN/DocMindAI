@@ -158,8 +158,9 @@ deployed from nothing.
    - the integration suite;
    - the tenant sweep (`test_tenant_isolation_sweep.py`), which covers new routes automatically;
    - `smoke/run.sh all` on built images.
-3. Give the dev stack its own sign-up limit (`RATE_LIMIT_AUTH_PER_IP`), or reset counters in a
-   Playwright global setup. Never change the production limit.
+3. ~~Give the dev stack its own sign-up limit.~~ Done: the development `docker-compose.yml` sets
+   `RATE_LIMIT_AUTH_PER_IP` and `RATE_LIMIT_LOGIN_PER_IP` to 200, overridable in `.env`. The
+   production stack keeps the defaults; never change those.
 4. Schedule `documind-manage orphans` monthly in report-only mode, and review before `--delete`.
 5. Add PostgreSQL WAL archiving if customers need an RPO under a day.
 6. Add an OSV-based dependency scan to CI. Only the PyPI advisory database was reachable here.

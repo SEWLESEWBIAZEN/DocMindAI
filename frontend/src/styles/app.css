@@ -4146,3 +4146,16 @@ mark.reading-highlight {
 .table__primary .avatar {
   flex: none;
 }
+
+/* The workspace switcher sits at the foot of the sidebar: its menu opens upwards. */
+.sidebar__foot {
+  display: grid;
+  gap: 6px;
+  position: relative;
+  z-index: 5;
+}
+
+.sidebar__foot .menu__popover {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
