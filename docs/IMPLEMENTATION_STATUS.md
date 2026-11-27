@@ -578,5 +578,12 @@ Tests at the end of Phase 10 (2026-11-24), all run locally:
   nothing resumes a dead run automatically. The workspace is unavailable while a migration runs.
 - ~~No re-encryption tool for `MFA_ENCRYPTION_KEY`~~ → key ring and `documind-manage mfa rewrap` (production readiness, F4).
 - There is no operator tool to move a dedicated data plane to another host.
+- ~~Orphaned objects are only logged~~ → `documind-manage orphans [--delete]` (production
+  readiness, F6/F7). Run by an operator; it is not scheduled.
+- ~~No statement timeout~~ → `DATABASE_STATEMENT_TIMEOUT_SECONDS` (30 s) on API connections,
+  `503 database_timeout` (F8).
+- ~~Configured models not checked~~ → start-up check, `documind_ai_model_available`,
+  `DocuMindAIModelUnavailable` and `documind-manage ai check` (F10). Workspace keys are checked
+  when saved, as before.
 - **Still open from Phase 9:** manual screen-reader tests, sessions with blind and low-vision
   users, and an independent penetration test.

@@ -28,6 +28,7 @@ from documind.infrastructure.database.dataplane import (
     AuditOutbox,
     TenantWorkspace,
 )
+from documind.infrastructure.database.engine import server_settings
 from documind.infrastructure.database.models import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ def create_dataplane_engine(
             "ssl": _ssl_context(config.sslmode),
             "timeout": 10,
             "server_settings": {
-                "application_name": "documind-dataplane",
+                **server_settings(settings, "documind-dataplane"),
                 "search_path": f"{DATAPLANE_SCHEMA},public",
             },
         },

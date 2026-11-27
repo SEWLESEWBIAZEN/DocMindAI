@@ -104,6 +104,47 @@ Alerts: `DocuMindAnswerFailures`; `DocuMindInvalidAIKeys` (informational).
   - Processing jobs that still fail with `embedding_rate_limited` are retried later.
   - If it persists, lower `WORKER_CONCURRENCY`, which reduces embedding load first.
 
+## AI model unavailable
+
+Alert: `DocuMindAIModelUnavailable`. At start-up the API asked the provider about each configured
+model, and the key can't use one of them. Requests that need that model fail every time: answers
+for `LLM_MODEL`, processing for `EMBEDDING_MODEL`, figure descriptions for the vision model, voice
+for the speech models.
+
+1. `docker compose exec api documind-manage ai check` lists each model and its status
+   (`MISSING` = not available to this key). Exit code 1 means at least one is missing.
+2. Either set the variable to a model the key can use, or allow the model for the key (OpenAI:
+   the project's model limits). Then `docker compose up -d api worker`.
+3. Changing `EMBEDDING_MODEL` changes the vectors: re-index afterwards
+   (`documind-manage reindex --all`).
+
+## Database slow
+
+Symptom: requests answer `503 database_timeout`. A statement on an API connection ran longer
+than `DATABASE_STATEMENT_TIMEOUT_SECONDS` and PostgreSQL cancelled it, so the connection and the
+request were freed.
+
+1. Find the slow statements: `SELECT pid, now() - query_start AS age, left(query, 200) FROM
+   pg_stat_activity WHERE application_name LIKE 'documind-%' ORDER BY age DESC;`. API, worker
+   and CLI connections are named `documind-api`, `documind-worker` and `documind-cli`.
+2. Look for lock waits (`wait_event_type = 'Lock'`), a missing index after an upgrade, or a
+   database under load from another tenant.
+3. Raise the timeout only as a stopgap; the default 30 s is far above any normal request.
+
+## Orphaned objects
+
+`documind-manage orphans` lists objects in the platform bucket that no row refers to. They are
+left behind when an object delete fails after the database commit, or when an upload's
+transaction fails and so does its clean-up. It only reports; `--delete` removes them.
+
+- Objects newer than 24 hours (`--min-age-hours`) are never counted: an upload may still be
+  committing.
+- Workspaces being migrated, and those whose storage moved to their own bucket (the retained
+  migration source), are skipped.
+- Unknown prefixes are listed but never deleted. A customer's own bucket is never touched.
+- Run it monthly, or after an incident with storage errors in the logs. Check the report before
+  you run `--delete`.
+
 ## Data plane down
 
 Alert: `DocuMindDataPlaneDown`. A dedicated or external database is unreachable.

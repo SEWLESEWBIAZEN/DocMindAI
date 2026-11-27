@@ -63,6 +63,13 @@ groups:
           summary: "Redis is down: per-process rate limits apply and AI answers are refused"
           runbook: docs/runbooks/incident-response.md#dependency-down
 
+      - alert: DocuMindAIModelUnavailable
+        expr: min by (purpose, model) (documind_ai_model_available) == 0
+        labels: { severity: critical }
+        annotations:
+          summary: "The configured {{ $labels.purpose }} model {{ $labels.model }} is not available to the API key"
+          runbook: docs/runbooks/incident-response.md#ai-model-unavailable
+
       # TLS (Let's Encrypt renews at 30 days left; certbot retries every 12 h).
       - alert: DocuMindTLSCertificateExpiresSoon
         expr: documind_tls_certificate_expiry_timestamp > 0 and documind_tls_certificate_expiry_timestamp - time() < 14 * 86400

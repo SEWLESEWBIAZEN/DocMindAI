@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 
 from documind.domain.errors import (
     AuthenticationError,
@@ -22,6 +25,8 @@ from documind.domain.errors import (
     UnsupportedMediaTypeError,
     ValidationFailedError,
 )
+
+logger = logging.getLogger(__name__)
 
 _STATUS: list[tuple[type[DomainError], int]] = [
     (RateLimitedError, 429),
@@ -73,6 +78,23 @@ async def _handle_validation_error(_: Request, exc: Exception) -> JSONResponse:
     return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
 
+#: PostgreSQL ``query_canceled``: the statement timeout (or an operator) cancelled it.
+_QUERY_CANCELED = "57014"
+
+
+async def _handle_database_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, DBAPIError)  # noqa: S101 - registered only for DBAPIError
+    if getattr(exc.orig, "sqlstate", None) == _QUERY_CANCELED:
+        logger.warning("database statement cancelled (statement timeout)")
+        return JSONResponse(
+            {"detail": "This took too long. Please try again.", "code": "database_timeout"},
+            status_code=503,
+            headers={"Retry-After": "5"},
+        )
+    raise exc  # anything else stays a 500 with the normal error logging
+
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(DomainError, _handle_domain_error)
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
+    app.add_exception_handler(DBAPIError, _handle_database_error)

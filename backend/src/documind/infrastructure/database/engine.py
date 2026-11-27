@@ -10,7 +10,16 @@ from sqlalchemy.ext.asyncio import (
 from documind.core.config import Settings
 
 
-def create_engine(settings: Settings) -> AsyncEngine:
+def server_settings(settings: Settings, application_name: str) -> dict[str, str]:
+    """Per-connection PostgreSQL settings, including the statement timeout if one is set."""
+    values = {"application_name": application_name}
+    timeout_ms = int(settings.database_statement_timeout_seconds * 1000)
+    if timeout_ms > 0:
+        values["statement_timeout"] = str(timeout_ms)
+    return values
+
+
+def create_engine(settings: Settings, *, application_name: str = "documind-api") -> AsyncEngine:
     """Create the process-wide engine. No connection is opened until first use."""
     return create_async_engine(
         settings.database_url.get_secret_value(),
@@ -19,7 +28,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
         pool_timeout=settings.database_pool_timeout_seconds,
         pool_pre_ping=True,
         echo=settings.database_echo,
-        connect_args={"server_settings": {"application_name": "documind-api"}},
+        connect_args={"server_settings": server_settings(settings, application_name)},
     )
 
 

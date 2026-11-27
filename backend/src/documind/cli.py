@@ -33,7 +33,7 @@ from documind.application.infrastructure.sweeps import sweep_processing
 from documind.application.processing.jobs import new_job
 from documind.application.processing.orchestrator import ProcessingOrchestrator
 from documind.container import Container, build_container, processing_ai
-from documind.core.config import get_settings
+from documind.core.config import Settings, get_settings
 from documind.core.logging import configure_logging
 from documind.domain.billing.plans import PLANS
 from documind.infrastructure.database.models import Document
@@ -62,7 +62,7 @@ def _bootstrap_storage() -> int:
 
 
 async def _with_container(fn: Any) -> int:
-    container = build_container(get_settings())
+    container = build_container(get_settings(), role="cli")
     try:
         result: int = await fn(container)
         return result
@@ -217,6 +217,39 @@ async def _plan_assign(
     return 0
 
 
+async def _orphans(container: Container, delete: bool, min_age_hours: float) -> int:
+    from datetime import timedelta
+
+    from documind.ops.orphans import OrphanReconciler
+
+    report = await OrphanReconciler(
+        s3_client=container.s3_client,
+        bucket=container.settings.s3_bucket,
+        control=container.session_factory,
+        resolver=container.infrastructure(),
+    ).run(min_age=timedelta(hours=min_age_hours), delete=delete)
+    _print({"mode": "delete" if delete else "report", **report.as_dict()})
+    return 1 if report.delete_failed else 0
+
+
+async def _ai_check(settings: Settings, *, as_json: bool) -> int:
+    """Exit 1 if a configured model is unavailable, 2 if a provider couldn't be asked."""
+    from documind.ops.ai_models import AVAILABLE, MISSING, check_models
+
+    results = await check_models(settings)
+    if as_json:
+        _print({"models": [r.as_dict() for r in results]})
+    elif not results:
+        print("No hosted AI provider is configured (local providers only).")  # noqa: T201
+    for r in [] if as_json else results:
+        mark = {"available": "ok     ", "missing": "MISSING"}.get(r.status, "ERROR  ")
+        line = f"{mark} {r.purpose:<15} {r.provider:<10} {r.model}"
+        print(line + (f"  ({r.detail})" if r.detail else ""))  # noqa: T201
+    if any(r.status == MISSING for r in results):
+        return 1
+    return 0 if all(r.status == AVAILABLE for r in results) else 2
+
+
 async def _eval(
     container: Container,
     workspace_id: uuid.UUID,
@@ -231,6 +264,17 @@ async def _eval(
     Runs as a member of the workspace (the owner unless ``--as``), with the
     workspace's own AI settings, without saving conversations.
     """
+    from documind.ops.ai_models import MISSING, check_models
+
+    # A missing platform model fails every case for the same reason: say so first.
+    # (A workspace with its own key may not use the platform models at all.)
+    for r in await check_models(container.settings):
+        if r.status == MISSING:
+            print(  # noqa: T201
+                f"warning: the platform {r.purpose} model {r.model!r} is not available to "
+                "the platform key; workspaces without their own key will fail.",
+                file=sys.stderr,
+            )
     from pathlib import Path
 
     from documind.application.identity.common import RequestMeta
@@ -637,6 +681,16 @@ def main(argv: list[str] | None = None) -> int:
     objects.add_argument("objects_command", choices=["export", "import", "upload-file"])
     objects.add_argument("directory", help="export/import directory, or the file to upload")
     objects.add_argument("--bucket", default=None, help="defaults to S3_BUCKET")
+    orph = sub.add_parser(
+        "orphans", help="find objects in the platform bucket that no row refers to (F6/F7)"
+    )
+    orph.add_argument("--delete", action="store_true", help="delete them (default: report only)")
+    orph.add_argument(
+        "--min-age-hours",
+        type=float,
+        default=24.0,
+        help="ignore objects newer than this (default 24; an upload may still be committing)",
+    )
     backup = sub.add_parser("backup", help="encrypt or decrypt a backup archive")
     backup.add_argument("backup_command", choices=["seal", "unseal", "mark-success"])
     backup.add_argument("source", nargs="?")
@@ -676,6 +730,12 @@ def main(argv: list[str] | None = None) -> int:
         help="entitlement override, e.g. --override max_members=100 (repeatable)",
     )
     assign.add_argument("--note", default=None)
+    ai = sub.add_parser("ai", help="platform AI configuration")
+    ai_sub = ai.add_subparsers(dest="ai_command", required=True)
+    ai_check = ai_sub.add_parser(
+        "check", help="check the configured models are available to the configured keys"
+    )
+    ai_check.add_argument("--json", dest="ai_json", action="store_true", help="JSON output")
     ev = sub.add_parser("eval", help="score answers on a fixed set of questions (ADR 0038)")
     ev.add_argument("workspace_id", type=uuid.UUID)
     ev.add_argument(
@@ -712,6 +772,10 @@ def main(argv: list[str] | None = None) -> int:
         if not (args.source and args.target and args.passphrase_file):
             parser.error("seal/unseal need SOURCE TARGET --passphrase-file")
         return _backup(args.backup_command, args.source, args.target, args.passphrase_file)
+    if args.command == "orphans":
+        if args.min_age_hours < 1:
+            parser.error("--min-age-hours must be at least 1")
+        return asyncio.run(_with_container(lambda c: _orphans(c, args.delete, args.min_age_hours)))
     if args.command == "objects":
         return _objects(args.objects_command, args.directory, args.bucket)
     if args.command == "dataplanes":
@@ -757,6 +821,8 @@ def main(argv: list[str] | None = None) -> int:
                 lambda c: _plan_assign(c, args.workspace_id, args.plan, args.override, args.note)
             )
         )
+    if args.command == "ai":
+        return asyncio.run(_ai_check(settings, as_json=args.ai_json))
     if args.command == "eval":
         if not 0 <= args.min_pass <= 1:
             parser.error("--min-pass is between 0 and 1")

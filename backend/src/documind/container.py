@@ -118,6 +118,8 @@ class Container:
     provider_factory: ProviderFactory | None = None
     workspace_keys: SqlWorkspaceKeys | None = None
     infra: InfrastructureResolver | None = None
+    #: Result of the startup check of the configured AI models (F10); None until it ran.
+    ai_models: list[Any] | None = None
     #: Starts an extraction run in the background (ADR 0034): ``(run_id, workspace_id)``.
     extraction_dispatch: Callable[[uuid.UUID, uuid.UUID], Awaitable[bool]] | None = None
     #: OpenID Connect relying party for organization SSO (ADR 0036).
@@ -172,9 +174,12 @@ class Container:
             self.s3_client.close()
 
 
-def build_container(settings: Settings) -> Container:
+def build_container(settings: Settings, *, role: str = "api") -> Container:
+    """``role`` is ``api``, ``worker`` or ``cli``. Only the API keeps the statement timeout."""
+    if role != "api" and settings.database_statement_timeout_seconds:
+        settings = settings.model_copy(update={"database_statement_timeout_seconds": 0.0})
     image_describer = _build_image_describer(settings)
-    engine = create_engine(settings)
+    engine = create_engine(settings, application_name=f"documind-{role}")
     redis = create_redis_client(settings)
     s3_client = create_s3_client(settings)
     health_service = HealthService(

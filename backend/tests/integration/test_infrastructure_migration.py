@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 
 from documind.application.infrastructure.migration import (
-    MigrationExecutor,
     LeaseLostError,
+    MigrationExecutor,
     MigrationFailedError,
     MigrationReport,
 )

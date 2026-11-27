@@ -95,19 +95,23 @@ Before going live, also complete [`../PRODUCTION_CHECKLIST.md`](../PRODUCTION_CH
      `X-Content-Type-Options`.
    - `https://$SERVER_NAME/api/v1/metrics` returns 404 from outside, because it is internal only.
 
-5. **Assign plans** to organizations as an operator:
+5. **Check the AI models.** `docker compose exec api documind-manage ai check` must print `ok`
+   for every model. `MISSING` means the key can't use it; see
+   [`incident-response.md`](incident-response.md#ai-model-unavailable).
+
+6. **Assign plans** to organizations as an operator:
 
    ```bash
    docker compose exec api documind-manage plan assign <workspace_id> business
    ```
 
-6. **Monitoring.** Run Prometheus with `deploy/monitoring/prometheus.yml` and `alerts.yml` on the
+7. **Monitoring.** Run Prometheus with `deploy/monitoring/prometheus.yml` and `alerts.yml` on the
    stack's `internal` network:
    - put the `METRICS_TOKEN` value in `/etc/prometheus/metrics_token`;
    - route the alerts. Each alert links to a section of
      [`incident-response.md`](incident-response.md).
 
-7. **Backups.** Confirm the first nightly run (`docker compose logs backup`). Run a restore drill
+8. **Backups.** Confirm the first nightly run (`docker compose logs backup`). Run a restore drill
    ([`backup-and-restore.md`](backup-and-restore.md)) before onboarding customers.
 
 ### Reproducing the deployment locally
@@ -196,5 +200,7 @@ live database. Data written after the backup is lost, so compare the audit log b
 | Check answer quality (before a release, after a model or prompt change) | Load the sample documents into a test workspace, then `documind-manage eval <workspace_id> --min-pass 0.9 --markdown eval.md`; exit code 1 means a regression ([ADR 0038](../adr/0038-answer-feedback-and-quality-checks.md)) |
 | Rotate the credential key ring | Add the new key **first** in `CREDENTIAL_ENCRYPTION_KEYS`, restart, then run `documind-manage credentials rewrap`. Keep the old key while backups need it ([`disaster-recovery.md`](disaster-recovery.md#key-rotation)) |
 | Infrastructure migrations | `documind-manage migrations list`, then `run <id>`, `resume <id>` or `abort <id>` ([`incident-response.md`](incident-response.md#migration-stuck)) |
+| AI models available to the keys | `documind-manage ai check` (exit 1: a configured model is missing) |
+| Orphaned objects | `documind-manage orphans` (report), then `orphans --delete` ([`incident-response.md`](incident-response.md#orphaned-objects)) |
 | Certificates | Automatic. Force a renewal with `docker compose --profile letsencrypt run --rm --entrypoint certbot certbot renew --force-renewal` |
 | Logs | JSON on stdout, rotated by Docker (20 MB × 5 per service). Ship them to your log system. Secrets are redacted |

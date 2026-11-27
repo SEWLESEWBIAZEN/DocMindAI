@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -21,8 +22,20 @@ from documind.api.router import api_router
 from documind.container import Container, build_container
 from documind.core.config import Settings, get_settings
 from documind.core.logging import configure_logging
+from documind.ops.ai_models import check_models, configured_models, log_results
 
 logger = logging.getLogger(__name__)
+
+
+async def _check_ai_models(container: Container) -> None:
+    """In the background, so a slow provider never delays start-up or readiness."""
+    try:
+        container.ai_models = await check_models(container.settings)
+    except Exception:  # pragma: no cover - check_models reports, it shouldn't raise
+        logger.exception("AI model check failed")
+        return
+    log_results(container.ai_models)
+
 
 ContainerFactory = Callable[[Settings], Container]
 
@@ -44,9 +57,16 @@ def create_app(
             "Application started",
             extra={"environment": settings.environment.value, "version": __version__},
         )
+        check = (
+            asyncio.create_task(_check_ai_models(container))
+            if settings.ai_model_check_on_startup and configured_models(settings)
+            else None
+        )
         try:
             yield
         finally:
+            if check is not None and not check.done():
+                check.cancel()
             await container.aclose()
             logger.info("Application stopped")
 

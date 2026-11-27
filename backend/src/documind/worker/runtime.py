@@ -30,7 +30,7 @@ def _state() -> tuple[asyncio.AbstractEventLoop, Container]:
     if _loop is None or _container is None:
         _loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_loop)
-        _container = build_container(get_settings())
+        _container = build_container(get_settings(), role="worker")
     return _loop, _container
 
 

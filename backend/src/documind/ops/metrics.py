@@ -46,6 +46,19 @@ class _Out:
         return "\n".join(self.lines) + "\n"
 
 
+def ai_model_gauges(out: _Out, models: list[Any]) -> None:
+    """Known results only: a model that couldn't be checked is not reported as missing."""
+    for model in models:
+        if model.status in ("available", "missing"):
+            out.gauge(
+                "documind_ai_model_available",
+                "1 if a configured AI model is available to the configured key (start-up check).",
+                1.0 if model.status == "available" else 0.0,
+                purpose=model.purpose,
+                model=model.model,
+            )
+
+
 async def render(container: Any) -> str:
     out = _Out()
     out.gauge("documind_up", "The API process is serving.", 1)
@@ -181,6 +194,7 @@ async def render(container: Any) -> str:
             "1 while the temporary self-signed certificate is served (no Let's Encrypt yet).",
             1.0 if self_signed else 0.0,
         )
+    ai_model_gauges(out, getattr(container, "ai_models", None) or [])
     out.gauge("documind_scrape_timestamp", "When these values were computed.", time.time())
     return out.text()
 

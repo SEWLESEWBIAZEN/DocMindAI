@@ -207,3 +207,26 @@ def test_speech_round_trip_or_reports_why_not() -> None:
     text = run(speech.transcribe(audio, media_type="audio/mpeg"))
     print("stt:", text)
     assert "documind" in text.text.lower().replace(" ", "")
+
+
+def test_configured_model_check_against_the_real_api() -> None:
+    """F10: the start-up / `documind-manage ai check` result for the key in use."""
+    from pydantic import SecretStr
+
+    from documind.ops.ai_models import check_models
+
+    settings = Settings().model_copy(
+        update={
+            "embedding_provider": "openai",
+            "llm_provider": "openai",
+            "llm_model": MISSING,
+            "openai_api_key": SecretStr(KEY),
+            "speech_provider": "none",
+            "figure_descriptions_enabled": False,
+        }
+    )
+    results = {r.purpose: r for r in run(check_models(settings))}
+    print({k: (v.model, v.status) for k, v in results.items()})
+    assert results["embeddings"].status == "available"
+    assert results["answers"].status == "missing"
+    assert results["answers"].detail == "not available to this API key"

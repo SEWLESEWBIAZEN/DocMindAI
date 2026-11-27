@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(default=10, ge=1, le=100)
     database_max_overflow: int = Field(default=10, ge=0, le=100)
     database_pool_timeout_seconds: float = Field(default=10.0, gt=0)
+    # PostgreSQL statement_timeout for API connections (control and data planes): a slow or
+    # stuck query is cancelled instead of holding a connection and a request. 0 turns it
+    # off. Workers and the CLI never use it: bulk copies, backups and exports run long.
+    database_statement_timeout_seconds: float = Field(default=30.0, ge=0, le=3600)
     database_echo: bool = False
 
     # --- Redis -------------------------------------------------------------
@@ -227,6 +231,9 @@ class Settings(BaseSettings):
 
     # --- Health checks -----------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    # Ask the AI providers once, at API start, whether the configured models are
+    # available to the configured keys (F10). Logged and exported as a metric.
+    ai_model_check_on_startup: bool = True
 
     # --- Public URLs -------------------------------------------------------
     # Base URL of the web app; used to build links in emails.

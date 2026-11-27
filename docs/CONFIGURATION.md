@@ -19,6 +19,7 @@ Required variables have no default; the backend refuses to start without them.
 | `API_DOCS_ENABLED`               |          | *(unset)*      | Force OpenAPI docs on/off. Unset means on, except in production.             |
 | `CORS_ALLOWED_ORIGINS`           |          | *(empty)*      | Comma-separated origins. Empty means no CORS middleware (same-origin only). `*` is rejected in production. |
 | `HEALTH_CHECK_TIMEOUT_SECONDS`   |          | `3.0`          | Per-dependency timeout for readiness checks (max 30).                       |
+| `AI_MODEL_CHECK_ON_STARTUP`      |          | `true`         | At API start, ask the AI providers in the background whether the configured models (`LLM_MODEL`, `EMBEDDING_MODEL`, vision and speech models) are available to the configured keys. Logged, and exported as `documind_ai_model_available`. Same check: `documind-manage ai check`. |
 
 ## PostgreSQL
 
@@ -28,6 +29,7 @@ Required variables have no default; the backend refuses to start without them.
 | `DATABASE_POOL_SIZE`              |          | `10`    | Persistent connections per process.                             |
 | `DATABASE_MAX_OVERFLOW`           |          | `10`    | Extra burst connections per process.                            |
 | `DATABASE_POOL_TIMEOUT_SECONDS`   |          | `10`    | Wait time for a pooled connection.                              |
+| `DATABASE_STATEMENT_TIMEOUT_SECONDS` |       | `30`    | PostgreSQL `statement_timeout` for **API** connections, on the control plane and on data planes. A cancelled statement answers `503 database_timeout`. `0` turns it off. Workers and `documind-manage` never use it: copies, backups and exports run long. |
 | `DATABASE_ECHO`                   |          | `false` | Log all SQL (development debugging only).                       |
 
 ## Redis
