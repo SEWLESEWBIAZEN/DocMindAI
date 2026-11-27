@@ -154,7 +154,8 @@ class TestAnswer:
         llm = ScriptedLLM(f"{INSUFFICIENT_CONTEXT_SENTINEL} The sources only cover renewal [1].")
         result = await orchestrator(FakeRetrieval([NOTICE]), llm).answer(cast(Any, Ctx()), "q")
         assert result.status == "insufficient_context"
-        assert result.answer == "The sources only cover renewal [1]."
+        # No citations, so no dangling [1] either (seen with a real model).
+        assert result.answer == "The sources only cover renewal."
         assert result.citations == ()
 
     async def test_bare_sentinel_uses_default_message(self) -> None:

@@ -70,7 +70,12 @@ class OpenAIEmbeddingProvider:
             raise TransientProcessingError(
                 "The embedding service is temporarily unavailable.", code="embedding_unavailable"
             ) from exc
-        except (openai.AuthenticationError, openai.PermissionDeniedError) as exc:
+        except (
+            openai.AuthenticationError,
+            openai.PermissionDeniedError,
+            openai.NotFoundError,
+        ) as exc:
+            # NotFoundError: the model doesn't exist or this key can't use it.
             # An operator can fix credentials, so retry rather than fail the document.
             logger.error("Embedding provider rejected our credentials")
             raise TransientProcessingError(

@@ -34,6 +34,12 @@ def split_insufficient(text: str) -> tuple[bool, str]:
     return False, text
 
 
+def strip_markers(text: str) -> str:
+    """Remove every [n] marker: for answers that carry no citations."""
+    cleaned = _MARKER.sub("", text)
+    return re.sub(r"[ \t]+([.,;:])", r"\1", re.sub(r"[ \t]{2,}", " ", cleaned)).strip()
+
+
 def _labels(
     title: str, start: int | None, end: int | None, path: tuple[str, ...]
 ) -> tuple[str, str]:

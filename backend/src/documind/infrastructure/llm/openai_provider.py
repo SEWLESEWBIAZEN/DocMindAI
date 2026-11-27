@@ -48,6 +48,13 @@ def raise_classified(exc: Exception) -> NoReturn:
         raise TransientProcessingError(
             "The AI service is misconfigured.", code="llm_misconfigured"
         ) from exc
+    if isinstance(exc, openai.NotFoundError):
+        # The configured model doesn't exist or this key can't use it (verified against
+        # the real API: HTTP 404 model_not_found). An operator fixes the model setting.
+        logger.error("LLM provider doesn't know the configured model")
+        raise TransientProcessingError(
+            "The AI service is misconfigured (model not available).", code="llm_misconfigured"
+        ) from exc
     if isinstance(exc, openai.BadRequestError):
         raise PermanentProcessingError(
             "The AI service rejected this request.", code="llm_rejected"

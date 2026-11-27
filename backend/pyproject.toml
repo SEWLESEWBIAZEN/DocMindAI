@@ -58,9 +58,10 @@ asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
 # Integration tests need the Docker Compose infrastructure; run them with
 # `uv run pytest -m integration`.
-addopts = ["-ra", "--strict-markers", "-m", "not integration"]
+addopts = ["-ra", "--strict-markers", "-m", "not integration and not live"]
 markers = [
     "integration: requires running PostgreSQL, Redis and S3-compatible storage",
+    "live: calls real external services (opt-in; see docs/production-readiness/02)",
 ]
 filterwarnings = [
     "error::DeprecationWarning:documind.*",
@@ -82,6 +83,9 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
+# Live checks print what the real services answered: that output is the evidence.
+"tests/live/**" = ["S101", "S105", "S106", "T201"]
+"tests/integration/*_live.py" = ["S101", "S105", "S106", "T201"]
 "alembic/**" = ["N999"]
 
 [tool.mypy]

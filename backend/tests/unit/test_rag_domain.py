@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from documind.domain.rag.citations import resolve_citations, split_insufficient
+from documind.domain.rag.citations import resolve_citations, split_insufficient, strip_markers
 from documind.domain.rag.context import build_context, neutralize
 from documind.domain.rag.fusion import reciprocal_rank_fusion
 from documind.domain.rag.models import ContextSource, RetrievedChunk
@@ -156,3 +156,8 @@ class TestCitations:
             "Nothing about parking.",
         )
         assert split_insufficient("Answer [1].") == (False, "Answer [1].")
+
+    def test_strip_markers(self) -> None:
+        assert strip_markers("Only renewals [1]. Nothing else [2, 3] here [4];") == (
+            "Only renewals. Nothing else here;"
+        )

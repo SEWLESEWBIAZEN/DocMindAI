@@ -127,6 +127,8 @@ class TestOpenAIChat:
             (429, TransientProcessingError, "llm_rate_limited"),
             (500, TransientProcessingError, "llm_unavailable"),
             (401, TransientProcessingError, "llm_misconfigured"),
+            # The real API answers 404 model_not_found for a model the key can't use.
+            (404, TransientProcessingError, "llm_misconfigured"),
             (400, PermanentProcessingError, "llm_rejected"),
         ],
     )

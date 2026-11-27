@@ -83,6 +83,7 @@ class TestOpenAIProvider:
             (429, TransientProcessingError, "embedding_rate_limited"),
             (503, TransientProcessingError, "embedding_unavailable"),
             (401, TransientProcessingError, "embedding_misconfigured"),
+            (404, TransientProcessingError, "embedding_misconfigured"),
             (400, PermanentProcessingError, "embedding_rejected"),
         ],
     )

@@ -37,7 +37,7 @@ from documind.domain.identity.permissions import Permission
 from documind.domain.identity.policies import WorkspaceContext
 from documind.domain.processing.errors import ProcessingError, ProviderAccessError
 from documind.domain.processing.tokens import estimate_tokens
-from documind.domain.rag.citations import resolve_citations, split_insufficient
+from documind.domain.rag.citations import resolve_citations, split_insufficient, strip_markers
 from documind.domain.rag.context import build_context
 from documind.domain.rag.models import BuiltContext, Citation, ContextSource, Turn
 from documind.domain.rag.prompts import INSUFFICIENT_CONTEXT_ANSWER, INSUFFICIENT_CONTEXT_SENTINEL
@@ -194,7 +194,9 @@ class RAGOrchestrator:
             insufficient, body = True, ""
         resolved = resolve_citations(body, prep.context.sources, prep.question)
         if insufficient:
-            text = resolved.text or INSUFFICIENT_CONTEXT_ANSWER
+            # No citations on a "not in the documents" answer, so no markers either: the
+            # real model sometimes still writes [1] after the sentinel.
+            text = strip_markers(resolved.text) or INSUFFICIENT_CONTEXT_ANSWER
             citations: tuple[Citation, ...] = ()
         else:
             text, citations = resolved.text, resolved.citations
