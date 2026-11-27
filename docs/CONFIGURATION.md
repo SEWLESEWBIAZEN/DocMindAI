@@ -89,6 +89,7 @@ Required variables have no default; the backend refuses to start without them.
 | Variable                          | Required | Default    | Description                                                              |
 | --------------------------------- | -------- | ---------- | ------------------------------------------------------------------------ |
 | `MFA_ENCRYPTION_KEY`              | yes      |            | 32 random bytes, base64url. Encrypts TOTP secrets (AES-256-GCM) and keys recovery-code hashes. Generate with `python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Placeholders are rejected in production. |
+| `MFA_ENCRYPTION_KEYS_PREVIOUS`    |          | *(unset)*  | Retired 2FA keys, comma-separated, same format. Still accepted while `documind-manage mfa rewrap` moves secrets to the current key, and for recovery codes issued under them. See `runbooks/disaster-recovery.md` (key rotation). |
 | `MFA_ISSUER`                      |          | `DocuMind` | Name shown in authenticator apps.                                        |
 | `MFA_STEP_UP_TTL_SECONDS`         |          | `300`      | How long a 2FA check authorizes sensitive actions such as deleting documents (30–3600). |
 | `MFA_SETUP_TTL_MINUTES`           |          | `15`       | Time allowed to confirm a started setup.                                 |

@@ -301,6 +301,15 @@ async def _eval(
     return 0 if report.pass_rate >= min_pass else 1
 
 
+async def _mfa_rewrap(container: Container, dry_run: bool) -> int:
+    """Re-encrypt stored 2FA secrets with the current key; exit 1 if any can't be read."""
+    from documind.ops.mfa_keys import rewrap
+
+    report = await rewrap(container.session_factory, container.secret_box, dry_run=dry_run)
+    _print({"dry_run": dry_run, **report.as_dict()})
+    return 1 if report.undecryptable else 0
+
+
 def _offsite_client(settings: Any) -> Any:
     """Offsite backups can use their own credentials and endpoint (BACKUP_S3_*),
     so a compromised application key can't delete the backups."""
@@ -619,6 +628,10 @@ def main(argv: list[str] | None = None) -> int:
     backup.add_argument("source", nargs="?")
     backup.add_argument("target", nargs="?")
     backup.add_argument("--passphrase-file")
+    mfa = sub.add_parser("mfa", help="2FA key maintenance")
+    mfa_sub = mfa.add_subparsers(dest="mfa_command", required=True)
+    rw = mfa_sub.add_parser("rewrap", help="re-encrypt 2FA secrets with MFA_ENCRYPTION_KEY")
+    rw.add_argument("--dry-run", action="store_true", help="count only; change nothing")
     reset = sub.add_parser("mfa-reset", help="support-assisted 2FA reset requests (ADR 0030)")
     reset.add_argument("mfa_reset_command", choices=["list", "approve", "deny"])
     reset.add_argument("request_id", nargs="?", type=uuid.UUID)
@@ -691,6 +704,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_with_container(_dataplanes_migrate))
     if args.command == "credentials":
         return asyncio.run(_with_container(_rewrap))
+    if args.command == "mfa":
+        return asyncio.run(_with_container(lambda c: _mfa_rewrap(c, args.dry_run)))
     if args.command == "mfa-reset":
         if args.mfa_reset_command != "list" and (args.request_id is None or not args.operator):
             parser.error("approve and deny need REQUEST_ID and --operator")

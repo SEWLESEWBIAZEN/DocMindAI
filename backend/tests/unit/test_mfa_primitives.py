@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from documind.domain.identity import totp
-from documind.infrastructure.security.secret_box import SecretBox, SecretDecryptionError
+from documind.infrastructure.security.secret_box import SecretBox, SecretDecryptionError, key_id
 
 # RFC 6238 Appendix B test secret (ASCII "12345678901234567890"), SHA-1.
 RFC_SECRET = base64.b32encode(b"12345678901234567890").decode()
@@ -94,7 +94,7 @@ class TestSecretBox:
         a = self.box.encrypt("JBSWY3DPEHPK3PXP", context="user-1")
         b = self.box.encrypt("JBSWY3DPEHPK3PXP", context="user-1")
         assert a != b
-        assert a.startswith("v1:")
+        assert a.startswith(f"v2:{key_id(b'k' * 32)}:")
         assert "JBSWY3DPEHPK3PXP" not in a
         assert self.box.decrypt(a, context="user-1") == "JBSWY3DPEHPK3PXP"
 
@@ -113,3 +113,43 @@ class TestSecretBox:
     def test_key_length(self) -> None:
         with pytest.raises(ValueError, match="32-byte"):
             SecretBox(b"short")
+        with pytest.raises(ValueError, match="32-byte"):
+            SecretBox(b"k" * 32, [b"short"])
+
+
+def _legacy_v1(key: bytes, plaintext: str, context: str) -> str:
+    """The format written before key rotation existed (no key id)."""
+    import base64
+    import os
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    nonce = os.urandom(12)
+    sealed = AESGCM(key).encrypt(nonce, plaintext.encode(), context.encode())
+    return "v1:" + base64.urlsafe_b64encode(nonce + sealed).decode()
+
+
+class TestKeyRotation:
+    old, new = b"o" * 32, b"n" * 32
+
+    def test_legacy_ciphertexts_still_decrypt_with_the_old_key_as_previous(self) -> None:
+        legacy = _legacy_v1(self.old, "SECRET", "totp:1")
+        assert SecretBox(self.old).decrypt(legacy, context="totp:1") == "SECRET"
+        rotated = SecretBox(self.new, [self.old])
+        assert rotated.decrypt(legacy, context="totp:1") == "SECRET"
+        assert rotated.is_current(legacy) is False
+        # Without the old key it can't be read: rewrap before retiring it.
+        with pytest.raises(SecretDecryptionError):
+            SecretBox(self.new).decrypt(legacy, context="totp:1")
+
+    def test_new_ciphertexts_name_their_key(self) -> None:
+        old_box = SecretBox(self.old)
+        token = old_box.encrypt("SECRET", context="totp:1")
+        rotated = SecretBox(self.new, [self.old])
+        assert rotated.decrypt(token, context="totp:1") == "SECRET"
+        assert rotated.is_current(token) is False
+        rewrapped = rotated.encrypt(rotated.decrypt(token, context="totp:1"), context="totp:1")
+        assert rotated.is_current(rewrapped) is True
+        assert SecretBox(self.new).decrypt(rewrapped, context="totp:1") == "SECRET"
+        with pytest.raises(SecretDecryptionError, match="not configured"):
+            SecretBox(self.new).decrypt(token, context="totp:1")

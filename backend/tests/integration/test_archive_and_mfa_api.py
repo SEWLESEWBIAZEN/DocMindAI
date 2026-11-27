@@ -258,7 +258,7 @@ def test_mfa_enrollment(api: Api) -> None:
 
     # The secret is encrypted at rest; recovery codes are stored only as hashes.
     (stored,) = _sql(api, "SELECT totp_secret_encrypted FROM users")[0]
-    assert stored.startswith("v1:")
+    assert stored.startswith("v2:")  # key-id format since the key ring (F4)
     assert secret not in stored
     hashes = {row[0] for row in _sql(api, "SELECT code_hash FROM mfa_recovery_codes")}
     assert not hashes & set(confirm.json()["recovery_codes"])

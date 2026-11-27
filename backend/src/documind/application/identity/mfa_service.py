@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
 import time
 import uuid
@@ -34,13 +35,14 @@ from documind.application.identity.mfa_reset import (
     delete_factor_rows,
 )
 from documind.application.ports import EmailSender, PasswordHasher, RateLimiter
-from documind.core.config import Settings, mfa_key_bytes
+from documind.core.config import Settings, mfa_key_bytes, mfa_previous_keys
 from documind.domain.errors import (
     AuthenticationError,
     ConflictError,
     InvalidTokenError,
     NotFoundError,
     PermissionDeniedError,
+    ServiceUnavailableError,
     ValidationFailedError,
 )
 from documind.domain.identity import totp
@@ -57,7 +59,7 @@ from documind.infrastructure.security.passkeys import (
     client_challenge,
     credential_id,
 )
-from documind.infrastructure.security.secret_box import SecretBox
+from documind.infrastructure.security.secret_box import SecretBox, SecretDecryptionError
 
 MFA_EMAIL = "mfa_email"
 WEBAUTHN_REG = "webauthn_reg"
@@ -65,6 +67,8 @@ WEBAUTHN_AUTH = "webauthn_auth"
 PASSKEY_CHALLENGE_TTL = timedelta(minutes=5)
 # A password reset proves control of the mailbox only; don't let the mailbox be both factors.
 EMAIL_CODE_BLOCK_AFTER_RESET = timedelta(hours=24)
+
+logger = logging.getLogger(__name__)
 
 
 def _totp_clock() -> float:
@@ -113,6 +117,9 @@ class MfaService:
         self._email = email
         self._limiter = limiter
         self._pepper = mfa_key_bytes(settings.mfa_encryption_key)
+        # Recovery and email codes are HMAC'd with the key: also accept retired keys, so
+        # rotating it doesn't invalidate codes people already hold.
+        self._peppers = [self._pepper, *mfa_previous_keys(settings.mfa_encryption_keys_previous)]
         self._users = UserRepository(session)
         self._codes = MfaRecoveryCodeRepository(session)
         self._tokens = AccountTokenRepository(session)
@@ -148,8 +155,15 @@ class MfaService:
         )
         return codes
 
-    def _email_code_hash(self, row_id: uuid.UUID, code: str) -> str:
-        return hmac.new(self._pepper, f"{row_id}:{code}".encode(), hashlib.sha256).hexdigest()
+    def _email_code_hash(self, row_id: uuid.UUID, code: str, pepper: bytes | None = None) -> str:
+        key = pepper or self._pepper
+        return hmac.new(key, f"{row_id}:{code}".encode(), hashlib.sha256).hexdigest()
+
+    def _email_code_matches(self, stored: str, row_id: uuid.UUID, code: str) -> bool:
+        return any(
+            hmac.compare_digest(stored, self._email_code_hash(row_id, code, p))
+            for p in self._peppers
+        )
 
     async def _email_codes_blocked(self, user: User) -> bool:
         since = utcnow() - EMAIL_CODE_BLOCK_AFTER_RESET
@@ -184,22 +198,33 @@ class MfaService:
                 code="invalid_passkey",
             )
         if code is not None and user.totp_secret_encrypted:
-            secret = self._box.decrypt(user.totp_secret_encrypted, context=self._context(user))
+            try:
+                secret = self._box.decrypt(user.totp_secret_encrypted, context=self._context(user))
+            except SecretDecryptionError as exc:
+                # A configuration problem (a key was retired too early), not a wrong code.
+                logger.error(
+                    "2FA secret can't be decrypted: check MFA_ENCRYPTION_KEYS_PREVIOUS",
+                    extra={"user_id": str(user.id)},
+                )
+                raise ServiceUnavailableError(
+                    "Two-factor verification is temporarily unavailable. Try a recovery code "
+                    "or contact support.",
+                    code="mfa_unavailable",
+                ) from exc
             step = totp.verify(secret, code, _totp_clock(), last_used_step=user.totp_last_used_step)
             if step is not None:
                 user.totp_last_used_step = step  # prevents replay of this and older codes
                 return "totp"
         elif recovery_code is not None:
-            digest = totp.hash_recovery_code(recovery_code, self._pepper)
-            if await self._codes.consume(user.id, digest, utcnow()):
-                return "recovery_code"
+            for pepper in self._peppers:
+                digest = totp.hash_recovery_code(recovery_code, pepper)
+                if await self._codes.consume(user.id, digest, utcnow()):
+                    return "recovery_code"
         elif email_code is not None and not await self._email_codes_blocked(user):
             now = utcnow()
             row = await self._tokens.latest_active(user.id, MFA_EMAIL, now)
             candidate = "".join(email_code.split())
-            if row is not None and hmac.compare_digest(
-                row.token_hash, self._email_code_hash(row.id, candidate)
-            ):
+            if row is not None and self._email_code_matches(row.token_hash, row.id, candidate):
                 row.used_at = now  # single use
                 return "email_code"
         self._audit.record("auth.mfa_failed", actor_user_id=user.id, details={"reason": "code"})
@@ -483,9 +508,7 @@ class MfaService:
         now = utcnow()
         row = await self._tokens.latest_active(locked.id, MFA_EMAIL, now)
         candidate = "".join(email_code.split())
-        if row is None or not hmac.compare_digest(
-            row.token_hash, self._email_code_hash(row.id, candidate)
-        ):
+        if row is None or not self._email_code_matches(row.token_hash, row.id, candidate):
             self._audit.record(
                 "auth.mfa_failed", actor_user_id=locked.id, details={"reason": "setup_code"}
             )

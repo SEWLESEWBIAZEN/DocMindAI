@@ -41,7 +41,7 @@ from documind.application.ports import (
     SpeechToTextProvider,
     TextToSpeechProvider,
 )
-from documind.core.config import Settings, credential_key_ring, mfa_key_bytes
+from documind.core.config import Settings, credential_key_ring, mfa_key_bytes, mfa_previous_keys
 from documind.domain.billing.plans import Capability
 from documind.infrastructure.ai.factory import ProviderAdapterFactory
 from documind.infrastructure.cache.cancellation import RedisCancellationRegistry
@@ -215,7 +215,10 @@ def build_container(settings: Settings) -> Container:
             ),
         ),
         malware_scanner=_build_scanner(settings),
-        secret_box=SecretBox(mfa_key_bytes(settings.mfa_encryption_key)),
+        secret_box=SecretBox(
+            mfa_key_bytes(settings.mfa_encryption_key),
+            mfa_previous_keys(settings.mfa_encryption_keys_previous),
+        ),
         extractor=CompositeExtractor(
             ExtractionLimits(max_pages=settings.max_document_pages),
             OcrOptions(

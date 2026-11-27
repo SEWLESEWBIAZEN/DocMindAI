@@ -279,6 +279,9 @@ class Settings(BaseSettings):
     # keys the recovery-code hashes. Generate with:
     #   python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
     mfa_encryption_key: SecretStr
+    #: Retired 2FA keys, comma-separated (same format), still accepted for decrypting and
+    #: for recovery and email codes until `documind-manage mfa rewrap` has run.
+    mfa_encryption_keys_previous: SecretStr | None = None
     mfa_issuer: str = "DocuMind"
     # Credential vault (ADR 0022): "id:base64key,id:base64key". The first key wraps
     # new data keys; every key can unwrap. Rotate by prepending a new key, running
@@ -389,6 +392,15 @@ class Settings(BaseSettings):
             raise ValueError("MFA_ENCRYPTION_KEY must be 32 bytes, base64url-encoded")
         return value
 
+    @field_validator("mfa_encryption_keys_previous")
+    @classmethod
+    def _validate_previous_mfa_keys(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and any(len(k) != 32 for k in mfa_previous_keys(value)):
+            raise ValueError(
+                "MFA_ENCRYPTION_KEYS_PREVIOUS must be comma-separated 32-byte base64url keys"
+            )
+        return value
+
     @field_validator("credential_encryption_keys")
     @classmethod
     def _validate_credential_keys(cls, value: SecretStr | None) -> SecretStr | None:
@@ -403,6 +415,7 @@ class Settings(BaseSettings):
         "celery_broker_url",
         "smtp_password",
         "credential_encryption_keys",
+        "mfa_encryption_keys_previous",
         "dedicated_database_admin_url",
         "metrics_token",
         "stripe_secret_key",
@@ -590,6 +603,16 @@ def mfa_key_bytes(value: SecretStr) -> bytes:
 
 
 _KEY_ID = re.compile(r"^[a-z0-9_-]{1,16}$")
+
+
+def mfa_previous_keys(value: SecretStr | None) -> list[bytes]:
+    if value is None:
+        return []
+    return [
+        mfa_key_bytes(SecretStr(item))
+        for item in value.get_secret_value().split(",")
+        if item.strip()
+    ]
 
 
 def credential_key_ring(value: SecretStr) -> list[tuple[str, bytes]]:

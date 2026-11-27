@@ -110,10 +110,52 @@ leak.
 |-----|-----|--------|
 | `CREDENTIAL_ENCRYPTION_KEYS` | 1. Prepend a new `id:key` entry, keeping the old ones. 2. Restart `api` and `worker`. 3. Run `documind-manage credentials rewrap`. 4. Remove the old entry only once no archive you keep needs it | None for users |
 | `JWT_SECRET_KEY` | Replace it, restart, and delete the rows in `refresh_tokens` | Everyone signs in again |
-| `MFA_ENCRYPTION_KEY` | **No re-encryption tool yet.** Rotating it makes existing 2FA secrets unreadable. Rotate only after a leak, and plan for users to re-enrol | Users re-enrol in 2FA |
+| `MFA_ENCRYPTION_KEY` | Key ring: set the new key as `MFA_ENCRYPTION_KEY`, move the old one to `MFA_ENCRYPTION_KEYS_PREVIOUS`, restart, then `documind-manage mfa rewrap --dry-run` and `mfa rewrap` (see below) | Nobody: authenticator codes keep working throughout. Recovery codes issued under the old key work while it stays in `MFA_ENCRYPTION_KEYS_PREVIOUS` |
 | `REDIS_PASSWORD` | Replace it, then `docker compose up -d` (Redis and every client restart) | Seconds of downtime; queued messages may need `documind-manage sweep` |
 | `METRICS_TOKEN` | Replace it in `.env` and in Prometheus's `metrics_token` file, then restart `api` | None |
 | Backup passphrase | Write the new one to `secrets/backup_passphrase`. New archives use it | **Keep the old passphrase** for as long as older archives are retained |
 | Platform AI key, SMTP, S3 credentials | Replace them at the provider and in `.env`, then restart `api`, `worker` and `beat` | None |
 | Customer credentials (BYOK keys, external database password, storage keys) | Owners save a new AI key or infrastructure version. The old credential is revoked and its ciphertext destroyed | None |
 | Customer worker tokens | The owner registers a new worker, deploys its token, then revokes the old one | None |
+
+### Rotating `MFA_ENCRYPTION_KEY` without locking anyone out
+
+1. **Generate a key:**
+   ```
+   python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+   ```
+2. **Update `.env`:**
+   ```
+   MFA_ENCRYPTION_KEY=<new key>
+   MFA_ENCRYPTION_KEYS_PREVIOUS=<old key>   # several: comma-separated, newest first
+   ```
+   Restart `api`, `worker` and `beat`. New secrets are encrypted with the new key
+   (`v2:<key id>:…`, where the key id is the first 8 hex characters of SHA-256 of the key). Old
+   ones are still read with the old key.
+3. **Re-encrypt the stored secrets:**
+   ```
+   docker compose exec api documind-manage mfa rewrap --dry-run   # counts only
+   docker compose exec api documind-manage mfa rewrap
+   ```
+   It prints counts and user ids only, never secrets. It's safe to run again: secrets already
+   on the current key are skipped. Exit code 1 means some secrets couldn't be decrypted with
+   any configured key; their user ids are listed. Those users need a support reset
+   (ADR 0030).
+4. **Decide when to drop the old key.** Recovery codes and emailed codes are keyed hashes
+   and can't be re-keyed:
+   - **Keep the old key** in `MFA_ENCRYPTION_KEYS_PREVIOUS` until everyone who matters has
+   regenerated their recovery codes (Profile → Security). It's then used only to check those
+   codes.
+   - **After a leak, remove it at once.** Authenticator apps and passkeys keep working;
+   recovery codes issued before the rotation stop working.
+5. **Back up the new key** with the other secrets (see "What must survive outside the
+   archives").
+
+**Rollback.** Put the old key back as `MFA_ENCRYPTION_KEY` and the new one in
+`MFA_ENCRYPTION_KEYS_PREVIOUS`, then restart: everything stays readable. Run `rewrap` again
+if you want the old key to be primary everywhere.
+
+Verified by `test_rotating_the_mfa_key_keeps_everyone_signed_in`: enrol, rotate, sign in
+with an app code and a recovery code, dry run, rewrap (idempotent), retire the old key.
+A key removed too early gives `503 mfa_unavailable`, not a crash.
+

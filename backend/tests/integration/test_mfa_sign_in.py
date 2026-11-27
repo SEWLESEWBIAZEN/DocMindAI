@@ -130,3 +130,80 @@ def test_turning_2fa_off_restores_password_sign_in(api: Api) -> None:
     )
     assert off.status_code in (200, 204), off.text
     assert "access_token" in api.login(email).json()
+
+
+def test_rotating_the_mfa_key_keeps_everyone_signed_in(make_api: Any) -> None:
+    """Production readiness F4: a new MFA_ENCRYPTION_KEY, a rewrap, then the old key retired."""
+    import asyncio
+    import base64
+    import os
+
+    from pydantic import SecretStr
+
+    from documind.container import build_container
+    from documind.ops.mfa_keys import rewrap
+    from tests.integration.test_processing_pipeline import sql
+
+    old_api: Api = make_api()
+    email, secret, codes = _user_with_mfa(old_api)
+    before = sql(
+        old_api, "SELECT totp_secret_encrypted AS enc FROM users WHERE email = :e", e=email
+    )[0].enc
+    old_key = old_api.settings.mfa_encryption_key
+    new_key = SecretStr(base64.urlsafe_b64encode(os.urandom(32)).decode())
+
+    def sign_in(api: Api, **factor: str) -> int:
+        challenge = api.login(email).json()["challenge_token"]
+        return int(_finish(api, challenge, **factor).status_code)
+
+    # 1. New key, old one kept as previous: everything still works.
+    rotated: Api = make_api(
+        _skip_reset=True, mfa_encryption_key=new_key, mfa_encryption_keys_previous=old_key
+    )
+    assert sign_in(rotated, code=rotated.totp(secret)) == 200
+    assert sign_in(rotated, recovery_code=codes[0]) == 200
+
+    def run_rewrap(api: Api, dry_run: bool) -> dict[str, object]:
+        async def go() -> dict[str, object]:
+            c = build_container(api.settings)
+            try:
+                return (await rewrap(c.session_factory, c.secret_box, dry_run=dry_run)).as_dict()
+            finally:
+                await c.aclose()
+
+        return asyncio.run(go())
+
+    # 2. Dry run counts without changing anything; the real run re-encrypts.
+    dry = run_rewrap(rotated, dry_run=True)
+    assert dry["rewrapped"] == 1
+    assert (
+        sql(rotated, "SELECT totp_secret_encrypted AS enc FROM users WHERE email = :e", e=email)[
+            0
+        ].enc
+        == before
+    )
+    done = run_rewrap(rotated, dry_run=False)
+    assert (done["rewrapped"], done["undecryptable_user_ids"]) == (1, [])
+    after = sql(
+        rotated, "SELECT totp_secret_encrypted AS enc FROM users WHERE email = :e", e=email
+    )[0].enc
+    assert after.startswith(f"v2:{done['current_key_id']}:")
+    assert secret not in after
+    assert run_rewrap(rotated, dry_run=False)["already_current"] == 1  # idempotent
+
+    # 3. Old key retired: authenticator codes still work. Recovery codes issued under
+    #    the old key don't (keyed hashes can't be re-keyed): documented in the runbook.
+    retired: Api = make_api(_skip_reset=True, mfa_encryption_key=new_key)
+    assert sign_in(retired, code=retired.totp(secret)) == 200
+    assert sign_in(retired, recovery_code=codes[1]) == 401
+
+    # A key removed before rewrapping is a clear error, not a crash.
+    lost: Api = make_api(
+        _skip_reset=True,
+        mfa_encryption_key=SecretStr(base64.urlsafe_b64encode(os.urandom(32)).decode()),
+    )
+    challenge = lost.login(email).json()["challenge_token"]
+    r = _finish(lost, challenge, code=lost.totp(secret))
+    assert r.status_code == 503
+    assert r.json()["code"] == "mfa_unavailable"
+    assert run_rewrap(lost, dry_run=True)["undecryptable_user_ids"] != []
