@@ -19,6 +19,8 @@ dependencies = [
     "openai>=1.60",
     "packaging>=24",
     "pgvector>=0.3",
+    "pikepdf>=9,<11",
+    "pillow>=11",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "pyjwt>=2.9",
@@ -26,6 +28,7 @@ dependencies = [
     "python-docx>=1.1",
     "python-multipart>=0.0.20",
     "redis>=5.2",
+    "reportlab>=4.2,<6",
     "sqlalchemy[asyncio]>=2.0.36",
     "stripe>=12",
     "uvicorn[standard]>=0.32",
@@ -46,6 +49,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
+    "types-reportlab>=4.2",
 ]
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +107,7 @@ ignore_missing_imports = true
 # Test fixtures are built with untyped PyMuPDF / python-docx APIs.
 [[tool.mypy.overrides]]
 module = ["tests.unit.test_extractors",
-    "tests.unit.test_figures", "tests.integration.test_processing_pipeline"]
+    "tests.unit.test_figures", "tests.integration.test_processing_pipeline",
+    "tests.unit.test_signing_pdf"]
 disallow_untyped_calls = false
 warn_return_any = false
