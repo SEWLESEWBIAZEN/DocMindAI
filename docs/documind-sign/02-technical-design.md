@@ -3,8 +3,7 @@
 - **Milestone:** M0 (design for review).
 - **Basis:** [`01-architecture-discovery.md`](01-architecture-discovery.md).
 - **Becomes:** ADR 0041 once approved.
-- **Open items:** decisions C1–C4 (§15) and the open question in §8.2 need your approval. Until
-  then, nothing in this document is final.
+- **Decisions:** C1–C4 approved 2026-11-28 (§15). The question in §8.2 (R11) is still open.
 
 ## 1. Scope of the initial release
 
@@ -428,7 +427,8 @@ signing evidence. The legal basis and retention are covered in 03 §4.
 - **Signed document:** the final PDF becomes a new document, "{title} (signed)". It is linked
   through `agreements.signed_document_id`. Its version's `storage_key` is the agreement's final
   file key, which isn't duplicated.
-- **Placement:** per C4. Collections only ever become narrower.
+- **Placement:** per C4 (§15): the same restricted collections as the source, otherwise the
+  agreement's restricted collection.
 - **Processing:** it goes through normal processing (indexing, deadline extraction), so
   questions cite the signed version.
 
@@ -471,71 +471,117 @@ signing evidence. The legal basis and retention are covered in 03 §4.
 | Two parallel signers finish together | Both commits take the agreement row lock in turn; only the second sees "all complete" and queues finalization |
 | Redis down | Session checks continue (database-backed); code checks are refused |
 
-## 15. Decisions for your approval
+## 15. Decisions (approved 2026-11-28)
+
+| Item | Decision |
+|---|---|
+| C1 | Define a configurable retention policy after legal review; do not silently retain deleted customer data |
+| C2 | Pro and above initially, with configurable limits |
+| C3 | Authenticated DocuMind users sign in the app; external recipients sign through secure email links |
+| C4 | Inherit source collection restrictions; otherwise restrict to agreement participants |
 
 ### C1. Deletion and retention
 
-- **Options:**
-  - **A: delete with the organization.** Consistent with ADR 0039: immediate and complete.
-  - **B: retain for N years after deletion,** with personal-data requests handled by
-    operators.
-- **Recommendation: A**, with three safeguards:
-  1. Deleting an organization with agreements **in progress** first voids them, which notifies
-     the recipients and revokes their tokens, then deletes.
-  2. The owner is shown "download your completed agreements first". Each completed agreement
-     offers a one-click ZIP: final PDF, certificate and an events JSON file.
-  3. **Account deletion:** agreements stay with the organization; `created_by_user_id` becomes
-     empty.
-- **Data export:** a person's export lists the agreements they sent, with their status. It
-  copies files only for their personal workspace, as for documents.
-- **Why not B:** retaining data after a customer deletes it needs a legal basis and a lawyer's
-  review (03 §4). That conflicts with the deliberate "no grace period" design.
+**Policy surface (configuration, not hard-coded):**
+- **Workspace retention setting** `signing.retention`: what happens to **completed, declined,
+  voided and expired** agreements while the workspace exists.
+  - `keep` (default): kept until the workspace is deleted.
+  - `delete_after_days: N`: a daily sweep deletes the agreement, its files and its events, and
+    leaves an audit entry with the agreement id and file hashes only.
+  - Owners change it in workspace settings, with 2FA step-up.
+- **Platform setting** `SIGNING_RETAIN_AFTER_WORKSPACE_DELETION_DAYS`: **fixed at 0** (delete
+  with the workspace) until legal review defines a lawful retention basis.
+  - Any other value is **refused at startup** unless it comes with
+    `SIGNING_RETENTION_LEGAL_BASIS_REF`, a reference to the approved legal decision.
+  - The mechanism for keeping evidence after deletion is **not built** until that review: a
+    separate store with its own access and erasure process. It is a tracked follow-up.
+
+**Behaviour now (equivalent to setting 0):**
+- **Organization deletion:**
+  - in-progress agreements are voided first: recipients are notified and tokens revoked;
+  - then everything is deleted with the workspace, as ADR 0039 does for documents;
+  - before the confirmation, the owner is shown how many completed agreements exist, with a
+    one-click export (final PDF, certificate, events JSON).
+- **Account deletion:** agreements stay with the organization; `created_by_user_id` becomes
+  empty. In-progress agreements that the person **sent from their personal workspace** are
+  voided and deleted with it.
+- **Nothing is retained silently.** The deletion confirmation lists exactly what will be
+  deleted.
+- **Data export:** a person's export lists agreements they sent, and agreements they signed
+  in the app (C3), with status and hashes. Files are copied only from their personal workspace.
 
 ### C2. Plans and limits
 
-- **Options:**
-  - **(a) all plans,** with Free limited;
-  - **(b) Pro and above;**
-  - **(c) Business and above.**
-- **Recommendation: (a)**, so the feature can be demonstrated on any account. Limits are
-  entitlement fields, overridable per workspace:
+- **Availability:** Pro, Business and Enterprise (including the Pro trial). Free sees an upgrade
+  prompt, as for integrations.
+- **Mechanism:** new `Entitlements` fields, so limits are configurable per plan and overridable
+  per workspace with `documind-manage plan assign --override`:
+  - `signing: bool`;
+  - `agreements_per_month: int | None`;
+  - `recipients_per_agreement: int | None`.
+- **Proposed initial values** (configuration; no pricing or Stripe changes):
 
-| Plan | Agreements per month | Recipients per agreement |
-|---|---|---|
-| Free | 3 | 3 |
-| Pro | 50 | 10 |
-| Business | 500 | 25 |
-| Enterprise | unlimited | 50 |
+| Plan | `signing` | Agreements per month | Recipients per agreement |
+|---|---|---|---|
+| Free | no | 0 | 0 |
+| Pro (and trial) | yes | 50 | 10 |
+| Business | yes | 500 | 25 |
+| Enterprise | yes | unlimited | 50 |
 
-- These numbers are proposals. No prices change, and no Stripe changes are made.
+- **Counting:** sending is what counts (DRAFT → SENT), not drafts. Usage appears on the Usage
+  page. Over the limit: `402 quota_exceeded`, the existing response format.
 
-### C3. Internal recipients
+### C3. Internal and external recipients
 
-- **Options:**
-  - **(a) everyone signs through the email link;**
-  - **(b) DocuMind users sign in the app** with their session and the organization's 2FA rules.
-- **Recommendation: (a) for M1,** then add **(b) in M2** as a shortcut. A workspace member whose
-  **verified** email matches a recipient sees the agreement under "Waiting for me". "Sign now"
-  issues a portal session from their authenticated session, with the organization's 2FA rule.
-  It's the same portal and evidence path, with `auth_method = documind_session` recorded.
-- "Waiting for me" in M1 lists matches by verified email but links to "check your email".
+- **External recipients:** the secure email link → portal session (§4.2, §13).
+- **Authenticated DocuMind users:**
+  - **Who:** a recipient is "internal" when their email matches the **verified** email of a
+    member of the agreement's workspace. The match is made at send time and stored as
+    `agreement_recipients.user_id`.
+  - **Where they see it:** "Waiting for me" lists it. "Sign" opens the same portal UI inside the
+    app.
+  - **How the session starts:** `POST /workspaces/{ws}/agreements/{id}/signing-session`, which
+    requires their logged-in session, the workspace's 2FA rule, and a recent 2FA step-up if the
+    organization requires 2FA. The evidence records `auth_method = documind_session` (plus
+    `mfa` when used).
+  - They **also** receive the email link and may use either. The first completed action wins;
+    the other path then shows "already signed".
+  - **Membership changes:** if the person leaves the workspace before signing, in-app signing
+    stops working; the email link still works.
+- **Same rules for both paths:** the same state machine, consent step, evidence and routing
+  order.
+- **Milestone:** in-app signing moves into **M1**, since it's part of the approved scope and
+  shares the portal code. It remains a separate, small endpoint.
 
 ### C4. Visibility of the signed PDF
 
-- **The prompt's default, refined to fit the visibility rule (01 §7.2):**
-  - **Source in restricted collections:** the signed PDF is added to **the same** restricted
-    collections, so it's exactly as visible as the source.
-  - **Source in no restricted collection** (visible to the whole workspace): the signed PDF is
-    also visible to the whole workspace. This keeps visibility the same, not broader.
-  - **Source uploaded through Sign:** by default the upload goes into a new **restricted
-    collection for this agreement**, "Agreement: {title}", whose members are the sender and
-    internal recipients. The signed PDF goes in the same collection. The sender may choose an
-    existing collection instead at upload.
-  - **Never** added automatically to a broader collection.
-- **Alternative (not recommended):** a new per-document access list. That would change the
-  security-critical visibility SQL that search, answers and extraction all rely on.
-- **Side effect:** agreement collections appear in the Collections list. They're labelled, and
-  can be filtered out in M2.
+**Rule:**
+- **Source document in one or more restricted collections:** the signed PDF is added to
+  **the same** restricted collections, so it inherits exactly the source's restrictions.
+- **Otherwise** (source in no restricted collection, or uploaded through Sign without choosing
+  a restricted collection): the signed PDF goes into a new **restricted collection for the
+  agreement**, "Agreement: {title}".
+  - **Members:** the sender and every internal recipient (C3).
+  - **Also:** owners and admins, who see every document under ADR 0036.
+  - **External recipients** see the signed PDF only through their portal download, never in
+    the workspace.
+- **Source documents uploaded through Sign** follow the same rule: the agreement's restricted
+  collection, unless the sender picks a restricted collection at upload.
+- **Never** added automatically to a broader collection. Later changes to the source's
+  collections don't change the signed copy; a change to the signed copy is a deliberate admin
+  action.
+- **Mechanism:** reuses the existing visibility SQL (ADR 0036); no new access path. The
+  agreement collections are marked `kind = 'agreement'` (a new column with default
+  `'standard'`), so the Collections page can group or hide them. Only admins and the sender can
+  edit their membership.
+
+**Consequence:** a signed copy can be **narrower** than its unrestricted source. That's
+intended: the decision says "otherwise restrict to agreement participants".
+
+### Still open
+
+- **R11:** which agreements members and viewers can see (§8.2). Recommended: their own and
+  those where they are a recipient; owners and admins see all.
 
 ## 16. Testing strategy
 
@@ -569,7 +615,7 @@ Results go in `04-test-results.md`, recording only what was actually run.
 | Milestone | Content | Ends with |
 |---|---|---|
 | M0 | This document, 01 and 03, decisions | Your approval |
-| M1 | Tables and migrations (both environments), permissions, `signing_tokens`, orphan, migration and export integration, transition service, drafts and recipients API, snapshot (pikepdf), simple field editor (PDF.js, place and move), send, notifications outbox, portal (consent, fields, drawn and typed signatures, complete and decline), sequential and parallel routing, finalization, certificate, evidence and verify, signed document per C4, dashboard and detail pages | Demo and test results |
-| M2 | Editor polish (resize, rotated-page tests in the browser), groups, reminders, expiry, email codes, uploaded signatures, C3 in-app signing, void UI, completed-agreement page | Demo and test results |
+| M1 | Tables and migrations (both environments), permissions, `signing_tokens`, orphan, migration, export and deletion integration (C1 behaviour now), transition service, drafts and recipients API, snapshot (pikepdf), simple field editor (PDF.js, place and move), send, notifications outbox, portal (consent, fields, drawn and typed signatures, complete and decline), sequential and parallel routing, finalization, certificate, evidence and verify, signed document per C4, in-app signing for internal recipients (C3), plan gating (C2), dashboard and detail pages | Demo and test results |
+| M2 | Editor polish (resize, rotated-page tests in the browser), groups, reminders, expiry, email codes, uploaded signatures, workspace retention setting (C1), void UI, completed-agreement page | Demo and test results |
 | M3 | AI: party and signer suggestions, field suggestions, contract questions in the wizard, deadline extraction on the signed copy, templates | Demo and test results |
 | M4 | §17.7 end-to-end scenario, security review, smoke stack, user, operations and deployment documentation, `04-test-results.md` | Release review |

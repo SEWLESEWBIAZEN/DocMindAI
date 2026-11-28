@@ -91,10 +91,15 @@ one as another.
    is recorded (including IP address) and why, with a link to the full notice.
 3. **Minimisation.** IP address and user agent are recorded only at evidence events, never on
    page views generally. No device fingerprinting.
-4. **Retention.** Linked to decision C1:
-   - Option A deletes with the organization.
-   - Option B, retention after deletion, needs a documented legal basis and a fixed period, and
-     is **not** implemented without that.
+4. **Retention.** Decision C1 (approved): a configurable retention policy, whose values are
+   defined **after legal review**. Deleted customer data is **not** retained silently.
+   - Until that review: retention after workspace deletion is 0, so agreements and evidence are
+     deleted with the workspace. Startup refuses any other value without a recorded legal-basis
+     reference.
+   - Workspaces can choose to keep or auto-delete closed agreements while they exist (02 §15
+     C1).
+   - The lawyer should define: periods per document type and jurisdiction, whether any evidence
+     must survive deletion, and how erasure requests apply to completed agreements.
 5. **Rights requests.** Access, erasure and correction for external signers: there's no
    self-service. The process goes through the customer organization, with support from
    DocuMind operators. Erasing data from a completed agreement may conflict with keeping
