@@ -3,7 +3,7 @@
 - **Milestone:** M0 (design for review).
 - **Basis:** [`01-architecture-discovery.md`](01-architecture-discovery.md).
 - **Becomes:** ADR 0041 once approved.
-- **Decisions:** C1–C4 approved 2026-11-28 (§15). The question in §8.2 (R11) is still open.
+- **Decisions:** C1–C4 and R11 approved 2026-11-28 (§8.2, §15). M0 approved; M1 started.
 
 ## 1. Scope of the initial release
 
@@ -332,7 +332,7 @@ New permissions, using the existing `_own` / `_any` pattern:
 | `agreements.audit_any` | ✓ | ✓ | | |
 | `signing_templates.manage` (M3) | ✓ | ✓ | | |
 
-**Which agreements a reader sees (R11; confirm at review):**
+**Which agreements a reader sees (R11, approved):**
 - Owners and admins: every agreement in the workspace.
 - Members and viewers: agreements they created, plus agreements where they are a recipient by
   the C3 rule.
@@ -578,10 +578,10 @@ signing evidence. The legal basis and retention are covered in 03 §4.
 **Consequence:** a signed copy can be **narrower** than its unrestricted source. That's
 intended: the decision says "otherwise restrict to agreement participants".
 
-### Still open
+### R11. Who sees which agreements (approved)
 
-- **R11:** which agreements members and viewers can see (§8.2). Recommended: their own and
-  those where they are a recipient; owners and admins see all.
+Owners and admins see every agreement in the workspace. Members and viewers see only the
+agreements they created or are a recipient of (§8.1).
 
 ## 16. Testing strategy
 
