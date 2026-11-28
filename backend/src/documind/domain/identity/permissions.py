@@ -29,6 +29,14 @@ class Permission(StrEnum):
     BILLING_MANAGE = "billing.manage"
     AI_PROVIDERS_MANAGE = "ai_providers.manage"
     INFRASTRUCTURE_MANAGE = "infrastructure.manage"
+    # DocuMind Sign (docs/documind-sign/02-technical-design.md §8)
+    AGREEMENTS_READ = "agreements.read"
+    AGREEMENTS_CREATE = "agreements.create"
+    AGREEMENTS_VOID_OWN = "agreements.void_own"
+    AGREEMENTS_VOID_ANY = "agreements.void_any"
+    AGREEMENTS_AUDIT_OWN = "agreements.audit_own"
+    AGREEMENTS_AUDIT_ANY = "agreements.audit_any"
+    SIGNING_TEMPLATES_MANAGE = "signing_templates.manage"
 
 
 PERMISSION_DESCRIPTIONS: MappingProxyType[Permission, str] = MappingProxyType(
@@ -56,6 +64,13 @@ PERMISSION_DESCRIPTIONS: MappingProxyType[Permission, str] = MappingProxyType(
             "Manage the organization's databases, storage and processing "
             "(requires two-factor verification)"
         ),
+        Permission.AGREEMENTS_READ: "View agreements you created or must sign (admins: all)",
+        Permission.AGREEMENTS_CREATE: "Create agreements and send them for signature",
+        Permission.AGREEMENTS_VOID_OWN: "Void agreements you sent",
+        Permission.AGREEMENTS_VOID_ANY: "Void any agreement and retry failed finalization",
+        Permission.AGREEMENTS_AUDIT_OWN: "View the audit trail of agreements you sent",
+        Permission.AGREEMENTS_AUDIT_ANY: "View the audit trail of any agreement",
+        Permission.SIGNING_TEMPLATES_MANAGE: "Manage signing templates",
     }
 )
 
@@ -87,9 +102,16 @@ _VIEWER = frozenset(
         Permission.MEMBERS_READ,
         Permission.DOCUMENTS_READ,
         Permission.CONVERSATIONS_USE,
+        Permission.AGREEMENTS_READ,
     }
 )
-_MEMBER = _VIEWER | {Permission.DOCUMENTS_WRITE, Permission.DOCUMENTS_ARCHIVE_OWN}
+_MEMBER = _VIEWER | {
+    Permission.DOCUMENTS_WRITE,
+    Permission.DOCUMENTS_ARCHIVE_OWN,
+    Permission.AGREEMENTS_CREATE,
+    Permission.AGREEMENTS_VOID_OWN,
+    Permission.AGREEMENTS_AUDIT_OWN,
+}
 _ADMIN = _MEMBER | {
     Permission.WORKSPACE_UPDATE,
     Permission.MEMBERS_INVITE,
@@ -99,6 +121,9 @@ _ADMIN = _MEMBER | {
     Permission.DOCUMENTS_ARCHIVE_ANY,
     Permission.DOCUMENTS_DELETE,
     Permission.AI_PROVIDERS_MANAGE,
+    Permission.AGREEMENTS_VOID_ANY,
+    Permission.AGREEMENTS_AUDIT_ANY,
+    Permission.SIGNING_TEMPLATES_MANAGE,
 }
 _OWNER = frozenset(Permission)
 

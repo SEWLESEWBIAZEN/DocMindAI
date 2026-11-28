@@ -37,10 +37,16 @@ def upgrade() -> None:
         sa.Column("comment", sa.Text(), nullable=True),
         sa.Column("shared", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint(
             "rating IN ('up', 'down')", name=op.f("ck_message_feedback_rating_valid")

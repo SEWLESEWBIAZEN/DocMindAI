@@ -56,6 +56,10 @@ class Entitlements:
     dedicated_database: bool
     external_database: bool
     customer_workers: bool
+    # DocuMind Sign (design §15 C2): Pro and above; limits configurable per workspace.
+    signing: bool = False
+    agreements_per_month: int | None = 0  # agreements sent per calendar month (UTC)
+    recipients_per_agreement: int | None = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -130,6 +134,9 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 dedicated_database=False,
                 external_database=False,
                 customer_workers=False,
+                signing=False,
+                agreements_per_month=0,
+                recipients_per_agreement=0,
             ),
             Pricing(0, self_serve=False),
         ),
@@ -152,6 +159,9 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 dedicated_database=False,
                 external_database=False,
                 customer_workers=False,
+                signing=True,
+                agreements_per_month=50,
+                recipients_per_agreement=10,
             ),
             Pricing(1_900, self_serve=True),
         ),
@@ -174,6 +184,9 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 dedicated_database=True,
                 external_database=True,
                 customer_workers=False,
+                signing=True,
+                agreements_per_month=500,
+                recipients_per_agreement=25,
             ),
             Pricing(9_900, self_serve=True),
         ),
@@ -196,6 +209,9 @@ PLANS: MappingProxyType[PlanKey, Plan] = MappingProxyType(
                 dedicated_database=True,
                 external_database=True,
                 customer_workers=True,
+                signing=True,
+                agreements_per_month=None,
+                recipients_per_agreement=50,
             ),
             Pricing(None, self_serve=False),
         ),

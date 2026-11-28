@@ -406,3 +406,26 @@ def test_resume_refuses_a_migration_that_is_not_running(
     with pytest.raises(ConflictError) as refused:  # still waiting for approval
         executor_call(api, "resume", mid, lease_seconds=0)
     assert refused.value.code == "not_running"
+
+
+def test_signing_evidence_moves_with_the_workspace(
+    iapi: Api, external_db: dict[str, Any], customer_bucket: dict[str, Any]
+) -> None:
+    """DocuMind Sign M1.1: agreement files are copied like document files."""
+    from tests.integration.test_orphaned_objects import _agreement_with_file, put
+
+    api = iapi
+    w, h, elevated = owner_org(api)
+    ready(api, w, h)
+    key = f"workspaces/{w}/agreements/{uuid.uuid4()}/snapshot.pdf"
+    put(api, key)
+    _agreement_with_file(api, w, key, size=1)
+    _, mid = plan_migration(api, w, elevated, database=external_db, storage=customer_bucket)
+    api.client.app.state.container.migration_dispatch = None  # type: ignore[attr-defined]
+    api.client.post(url(w, f"/migrations/{mid}/approve"), headers=elevated)
+    run_migration(api, mid)
+
+    # The customer bucket keeps everything under its configured prefix.
+    assert any(k.endswith(key) for k in keys(CUSTOMER_BUCKET, api))
+    rows = plane_sql(api, EXT_DB, "SELECT storage_key FROM agreement_files")
+    assert [r.storage_key for r in rows] == [key]

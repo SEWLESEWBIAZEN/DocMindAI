@@ -107,3 +107,45 @@ def test_a_retained_migration_source_is_left_for_its_own_cleanup(
     report = reconcile(api, delete=True)
     assert report.skipped["retained_migration_source"] >= len(retained)
     assert set(retained) <= set(keys(api.settings.s3_bucket, api))
+
+
+def _agreement_with_file(api: Api, w: str, key: str, size: int = 1) -> None:
+    """A draft agreement and one evidence file row, written directly (DocuMind Sign M1.1)."""
+    from tests.integration.test_processing_pipeline import sql
+
+    agreement = uuid.uuid4()
+    sql(
+        api,
+        "INSERT INTO agreements (id, workspace_id, title) VALUES (:a, :w, 'Lease')",
+        a=agreement,
+        w=uuid.UUID(w),
+    )
+    sql(
+        api,
+        "INSERT INTO agreement_files (id, agreement_id, workspace_id, kind, storage_key, sha256, "
+        "size_bytes, media_type) VALUES (:i, :a, :w, 'snapshot', :k, :h, :s, 'application/pdf')",
+        i=uuid.uuid4(),
+        a=agreement,
+        w=uuid.UUID(w),
+        k=key,
+        h="0" * 64,
+        s=size,
+    )
+
+
+def test_signing_evidence_is_never_an_orphan(iapi: Api) -> None:
+    """Agreement files are referenced by agreement_files, so --delete must keep them."""
+    api = iapi
+    w, _, _ = owner_org(api)
+    kept = f"workspaces/{w}/agreements/{uuid.uuid4()}/snapshot.pdf"
+    stray = f"workspaces/{w}/agreements/{uuid.uuid4()}/final-1.pdf"  # no row: a failed attempt
+    for key in (kept, stray):
+        put(api, key)
+    _agreement_with_file(api, w, kept)
+
+    report = reconcile(api, delete=True)
+    assert kept not in {k for k, _ in report.orphans}
+    assert stray in {k for k, _ in report.orphans}
+    remaining = set(keys(api.settings.s3_bucket, api))
+    assert kept in remaining
+    assert stray not in remaining

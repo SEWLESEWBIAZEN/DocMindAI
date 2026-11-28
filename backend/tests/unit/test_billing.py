@@ -55,14 +55,26 @@ WS = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
 # --------------------------------------------------------------------------- plans
 
 
-def _migration_plans() -> list[dict[str, Any]]:
-    path = next(Path(__file__).parents[2].glob("alembic/versions/*_0009_plans_and_usage.py"))
-    spec = importlib.util.spec_from_file_location("m0009", path)
+def _migration(pattern: str) -> Any:
+    path = next(Path(__file__).parents[2].glob(f"alembic/versions/{pattern}"))
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return list(module.PLANS)
+    return module
+
+
+def _migration_plans() -> list[dict[str, Any]]:
+    """Plans as seeded by 0009, with the entitlements later migrations merged in."""
+    plans = [
+        dict(p, entitlements=dict(p["entitlements"]))
+        for p in _migration("*_0009_plans_and_usage.py").PLANS
+    ]
+    signing = _migration("*_0024_documind_sign.py").SIGNING_ENTITLEMENTS
+    for plan in plans:
+        plan["entitlements"].update(signing[plan["key"]])
+    return plans
 
 
 def test_migration_seed_matches_plan_catalog() -> None:

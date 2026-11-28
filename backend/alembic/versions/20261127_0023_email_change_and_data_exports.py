@@ -44,7 +44,10 @@ def upgrade() -> None:
         sa.Column("size_bytes", sa.BigInteger(), nullable=True),
         sa.Column("error", sa.String(length=300), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
@@ -53,12 +56,18 @@ def upgrade() -> None:
             name=op.f("ck_data_exports_status_valid"),
         ),
         sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], name=op.f("fk_data_exports_user_id_users"), ondelete="CASCADE"
+            ["user_id"],
+            ["users.id"],
+            name=op.f("fk_data_exports_user_id_users"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_data_exports")),
     )
     op.create_index(
-        "ix_data_exports_user_id_created_at", "data_exports", ["user_id", "created_at"], unique=False
+        "ix_data_exports_user_id_created_at",
+        "data_exports",
+        ["user_id", "created_at"],
+        unique=False,
     )
     op.create_index(
         "ix_data_exports_status_expires_at", "data_exports", ["status", "expires_at"], unique=False

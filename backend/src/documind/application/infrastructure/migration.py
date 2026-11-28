@@ -60,6 +60,7 @@ from documind.infrastructure.database.base import Base
 from documind.infrastructure.database.dataplane import DATA_PLANE_TABLES
 from documind.infrastructure.database.dataplane_runtime import register_tenant
 from documind.infrastructure.database.models import (
+    AgreementFile,
     Document,
     DocumentVersion,
     InfrastructureEvent,
@@ -114,10 +115,20 @@ async def _object_keys(
     sessions: async_sessionmaker[AsyncSession], ws: uuid.UUID
 ) -> list[tuple[str, int]]:
     async with sessions() as data:
-        rows = (
+        rows = list(
+            (
+                await data.execute(
+                    select(DocumentVersion.storage_key, DocumentVersion.size_bytes).where(
+                        DocumentVersion.workspace_id == ws
+                    )
+                )
+            ).all()
+        )
+        # DocuMind Sign evidence files move with the workspace too.
+        rows += (
             await data.execute(
-                select(DocumentVersion.storage_key, DocumentVersion.size_bytes).where(
-                    DocumentVersion.workspace_id == ws
+                select(AgreementFile.storage_key, AgreementFile.size_bytes).where(
+                    AgreementFile.workspace_id == ws
                 )
             )
         ).all()

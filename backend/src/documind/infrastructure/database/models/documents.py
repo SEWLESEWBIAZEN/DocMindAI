@@ -143,6 +143,9 @@ class DocumentCollection(Base):
     description: Mapped[str | None] = mapped_column(String(500))
     #: Restricted (ADR 0036): only its members, and admins, see it and its documents.
     restricted: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    #: ``standard``, or ``agreement`` for the restricted collection DocuMind Sign creates
+    #: for one agreement's participants (design §15 C4).
+    kind: Mapped[str] = mapped_column(String(16), default="standard", server_default="standard")
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

@@ -47,6 +47,14 @@ DATA_PLANE_TABLES: tuple[str, ...] = (
     "extraction_results",
     "deadlines",
     "connector_items",
+    # DocuMind Sign (docs/documind-sign/02-technical-design.md §3.1)
+    "agreements",
+    "agreement_files",
+    "agreement_recipients",
+    "agreement_fields",
+    "agreement_signatures",
+    "agreement_events",
+    "agreement_notifications",
 )
 CONTROL_PLANE_REFERENCES = {"workspaces", "users"}
 DATAPLANE_SCHEMA = "documind"

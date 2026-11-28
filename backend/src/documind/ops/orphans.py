@@ -38,7 +38,7 @@ from documind.application.infrastructure.resolver import (
     InfrastructureResolver,
     WorkspaceMigratingError,
 )
-from documind.infrastructure.database.models import DataExport, DocumentVersion
+from documind.infrastructure.database.models import AgreementFile, DataExport, DocumentVersion
 
 logger = logging.getLogger(__name__)
 
@@ -161,10 +161,15 @@ class OrphanReconciler:
         if infra.config.storage.provider != "documind":
             return "retained_migration_source"
         async with infra.data_plane.sessions() as session:
-            rows = await session.execute(
+            documents = await session.execute(
                 select(DocumentVersion.storage_key).where(DocumentVersion.workspace_id == ws)
             )
-            return {str(k) for (k,) in rows}
+            # Signing evidence (snapshots, signed PDFs, certificates, signature images) lives
+            # under workspaces/{ws}/agreements/ and is referenced by agreement_files.
+            agreements = await session.execute(
+                select(AgreementFile.storage_key).where(AgreementFile.workspace_id == ws)
+            )
+            return {str(k) for (k,) in documents} | {str(k) for (k,) in agreements}
 
     async def _export_keys(self) -> set[str]:
         if self._exports is None:

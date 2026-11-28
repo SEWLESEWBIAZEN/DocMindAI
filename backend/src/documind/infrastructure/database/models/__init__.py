@@ -71,10 +71,27 @@ from documind.infrastructure.database.models.processing import (
     DocumentPage,
     ProcessingJob,
 )
+from documind.infrastructure.database.models.signing import (
+    Agreement,
+    AgreementEvent,
+    AgreementField,
+    AgreementFile,
+    AgreementNotification,
+    AgreementRecipient,
+    AgreementSignature,
+    SigningToken,
+)
 from documind.infrastructure.database.models.sso import SsoConnection
 
 __all__ = [
     "AccountToken",
+    "Agreement",
+    "AgreementEvent",
+    "AgreementField",
+    "AgreementFile",
+    "AgreementNotification",
+    "AgreementRecipient",
+    "AgreementSignature",
     "ApiKey",
     "AuditLog",
     "BillingEvent",
@@ -112,6 +129,7 @@ __all__ = [
     "ProcessingJob",
     "RefreshToken",
     "Role",
+    "SigningToken",
     "SlackInstallation",
     "SlackUserLink",
     "SsoConnection",
